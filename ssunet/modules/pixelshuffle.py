@@ -6,9 +6,7 @@ logger = logging.getLogger(__name__)
 
 
 class PixelShuffle3d(nn.Module):
-    """
-    This class is a 3d version of pixelshuffle.
-    """
+    """This class is a 3d version of pixelshuffle."""
 
     def __init__(self, scale: int = 2):
         """
@@ -35,9 +33,7 @@ class PixelShuffle3d(nn.Module):
 
 
 class PixelUnshuffle3d(nn.Module):
-    """
-    This class is a 3d version of pixelunshuffle.
-    """
+    """This class is a 3d version of pixelunshuffle."""
 
     def __init__(self, scale: int = 2):
         """
@@ -62,9 +58,7 @@ class PixelUnshuffle3d(nn.Module):
 
 
 class PixelShuffle2d(nn.Module):
-    """
-    This class is a 2d version of pixelshuffle on BCZXY data on XY.
-    """
+    """This class is a 2d version of pixelshuffle on BCZXY data on XY."""
 
     def __init__(self, scale: int = 2):
         """
@@ -90,9 +84,7 @@ class PixelShuffle2d(nn.Module):
 
 
 class PixelUnshuffle2d(nn.Module):
-    """
-    This class is a 2d version of pixelunshuffle on BCZXY data on XY.
-    """
+    """This class is a 2d version of pixelunshuffle on BCZXY data on XY."""
 
     def __init__(self, scale: int = 2):
         """

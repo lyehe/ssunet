@@ -8,8 +8,9 @@ import pyiqa
 
 from torch.nn import init
 from torch.utils.checkpoint import checkpoint
-from loss import loss_functions
-from modules import (
+
+from ssunet.loss import loss_functions
+from ssunet.modules import (
     DownConvDual3D,
     UpConvDual3D,
     DownConvTri3D,

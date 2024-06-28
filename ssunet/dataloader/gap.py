@@ -6,7 +6,7 @@ from numpy.random import rand, choice, seed
 import torch
 from torch.distributions.binomial import Binomial
 
-from singlevolume import SingleVolumeDataset
+from .singlevolume import SingleVolumeDataset
 
 
 logger = logging.getLogger(__name__)

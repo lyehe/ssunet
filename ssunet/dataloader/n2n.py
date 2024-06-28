@@ -1,7 +1,7 @@
 import torch
 import logging
 
-from singlevolume import SingleVolumeDataset
+from .singlevolume import SingleVolumeDataset
 
 logger = logging.getLogger(__name__)
 

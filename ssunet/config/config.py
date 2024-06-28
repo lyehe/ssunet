@@ -1,6 +1,6 @@
-from dataloader import SingleVolumeConfig, SplitParams
-from models import ModelConfig
-from train import TrainConfig
+from ssunet.dataloader import SingleVolumeConfig, SplitParams
+from ssunet.models import ModelConfig
+from ssunet.train import LoaderConfig, TrainConfig
 
 import yaml
 from pathlib import Path
@@ -35,12 +35,16 @@ def load_yaml(config_path: Path | str = Path("./config.yml")) -> dict:
 
 def load_config(
     config_path: Path | str = Path("./config.yml"),
-) -> tuple[PathConfig, SingleVolumeConfig, SplitParams, ModelConfig, TrainConfig]:
+) -> tuple[
+    PathConfig, SingleVolumeConfig, SplitParams, ModelConfig, LoaderConfig, TrainConfig
+]:
     """Convert the configuration dictionary to dataclasses"""
     config = load_yaml(config_path)
-    path_Config = PathConfig(**config["PATH"])
-    single_volume_config = SingleVolumeConfig(**config["DATA"])
-    split_params = SplitParams(**config["SPLIT"])
-    model_config = ModelConfig(**config["MODEL"])
-    train_config = TrainConfig(**config["TRAIN"])
-    return path_Config, single_volume_config, split_params, model_config, train_config
+    return (
+        PathConfig(**config["PATH"]),
+        SingleVolumeConfig(**config["DATA"]),
+        SplitParams(**config["SPLIT"]),
+        ModelConfig(**config["MODEL"]),
+        LoaderConfig(**config["LOADER"]),
+        TrainConfig(**config["TRAIN"]),
+    )

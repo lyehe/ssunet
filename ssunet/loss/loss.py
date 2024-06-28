@@ -67,11 +67,3 @@ def photon_loss_2D(
         torch.mean(exp_energy, dim=(-1, -2, -4), keepdim=True) + EPSILON
     ) * torch.mean(target, dim=(-1, -2, -4), keepdim=True)
     return torch.mean(per_image)
-
-
-loss_functions = {
-    "mse": mse_loss,
-    "photon": photon_loss,
-    "l1": l1_loss,
-    "photon_2D": photon_loss_2D,
-}
