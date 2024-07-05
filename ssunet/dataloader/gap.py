@@ -137,6 +137,7 @@ class BinomDataset(SingleVolumeDataset):
     @staticmethod
     def _sample_noise(input: torch.Tensor, p_value: float) -> torch.Tensor:
         """Sample the noise data for the input image using a binomial distribution"""
+        input = torch.floor_(input)
         binom = Binomial(total_count=input, probs=torch.tensor([p_value]))  # type: ignore
         return binom.sample()
 

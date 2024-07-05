@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 EPSILON = 1e-8
 
 DEFAULT_OPTIMIZER_CONFIG = {
-    "name": "adam",  # optimizer name
+    "name": "adamw",  # optimizer name
     "lr": 2e-5,  # learning rate
     "mode": "min",  # mode for ReduceLROnPlateau
     "factor": 0.5,  # factor for ReduceLROnPlateau
@@ -53,7 +53,7 @@ class ModelConfig:
     depth_scale: int = 2
     depth_scale_stop: int = 10
     z_conv_stage: int = 5
-    group_norm: int = 0
+    group_norm: int = 4
     skip_depth: int = 0
     dropout_p: float = 0.0
     scale_factor: float = 10.0
@@ -67,7 +67,7 @@ class ModelConfig:
     merge_mode: str = "concat"
     down_mode: str = "maxpool"
     activation: str = "relu"
-    block_type: str = "dual"
+    block_type: str = "tri"
     note: str = ""
 
     @property
@@ -98,6 +98,7 @@ class SSUnet(pl.LightningModule):
         self.config = config
         self.optimizer_config = optimizer_config
         self.loss_function = loss_functions[config.loss_function]
+        self.kwargs = kwargs
 
         self._check_conflicts()
 
@@ -195,7 +196,7 @@ class SSUnet(pl.LightningModule):
                 input, skip = checkpoint(down_conv, input, use_reentrant=False)  # type: ignore
             else:
                 input, skip = down_conv(input)
-            encoder_outs.append(skip) if i < self.depth - 1 else ...
+            encoder_outs.append(skip) if i < self.config.depth - 1 else ...
             del skip
 
         for i, up_conv in enumerate(self.up_convs):
@@ -235,7 +236,7 @@ class SSUnet(pl.LightningModule):
         output = self(input)
         loss = (
             self.loss_function(output, target, (input < 1).float())
-            if self.masked
+            if self.config.masked
             else self.loss_function(output, target)
         )
         self.tb_train_log(loss, output, target, batch_idx)
@@ -256,8 +257,8 @@ class SSUnet(pl.LightningModule):
         batch: list[torch.Tensor],  # batch of validation data
         batch_idx: int,
     ) -> None:
-        input = batch[1]
         target = batch[0]
+        input = batch[1]
         ground_truth = batch[2] if len(batch) == 3 else None
         output = self(input)
         loss = self.loss_function(output, target)
@@ -296,35 +297,6 @@ class SSUnet(pl.LightningModule):
     ):
         self.log("test_loss", loss)
 
-    def _log_image(
-        self,
-        image: torch.Tensor,
-        name: str,
-        batch_idx: int,
-        frequency: int = 10,
-        normalization: str = "min-max",
-    ) -> None:
-        if normalization not in ("min-max", "mean-std", "mean"):
-            normalization = "min-max"
-            logger.warning(
-                f"Normalization method not recognized. Using {normalization}."
-            )
-        if batch_idx % frequency == 0:
-            image_shape = image.shape
-            img = image[:, image_shape[1] // 2, ...]
-            match normalization:
-                case "min-max":
-                    img = ((img - img.min()) / (img.max() - img.min()) * 255).to(
-                        torch.uint8
-                    )
-                    self.logger.experiment.add_image(name, img, self.current_epoch)  # type: ignore
-                case "mean-std":
-                    img = ((img - img.mean()) / img.std() * 255).to(torch.uint8)
-                    self.logger.experiment.add_image(name, img, self.current_epoch)  # type: ignore
-                case "mean":
-                    img = (img / img.mean() * 128).to(torch.uint8)
-                    self.logger.experiment.add_image(name, img, self.current_epoch)  # type: ignore
-
     def _log_metrics(
         self,
         output: torch.Tensor,
@@ -344,6 +316,38 @@ class SSUnet(pl.LightningModule):
         ssim = self._ssim_metric(normalized_output, ground_truth)
         self.log("val_psnr", psnr)
         self.log("val_ssim", ssim)
+
+    def _normalize_log_image(
+        self,
+        image: torch.Tensor,
+    ) -> torch.Tensor:
+        normalization = self.kwargs.get("log_image_normalization", "min-max")
+        img = image[:, image.shape[1] // 2, ...]
+        match normalization:
+            case "min-max":
+                return ((img - img.min()) / (img.max() - img.min()) * 255).to(
+                    torch.uint8
+                )
+            case "mean-std":
+                return ((img - img.mean()) / img.std() * 255).to(torch.uint8)
+            case "mean":
+                return (img / img.mean() * 128).to(torch.uint8)
+            case _:
+                logger.warning("Normalization method not recognized. Using min-max.")
+                return ((img - img.min()) / (img.max() - img.min()) * 255).to(
+                    torch.uint8
+                )
+
+    def _log_image(
+        self,
+        image: torch.Tensor,
+        name: str,
+        batch_idx: int,
+        frequency: int = 10,
+    ) -> None:
+        if batch_idx % frequency == 0:
+            img = self._normalize_log_image(image)
+            self.logger.experiment.add_image(name, img, self.current_epoch)  # type: ignore
 
     def _check_conflicts(self):
         # NOTE: up_mode 'upsample' is incompatible with merge_mode 'add'

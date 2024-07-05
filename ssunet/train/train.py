@@ -1,24 +1,19 @@
 from dataclasses import dataclass, field
-from pathlib import Path
 import torch
-import numpy as np
 from datetime import datetime
-
-import torch.utils.data as dt
-import pytorch_lightning as pl
 
 
 @dataclass
 class LoaderConfig:
-    batch_size: int = 100
+    batch_size: int = 20
     shuffle: bool = False
-    pin_memory: bool = True
+    pin_memory: bool = False
     drop_last: bool = True
-    num_workers: int = 0
-    persistent_workers: bool = False
+    num_workers: int = 6
+    persistent_workers: bool = True
 
     @property
-    def config(self) -> dict:
+    def to_dict(self) -> dict:
         return {
             "batch_size": self.batch_size,
             "shuffle": self.shuffle,
@@ -52,7 +47,7 @@ class TrainConfig:
     note: str = ""
 
     def __post_init__(self):
-        self.time_stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        self.time_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     @property
     def device(self) -> torch.device:
