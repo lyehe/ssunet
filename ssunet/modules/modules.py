@@ -120,14 +120,12 @@ class DownConvDual3D(UnetBlockConv3D):
 
 
 class UpConvDual3D(UnetBlockConv3D):
-    """
-    Simplified UpConv block with residual connection.
-    Performs 1 upconvolution and 2 convolutions. A ReLU activation follows each convolution.
-    """
-
     def __other__(self):
-        self.resconv = self.merge_conv(self.in_channels, self.out_channels)
-        self.conv1 = self.conv333(2 * self.out_channels, self.out_channels)
+        merge_channels = (
+            self.in_channels if self.merge_mode == "concat" else self.out_channels
+        )
+        self.resconv = self.merge_conv(self.out_channels, self.out_channels)
+        self.conv1 = self.conv333(merge_channels, self.out_channels)
         self.conv2 = self.conv333(self.out_channels, self.out_channels)
 
     def forward(
@@ -135,7 +133,7 @@ class UpConvDual3D(UnetBlockConv3D):
     ) -> torch.Tensor:
         input = self.up_sample(input)
         input = self.merge(input, skip)
-        residual = self.resconv(input) if skip is not None else input
+        residual = self.group_norm(self.resconv(input)) if skip is not None else input
         input = self.activation(self.group_norm(self.conv1(input)))
         input = self.activation(self.group_norm(self.conv2(input)))
         input = self.dropout(input)
