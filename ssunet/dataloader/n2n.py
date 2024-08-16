@@ -1,6 +1,5 @@
 import torch
 import logging
-
 from .singlevolume import SingleVolumeDataset
 
 logger = logging.getLogger(__name__)
@@ -27,7 +26,7 @@ class N2NDatasetSkipFrame(SingleVolumeDataset):
 
 
 class N2NDatasetDualVolume(SingleVolumeDataset):
-    def __getitem__(self, index) -> list[torch.Tensor]:
+    def __getitem__(self, index: int) -> list[torch.Tensor]:
         if self.reference is None:
             logger.error("Reference data is required for the dual N2N dataset")
             raise ValueError("Reference data is required for the dual N2N dataset")

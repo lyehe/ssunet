@@ -1,5 +1,6 @@
-from dataclasses import dataclass, field
 import torch
+import pytorch_lightning as pl
+
 from datetime import datetime
 from lightning.pytorch.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import (
@@ -8,10 +9,12 @@ from pytorch_lightning.callbacks import (
     EarlyStopping,
     DeviceStatsMonitor,
 )
-from typing import Literal
-import logging
 
-logger = logging.getLogger(__name__)
+from dataclasses import dataclass, field
+from typing import Literal
+from logging import getLogger
+
+logger = getLogger(__name__)
 
 
 @dataclass
@@ -55,24 +58,29 @@ class TrainConfig:
     default_root_dir: str = "./models"
     accelerator: str = "cuda"
     gradient_clip_val: int = 1
-    precision: str | int = 32
+    precision: str | int | None = 32
     max_epochs: int = 50
-    device_numbers: int | list[int] = 0
+    devices: int | list[int] = 0
+
     # callbacks - model checkpoint
     callbacks_model_checkpoint: bool = True
     mc_save_weights_only: bool = True
     mc_mode: str = "min"
     mc_monitor: str = "val_loss"
     mc_save_top_k: int = 2
+
     # learning rate monitor
     callbacks_learning_rate_monitor: bool = True
     lrm_logging_interval: Literal["step", "epoch"] | None = "epoch"
+
     # early stopping
     callbacks_early_stopping: bool = False
     es_monitor: str = "val_loss"
     es_patience: int = 25
+
     # device stats monitor
     callbacks_device_stats_monitor: bool = False
+
     # other params
     logger_name: str = "logs"
     profiler: str = "simple"
@@ -86,14 +94,6 @@ class TrainConfig:
     def __post_init__(self):
         torch.set_float32_matmul_precision(self.matmul_precision)
         self.time_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    @property
-    def devices(self) -> list[int]:
-        return (
-            [self.device_numbers]
-            if isinstance(self.device_numbers, int)
-            else self.device_numbers
-        )
 
     @property
     def name(self) -> str:
@@ -155,5 +155,11 @@ class TrainConfig:
             "log_every_n_steps": self.log_every_n_steps,
         }
 
-    def __call__(self) -> dict:
-        return self.to_dict
+    @property
+    def trainer(self) -> pl.Trainer:
+        """Create  a PyTorch Lightning Trainer instance from the config
+
+        :return: The PyTorch Lightning Trainer
+        :rtype: pl.Trainer
+        """
+        return pl.Trainer(**self.to_dict)
