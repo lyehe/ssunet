@@ -9,7 +9,6 @@ from pytorch_lightning.callbacks import (
     EarlyStopping,
     DeviceStatsMonitor,
 )
-
 from dataclasses import dataclass, field
 from typing import Literal
 from logging import getLogger
@@ -60,7 +59,7 @@ class TrainConfig:
     gradient_clip_val: int = 1
     precision: str | int | None = 32
     max_epochs: int = 50
-    devices: int | list[int] = 0
+    device_numbers: int | list[int] = 0
 
     # callbacks - model checkpoint
     callbacks_model_checkpoint: bool = True
@@ -104,6 +103,14 @@ class TrainConfig:
             f"n={self.note}" if self.note != "" else None,
         ]
         return "_".join(name for name in name_str if name is not None and name != "")
+
+    @property
+    def devices(self) -> list[int]:
+        return (
+            [self.device_numbers]
+            if isinstance(self.device_numbers, int)
+            else self.device_numbers
+        )
 
     @property
     def model_checkpoint(self) -> ModelCheckpoint:

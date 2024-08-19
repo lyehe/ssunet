@@ -44,7 +44,7 @@ if __name__ == "__main__":
         accelerator="cuda",
         gradient_clip_val=1,
         precision=train_config.precision,  # type: ignore
-        devices=train_config.device_numbers,
+        devices=train_config.devices,
         max_epochs=train_config.max_epochs,
         callbacks=train_config.callbacks,
         logger=logger,  # type: ignore

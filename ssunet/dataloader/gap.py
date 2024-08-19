@@ -1,4 +1,3 @@
-import logging
 from typing import Callable
 from dataclasses import dataclass, field
 
@@ -6,12 +5,7 @@ from numpy.random import rand, choice, seed
 import torch
 from torch.distributions.binomial import Binomial
 
-from .singlevolume import SingleVolumeDataset
-
-
-logger = logging.getLogger(__name__)
-
-EPSILON = 1e-8
+from .singlevolume import SingleVolumeDataset, EPSILON, logger
 
 
 @dataclass
@@ -21,7 +15,7 @@ class SplitParams:
     method: str = "signal"
     min_p: float = EPSILON
     max_p: float = 1 - EPSILON
-    p_list: list[float] = field(default_factory=list)
+    p_list: list[float] | None = field(default_factory=list)
     normalize_target: bool = True
     seed: int | None = None
 
@@ -73,9 +67,9 @@ class BinomDataset(SingleVolumeDataset):
     def _sample_p(self, input: torch.Tensor) -> float:
         """Random sample the p level for the input image"""
         # User can pass a custom function to sample the PSNR level
-        sample_p: Callable | None = self.kwargs.get("sample_p", None)
-        if sample_p is not None and callable(sample_p):
-            return sample_p(input, **self.kwargs)
+        p_sampling_method: Callable | None = self.kwargs.get("p_sampling_method", None)
+        if p_sampling_method is not None and callable(p_sampling_method):
+            return p_sampling_method(input, **self.kwargs)
         else:
             if self.split_params.method == "db":
                 return self._sample_db(input)
@@ -131,6 +125,7 @@ class BinomDataset(SingleVolumeDataset):
     def _sample_list(self) -> float:
         """Random sample the choice level for the input image"""
         p_list = self.split_params.p_list
+        assert p_list, "p_list must be provided when method is list"
         p_value = choice(p_list)
         return self._validate_p(p_value)
 

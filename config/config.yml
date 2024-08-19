@@ -1,0 +1,86 @@
+PATH:
+  model_path: "./models"
+  data_dir:  "../../tempdata/"
+  data_file: 0
+  reference_dir: null
+  reference_file: null
+  ground_truth_dir: null
+  ground_truth_file: null
+  begin_slice: int = 0
+  end_slice: int = -1
+
+DATA:
+  xy_size: 256
+  z_size: 32
+  virtual_size: 0
+  augments: False
+  rotation: 0
+  random_crop: True
+  skip_frames: 1
+  normalize_target: True
+  note: ""
+
+SPLIT:
+  method: "signal"
+  min_p: 0.000001
+  max_p: 0.999999
+  p_list: Null
+  normalize_target: True
+  seed: Null
+
+MODEL:
+  channels: 1
+  depth: 4
+  start_filts: 24
+  depth_scale: 2
+  depth_scale_stop: 10
+  z_conv_stage: 5
+  group_norm: 4
+  skip_depth: 0
+  dropout_p: 0.0
+  scale_factor: 10.0
+  sin_encoding: True
+  signal_levels: 10
+  masked: True
+  down_checkpointing: False
+  up_checkpointing: False
+  loss_function: "photon"
+  up_mode: "transpose"
+  merge_mode: "concat"
+  down_mode: "maxpool"
+  activation: "relu"
+  block_type: "tri"
+  note: ""
+
+LOADER:
+  batch_size: 20
+  shuffle: False
+  pin_memory: False
+  drop_last: True
+  num_workers: 6
+  persistent_workers: True
+
+TRAIN:
+  default_root_dir: "./models"
+  accelerator: "cuda"
+  gradient_clip_val: 1
+  precision: 32
+  max_epochs: 50
+  device_numbers: 0
+  callbacks_model_checkpoint: True
+  mc_save_weights_only: True
+  mc_mode: "min"
+  mc_monitor: "val_loss"
+  mc_save_top_k: 2
+  callbacks_learning_rate_monitor: True
+  lrm_logging_interval: "epoch"
+  callbacks_early_stopping: False
+  es_monitor: "val_loss"
+  es_patience: 25
+  callbacks_device_stats_monitor: False
+  logger_name: "logs"
+  profiler: "simple"
+  limit_val_batches: 20
+  log_every_n_steps: 20
+  note: ""
+  matmul_precision: "high"

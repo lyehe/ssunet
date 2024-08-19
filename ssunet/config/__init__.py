@@ -1,6 +1,6 @@
 from .config import (
     PathConfig,
-    SingleVolumeConfig,
+    DataConfig,
     SplitParams,
     ModelConfig,
     LoaderConfig,
@@ -11,7 +11,7 @@ from .config import (
 
 __all__ = [
     "PathConfig",
-    "SingleVolumeConfig",
+    "DataConfig",
     "SplitParams",
     "ModelConfig",
     "LoaderConfig",

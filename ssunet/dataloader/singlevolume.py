@@ -13,26 +13,15 @@ EPSILON = 1e-8
 logger = logging.getLogger(__name__)
 
 
-def lucky(factor: float = 0.5) -> bool:
+def _lucky(factor: float = 0.5) -> bool:
     """Check if you are lucky."""
     return rand() < factor
 
 
 @dataclass
-class SingleVolumeConfig:
-    """Data class for the input data of a single volume dataset."""
-
+class SSUnetData:
     data: np.ndarray | torch.Tensor
-    xy_size: int
-    z_size: int
-    virtual_size: int = 0
-    augments: bool = False
-    rotation: float = 0
-    random_crop: bool = True
-    skip_frames: int = 1
     reference: np.ndarray | torch.Tensor | None = None
-    normalize_target: bool = True
-    note: str = ""
 
     def __post_init__(self):
         # Check if the data and reference shapes match
@@ -50,7 +39,8 @@ class SingleVolumeConfig:
             if data_shape != reference_shape:
                 raise ValueError("Data and reference shapes do not match")
 
-    def to_tensor(self, input: np.ndarray) -> torch.Tensor:
+    @staticmethod
+    def _to_tensor(input: np.ndarray) -> torch.Tensor:
         try:
             return torch.from_numpy(input)
         except TypeError:
@@ -62,26 +52,36 @@ class SingleVolumeConfig:
                 logger.error("Data type not supported")
                 raise TypeError("Data type not supported")
 
+
+@dataclass
+class DataConfig:
+    """Data class for the input data of a single volume dataset."""
+
+    xy_size: int = 256
+    z_size: int = 32
+    virtual_size: int = 0
+    augments: bool = False
+    rotation: float = 0
+    random_crop: bool = True
+    skip_frames: int = 1
+    normalize_target: bool = True
+    note: str = ""
+
     @property
     def name(self) -> str:
-        return f"{self.note}_{self.stack_size}x{self.z_size}x{self.xy_size}x{self.xy_size}_skip={self.skip_frames}"
-
-    @property
-    def stack_size(self) -> int:
-        return self.virtual_size if self.virtual_size > 0 else len(self.data)
-
-    def __call__(self):
-        return self.data
+        return f"{self.note}_{self.virtual_size}x{self.z_size}x{self.xy_size}x{self.xy_size}_skip={self.skip_frames}"
 
 
 class SingleVolumeDataset(Dataset, ABC):
     def __init__(
         self,
-        input: SingleVolumeConfig,
+        input: SSUnetData,
+        config: DataConfig,
         **kwargs,
     ):
         super().__init__()
         self.input = input
+        self.config = config
         self.crop_idx: tuple[int, int, int, int]
         self.kwargs = kwargs
         self.__post_init__()
@@ -102,32 +102,34 @@ class SingleVolumeDataset(Dataset, ABC):
     @property
     def data(self) -> torch.Tensor:
         if isinstance(self.input.data, np.ndarray):
-            self.input.data = self.input.to_tensor(self.input.data)
+            self.input.data = self.input._to_tensor(self.input.data)
         return self.input.data
 
     @property
     def reference(self) -> torch.Tensor | None:
         if isinstance(self.input.reference, np.ndarray):
-            self.input.reference = self.input.to_tensor(self.input.reference)
+            self.input.reference = self.input._to_tensor(self.input.reference)
         return self.input.reference
 
     @property
     def x_size(self) -> int:
-        return self.input.xy_size
+        return self.config.xy_size
 
     @property
     def y_size(self) -> int:
-        return self.input.xy_size
+        return self.config.xy_size
 
     @property
     def z_size(self) -> int:
-        return self.input.z_size
+        return self.config.z_size
 
     @property
     def length(self) -> int:
         return (
-            self.data_size if self.input.virtual_size == 0 else self.input.virtual_size
-        ) // self.input.skip_frames
+            self.data_size
+            if self.config.virtual_size == 0
+            else self.config.virtual_size
+        ) // self.config.skip_frames
 
     @staticmethod
     def normalize_by_mean(input: torch.Tensor) -> torch.Tensor:
@@ -135,7 +137,7 @@ class SingleVolumeDataset(Dataset, ABC):
 
     def _new_crop_params(self) -> tuple[int, int, int, int]:
         """Compute the coordinates for the new crop window."""
-        if self.input.random_crop:  # Random crop
+        if self.config.random_crop:  # Random crop
             xi = randint(self.data.shape[-2] - self.x_size)
             yi = randint(self.data.shape[-1] - self.y_size)
             xe = xi + self.x_size
@@ -161,20 +163,20 @@ class SingleVolumeDataset(Dataset, ABC):
 
     def _rotate_list(self, input: list[torch.Tensor]) -> list[torch.Tensor]:
         """Rotate the input data if the rotation flag is set to True."""
-        if self.input.rotation > 0:
-            angle = rand() * self.input.rotation
+        if self.config.rotation > 0:
+            angle = rand() * self.config.rotation
             return [tf.rotate(data, angle) for data in input]
         else:
             return input
 
     def _augment_list(self, input: list[torch.Tensor]) -> list[torch.Tensor]:
         """Apply the augmentation to the output data if the augment flag is set to True."""
-        if self.input.augments:
-            if lucky():
+        if self.config.augments:
+            if _lucky():
                 input = [torch.transpose(data, -1, -2) for data in input]
-            if lucky():
+            if _lucky():
                 input = [torch.flip(data, [-1]) for data in input]
-            if lucky():
+            if _lucky():
                 input = [torch.flip(data, [-2]) for data in input]
         return input
 
@@ -189,32 +191,7 @@ class SingleVolumeDataset(Dataset, ABC):
     def _index(self, index: int) -> int:
         """Compute the true index for the input data."""
         # Random index if the virtual size is not set
-        index = index if self.input.virtual_size == 0 else randint(self.data_size)
-        if self.input.skip_frames > 1:
-            index = index // self.input.skip_frames * self.input.skip_frames
+        index = index if self.config.virtual_size == 0 else randint(self.data_size)
+        if self.config.skip_frames > 1:
+            index = index // self.config.skip_frames * self.config.skip_frames
         return index
-
-
-class ValidationDataset(SingleVolumeDataset):
-    """A dataset class for validation data."""
-
-    def __getitem__(self, index: int) -> list[torch.Tensor]:
-        index = self._index(index)
-        input = self.data[index : index + self.z_size]
-        # Combine the input and ground truth data for cropping
-        if self.reference is not None:
-            reference = self.reference[index : index + self.z_size]
-            target = (
-                self.normalize_by_mean(input) if self.input.normalize_target else input
-            )
-            output = self._crop_list(
-                [input / (input.mean() + EPSILON), input, reference]
-            )
-        else:
-            [input] = self._crop_list([input])
-            target = (
-                self.normalize_by_mean(input) if self.input.normalize_target else input
-            )
-            output = [target, input]
-
-        return self._add_channel_dim(self._augment_list(output))
