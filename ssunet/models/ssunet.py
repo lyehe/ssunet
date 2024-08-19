@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -18,7 +18,6 @@ from ssunet.modules import (
     LKDownConv3D,
     conv111,
 )
-from lightning.pytorch.loggers import TensorBoardLogger
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +68,7 @@ class ModelConfig:
     activation: str = "relu"
     block_type: str = "tri"
     note: str = ""
+    optimizer_config: dict = field(default_factory=lambda: DEFAULT_OPTIMIZER_CONFIG)
 
     @property
     def name(self) -> str:
@@ -91,12 +91,10 @@ class SSUnet(pl.LightningModule):
     def __init__(
         self,
         config: ModelConfig,
-        optimizer_config: dict = DEFAULT_OPTIMIZER_CONFIG,
         **kwargs,
     ):
         super().__init__()
         self.config = config
-        self.optimizer_config = optimizer_config
         self.loss_function = loss_functions[config.loss_function]
         self.kwargs = kwargs
 
@@ -208,7 +206,7 @@ class SSUnet(pl.LightningModule):
         return self.conv_final(input)
 
     def configure_optimizers(self) -> dict:
-        config = self.optimizer_config
+        config = self.config.optimizer_config
         optimizer = (
             OPTIMIZER[config["name"]](self.parameters(), lr=config["lr"], fused=False)
             if config["name"] in ("adam", "adamw")

@@ -1,4 +1,5 @@
 import torch
+import torch.utils.data as dt
 import pytorch_lightning as pl
 
 from datetime import datetime
@@ -9,6 +10,7 @@ from pytorch_lightning.callbacks import (
     EarlyStopping,
     DeviceStatsMonitor,
 )
+from ssunet.dataloader import SingleVolumeDataset
 from dataclasses import dataclass, field
 from typing import Literal
 from logging import getLogger
@@ -48,8 +50,8 @@ class LoaderConfig:
         ]
         return "_".join(name for name in name_str if name is not None and name != "")
 
-    def __call__(self) -> dict:
-        return self.to_dict
+    def loader(self, data: SingleVolumeDataset) -> dt.DataLoader:
+        return dt.DataLoader(data, **self.to_dict)
 
 
 @dataclass

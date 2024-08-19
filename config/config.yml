@@ -1,13 +1,13 @@
 PATH:
   model_path: "./models"
-  data_dir:  "../../tempdata/"
+  data_dir:  ".."
   data_file: 0
   reference_dir: null
   reference_file: null
   ground_truth_dir: null
   ground_truth_file: null
-  begin_slice: int = 0
-  end_slice: int = -1
+  begin_slice: 0
+  end_slice: -1
 
 DATA:
   xy_size: 256
@@ -51,9 +51,15 @@ MODEL:
   activation: "relu"
   block_type: "tri"
   note: ""
+  optimizer_config:
+    name: "adamw" # "adam" | "sgd" | "adamw"
+    lr: 0.0002
+    mode: "min" # "min" | "max"
+    factor: 0.5
+    patience: 5
 
 LOADER:
-  batch_size: 20
+  batch_size: 1
   shuffle: False
   pin_memory: False
   drop_last: True

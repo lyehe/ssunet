@@ -156,9 +156,6 @@ class MasterConfig:
         }
 
 
-# A loader for MasterConfig
-
-
 def load_yaml(config_path: Path | str = Path("./config.yml")) -> dict:
     """Load yaml configuration file"""
     if isinstance(config_path, str):
