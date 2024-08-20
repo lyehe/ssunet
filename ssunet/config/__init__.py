@@ -7,7 +7,6 @@ from .config import (
     LoaderConfig,
     TrainConfig,
     SSUnetData,
-    load_yaml,
     load_config,
 )
 
@@ -20,6 +19,5 @@ __all__ = [
     "LoaderConfig",
     "TrainConfig",
     "SSUnetData",
-    "load_yaml",
     "load_config",
 ]

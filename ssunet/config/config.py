@@ -16,28 +16,24 @@ from tifffile import imread, TiffFile
 class PathConfig:
     """Configuration for paths"""
 
-    model_path: str | Path
     data_dir: str | Path
     data_file: int | str | Path
-
     reference_dir: str | Path | None = None
     reference_file: int | str | Path | None = None
-    ground_truth_dir: str | Path | None = None
-    ground_truth_file: int | str | Path | None = None
-
     begin_slice: int = 0
     end_slice: int = -1
 
+    ground_truth_dir: str | Path | None = None
+    ground_truth_file: int | str | Path | None = None
+    grund_truth_begin_slice: int = 0
+    grund_truth_end_slice: int = -1
+
     def __post_init__(self):
-        self.model_path = Path(self.model_path)
         self.data_dir = Path(self.data_dir)
         self.reference_dir = Path(self.reference_dir) if self.reference_dir else None
         self.ground_truth_dir = (
             Path(self.ground_truth_dir) if self.ground_truth_dir else None
         )
-
-        # Verify or create the model path
-        self.model_path.mkdir(parents=True, exist_ok=True)
 
         # Verify the data directory exists
         if not self.data_dir.exists():
@@ -88,13 +84,19 @@ class PathConfig:
     def ground_truth_is_available(self) -> bool:
         return self.ground_truth_dir is not None and self.ground_truth_file is not None
 
-    def _load(self, path: Path, method: Callable | None) -> np.ndarray:
+    def _load(
+        self,
+        path: Path,
+        method: Callable | None,
+        begin: int,
+        end: int,
+    ) -> np.ndarray:
         if path.suffix in [".tif", ".tiff"]:
             if self.end_slice == -1:
                 return imread(path)
             else:
                 with TiffFile(str(path)) as tif:
-                    return tif.asarray(key=slice(self.begin_slice, self.end_slice))
+                    return tif.asarray(key=slice(begin, end))
 
         elif path.suffix in [".h5", ".hdf5"]:
             with h5py.File(str(path), "r") as f:
@@ -103,28 +105,37 @@ class PathConfig:
                 assert isinstance(
                     dataset, h5py.Dataset
                 ), "HDF5 file does not contain expected dataset"
-                return np.array(dataset[self.begin_slice : self.end_slice])
+                return np.array(dataset[begin:end])
 
         elif method is not None:
-            return method(path)
+            return method(path, begin=begin, end=end)
         else:
             raise ValueError(f"Unknown file type for path {path}")
 
     def load_data(self, method: Callable | None = None) -> np.ndarray:
         if isinstance(self.data_file, Path):
-            return self._load(self.data_file, method).astype(np.float32)
+            return self._load(
+                self.data_file, method, begin=self.begin_slice, end=self.end_slice
+            ).astype(np.float32)
         else:
             raise ValueError("No data file available")
 
     def load_reference(self, method: Callable | None = None) -> np.ndarray | None:
         if self.reference_is_avaiable and isinstance(self.reference_file, Path):
-            return self._load(self.reference_file, method).astype(np.float32)
+            return self._load(
+                self.reference_file, method, begin=self.begin_slice, end=self.end_slice
+            ).astype(np.float32)
         else:
             return None
 
     def load_ground_truth(self, method: Callable | None = None) -> np.ndarray | None:
         if self.ground_truth_is_available and isinstance(self.ground_truth_file, Path):
-            return self._load(self.ground_truth_file, method).astype(np.float32)
+            return self._load(
+                self.ground_truth_file,
+                method,
+                begin=self.grund_truth_begin_slice,
+                end=self.grund_truth_end_slice,
+            ).astype(np.float32)
         else:
             return None
 
@@ -188,7 +199,7 @@ def load_config(
 ) -> MasterConfig:
     """Convert the configuration dictionary to dataclasses"""
     config = load_yaml(config_path)
-    return MasterConfig(
+    master_config = MasterConfig(
         path_config=PathConfig(**config["PATH"]),
         data_config=DataConfig(**config["DATA"]),
         split_params=SplitParams(**config["SPLIT"]),
@@ -196,12 +207,15 @@ def load_config(
         loader_config=LoaderConfig(**config["LOADER"]),
         train_config=TrainConfig(**config["TRAIN"]),
     )
+    master_config.train_config.set_new_root(new_root=master_config.name)
+    save_config(config, master_config.train_config.default_root_dir)
+    return master_config
 
 
-def dump_config(
-    config: MasterConfig, config_path: Path = Path("./dumped_config.yml")
-) -> None:
-    """Dump the MasterConfig object to a yaml file"""
-    config_dict = config._as_dict()
-    with open(config_path, "w") as file:
-        yaml.dump(config_dict, file)
+def save_config(config: dict, path: Path | str) -> None:
+    """Save the configruation to a yaml file"""
+    path = Path(path) / "config.yml"
+    if not path.parent.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as file:
+        yaml.dump(config, file)

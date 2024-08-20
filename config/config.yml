@@ -1,13 +1,15 @@
 PATH:
-  model_path: "../models"
   data_dir:  "../../temp_data"
   data_file: "RES_4341_p=0.00781_m=0.00776.tif"
   reference_dir: "../../temp_data"
   reference_file: "RES_4341_p=0.00781_m=0.00776.tif"
-  ground_truth_dir: null
-  ground_truth_file: null
   begin_slice: 0
   end_slice: 3600
+
+  ground_truth_dir: null
+  ground_truth_file: null
+  grund_truth_begin_slice: 3601
+  grund_truth_end_slice: 3856
 
 DATA:
   xy_size: 256

@@ -54,7 +54,7 @@ class LoaderConfig:
 
 @dataclass
 class TrainConfig:
-    default_root_dir: str = "../models"
+    default_root_dir: str | Path = "../models"
     accelerator: str = "cuda"
     gradient_clip_val: int = 1
     precision: str | int | None = 32
@@ -91,6 +91,9 @@ class TrainConfig:
     time_stamp: str = field(init=False)
 
     def __post_init__(self):
+        self.default_root_dir = Path(self.default_root_dir)
+        if not self.default_root_dir.exists():
+            self.default_root_dir.mkdir(parents=True, exist_ok=True)
         torch.set_float32_matmul_precision(self.matmul_precision)
         self.time_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -162,15 +165,19 @@ class TrainConfig:
             "log_every_n_steps": self.log_every_n_steps,
         }
 
-    def trainer(self, path: Path | str | None = None) -> pl.Trainer:
-        """Create  a PyTorch Lightning Trainer instance from the config
-        :param path: Optional path to save trainer logs and checkpoints
+    @property
+    def trainer(self) -> pl.Trainer:
+        print(f"Saving logs and checkpoints to {str(self.default_root_dir)}")
+        return pl.Trainer(**self.to_dict)
 
-        :return: The PyTorch Lightning Trainer
-        :rtype: pl.Trainer
+    def set_new_root(self, new_root: Path | str):
+        """Set a new default root directory
+
+        :param new_root: New root directory path. If a string, will be joined to existing root dir
+        :type new_root: Path | str
         """
-        params = self.to_dict
-        if path is not None:
-            root_path = Path(params["default_root_dir"])
-            params["default_root_dir"] = root_path / path
-        return pl.Trainer(**params)
+        if isinstance(new_root, Path):
+            self.default_root_dir = new_root
+        elif isinstance(new_root, str):
+            self.default_root_dir = self.default_root_dir / Path(new_root)
+        print(f"New model root directory: {str(self.default_root_dir)}")
