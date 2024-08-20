@@ -1,41 +1,16 @@
 from dataclasses import dataclass, field
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import pytorch_lightning as pl
-import logging
 import pyiqa
 
 from torch.nn import init
 from torch.utils.checkpoint import checkpoint
 
 from ssunet.loss import loss_functions
-from ssunet.modules import (
-    DownConvDual3D,
-    UpConvDual3D,
-    DownConvTri3D,
-    UpConvTri3D,
-    LKDownConv3D,
-    conv111,
-)
-
-logger = logging.getLogger(__name__)
-
-EPSILON = 1e-8
-
-DEFAULT_OPTIMIZER_CONFIG = {
-    "name": "adamw",  # optimizer name
-    "lr": 2e-5,  # learning rate
-    "mode": "min",  # mode for ReduceLROnPlateau
-    "factor": 0.5,  # factor for ReduceLROnPlateau
-    "patience": 5,  # patience for ReduceLROnPlateau
-}
-
-BLOCK = {
-    "dual": (DownConvDual3D, UpConvDual3D),
-    "tri": (DownConvTri3D, UpConvTri3D),
-    "LK": (LKDownConv3D, UpConvTri3D),
-}
+from ssunet.modules import conv111, BLOCK
+from ssunet.constants import DEFAULT_OPTIMIZER_CONFIG, EPSILON, LOGGER
+import torch.optim as optim
 
 OPTIMIZER = {
     "adam": optim.Adam,
@@ -312,8 +287,8 @@ class SSUnet(pl.LightningModule):
 
         psnr = self._psnr_metric(normalized_output, ground_truth)
         ssim = self._ssim_metric(normalized_output, ground_truth)
-        self.log("val_psnr", psnr)
-        self.log("val_ssim", ssim)
+        self.log("val_psnr", psnr.mean())
+        self.log("val_ssim", ssim.mean())
 
     def _normalize_log_image(
         self,
@@ -331,7 +306,7 @@ class SSUnet(pl.LightningModule):
             case "mean":
                 return (img / img.mean() * 128).to(torch.uint8)
             case _:
-                logger.warning("Normalization method not recognized. Using min-max.")
+                LOGGER.warning("Normalization method not recognized. Using min-max.")
                 return ((img - img.min()) / (img.max() - img.min()) * 255).to(
                     torch.uint8
                 )

@@ -1,6 +1,6 @@
 import torch
-from .singlevolume import SingleVolumeDataset, EPSILON
-
+from .singlevolume import SingleVolumeDataset
+from ssunet.constants import EPSILON
 
 class ValidationDataset(SingleVolumeDataset):
     """A dataset class for validation data."""

@@ -5,8 +5,8 @@ from numpy.random import rand, choice, seed
 import torch
 from torch.distributions.binomial import Binomial
 
-from .singlevolume import SingleVolumeDataset, EPSILON, logger
-
+from .singlevolume import SingleVolumeDataset
+from ssunet.constants import LOGGER, EPSILON
 
 @dataclass
 class SplitParams:
@@ -21,7 +21,7 @@ class SplitParams:
 
     def __post_init__(self):
         if self.min_p > self.max_p:
-            logger.warning("min_p should be less than max_p, swapping values")
+            LOGGER.warning("min_p should be less than max_p, swapping values")
             self.min_p, self.max_p = self.max_p, self.min_p
         if self.seed is not None:
             seed(self.seed)
@@ -80,7 +80,7 @@ class BinomDataset(SingleVolumeDataset):
             elif self.split_params.method == "list":
                 return self._sample_list()
             else:
-                logger.warning(
+                LOGGER.warning(
                     f"Method {self.split_params.method} not supported, using default"
                 )
                 return self._sample_signal()
@@ -89,10 +89,10 @@ class BinomDataset(SingleVolumeDataset):
     def _validate_p(p_value: float) -> float:
         """Check the p level is within the valid range"""
         if p_value <= 0:
-            logger.warning("PSNR level must be greater than 0, using 0")
+            LOGGER.warning("PSNR level must be greater than 0, using 0")
             return 0.0
         if p_value >= 1:
-            logger.warning("PSNR level must be less than 1, using 1")
+            LOGGER.warning("PSNR level must be less than 1, using 1")
             return 1.0
         return p_value
 
@@ -132,7 +132,7 @@ class BinomDataset(SingleVolumeDataset):
     @staticmethod
     def _sample_noise(input: torch.Tensor, p_value: float) -> torch.Tensor:
         """Sample the noise data for the input image using a binomial distribution"""
-        input = torch.floor_(input)
+        input = torch.floor_(input.float())
         binom = Binomial(total_count=input, probs=torch.tensor([p_value]))  # type: ignore
         return binom.sample()
 

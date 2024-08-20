@@ -1,10 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import logging
-
-EPSILON = 1e-8  # for mixed precision training, change 1e-8 to 1e-6
-logger = logging.getLogger(__name__)
+from ssunet.constants import LOGGER, EPSILON
 
 
 class PartialConv3d(nn.Conv3d):
@@ -31,7 +28,7 @@ class PartialConv3d(nn.Conv3d):
 
     def forward(self, input: torch.Tensor, mask_in: torch.Tensor | None = None):
         if len(input.shape) != 5:
-            logger.error(f"Pconv3D: Input must be 5D , but got {len(input.shape)}")
+            LOGGER.error(f"Pconv3D: Input must be 5D , but got {len(input.shape)}")
             raise ValueError(f"Pconv3D: Input must be 5D , but got {len(input.shape)}")
 
         if mask_in is not None or self.last_size != tuple(input.shape):
@@ -101,7 +98,7 @@ class PartialConv2d(nn.Conv2d):
 
     def forward(self, input: torch.Tensor, mask_in: torch.Tensor | None = None):
         if len(input.shape) != 4:
-            logger.error(f"Pconv2D: Input must be 4D , but got {len(input.shape)}")
+            LOGGER.error(f"Pconv2D: Input must be 4D , but got {len(input.shape)}")
             raise ValueError(f"Pconv2D: Input must be 4D , but got {len(input.shape)}")
 
         if mask_in is not None or self.last_size != tuple(input.shape):

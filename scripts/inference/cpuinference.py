@@ -1,9 +1,6 @@
 import numpy as np
 import pytorch_lightning as pl
 import torch
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 def cpu_inference(model: pl.LightningModule, data: np.ndarray) -> np.ndarray:

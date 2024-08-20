@@ -15,9 +15,7 @@ from .modulets import (
 from abc import abstractmethod
 from functools import partial
 from typing import TypeAlias
-import logging
 
-logger = logging.getLogger(__name__)
 _EncoderOut: TypeAlias = tuple[torch.Tensor, torch.Tensor] | tuple[torch.Tensor, None]
 
 

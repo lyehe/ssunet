@@ -1,7 +1,5 @@
 import torch
-
-EPSILON = 1e-8
-
+from ssunet.constants import EPSILON
 
 def mse_loss(
     result: torch.Tensor,

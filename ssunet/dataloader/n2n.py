@@ -1,6 +1,6 @@
 import torch
-from .singlevolume import SingleVolumeDataset, logger
-
+from .singlevolume import SingleVolumeDataset
+from ssunet.constants import LOGGER
 
 class N2NDatasetSkipFrame(SingleVolumeDataset):
     """N2N using even and odd frames as input/target."""
@@ -29,7 +29,7 @@ class N2NDatasetDualVolume(SingleVolumeDataset):
 
     def __getitem__(self, index: int) -> list[torch.Tensor]:
         if self.reference is None:
-            logger.error("Reference data is required for the dual N2N dataset")
+            LOGGER.error("Reference data is required for the dual N2N dataset")
             raise ValueError("Reference data is required for the dual N2N dataset")
 
         start_index = self._index(index)

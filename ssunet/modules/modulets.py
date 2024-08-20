@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import logging
 from .pixelshuffle import (
     PixelShuffle3d,
     PixelUnshuffle3d,
@@ -9,8 +8,8 @@ from .pixelshuffle import (
 )
 from .partialconv import PartialConv3d
 from .separableconv import SeparableConv3d
+from ssunet.constants import LOGGER
 
-logger = logging.getLogger(__name__)
 
 
 def conv111(
@@ -256,7 +255,7 @@ def pool(
         case "unshuffle":
             return pixelunshuffle(in_channels, out_channels, z_conv)
         case _:
-            logger.warning(f"Unknown downsample mode: {down_mode}. Using maxpool.")
+            LOGGER.warning(f"Unknown downsample mode: {down_mode}. Using maxpool.")
             return maxpool_downsample(z_conv)
 
 
@@ -338,7 +337,7 @@ def upconv222(
                 conv333(in_channels, out_channels, z_conv),
             )
         case _:
-            logging.warning(f"Unknown up_mode: {up_mode}. Using transpose instead.")
+            LOGGER.warning(f"Unknown up_mode: {up_mode}. Using transpose instead.")
             return nn.ConvTranspose3d(in_channels, out_channels, kernel, stride=stride)
 
 
@@ -394,16 +393,16 @@ def merge(
     match merge_mode:
         case "concat":
             if input_a.shape[1:] != input_b.shape[1:]:
-                logger.error(f"Unequal shape: a={input_a.shape}, b={input_b.shape}")
+                LOGGER.error(f"Unequal shape: a={input_a.shape}, b={input_b.shape}")
                 raise ValueError(f"Unequal shape: a={input_a.shape}, b={input_b.shape}")
             return torch.cat((input_a, input_b), dim=1)
         case "add":
             if input_a.shape != input_b.shape:
-                logger.error(f"Unequal shape: a={input_a.shape}, b={input_b.shape}")
+                LOGGER.error(f"Unequal shape: a={input_a.shape}, b={input_b.shape}")
                 raise ValueError(f"Unequal shape: a={input_a.shape}, b={input_b.shape}")
             return input_a + input_b
         case _:
-            logging.warning(f"Unknown merge_mode: {merge_mode}. Using concat instead.")
+            LOGGER.warning(f"Unknown merge_mode: {merge_mode}. Using concat instead.")
             return torch.cat((input_a, input_b), dim=1)
 
 
@@ -432,7 +431,7 @@ def merge_conv(
         case "add":
             return conv333(in_channels, out_channels, z_conv)
         case _:
-            logging.warning(f"Unknown mode: {mode}. Using concat instead.")
+            LOGGER.warning(f"Unknown mode: {mode}. Using concat instead.")
             return conv333(in_channels * 2, out_channels, z_conv)
 
 
@@ -471,5 +470,5 @@ def activation_function(activation: str, **kwargs) -> nn.Module:
         case "logsoftmax":
             return nn.LogSoftmax(dim=kwargs.get("dim", None))
         case _:
-            logging.warning(f"Unknown activation: {activation}. Using ReLU instead.")
+            LOGGER.warning(f"Unknown activation: {activation}. Using ReLU instead.")
             return nn.ReLU(inplace=kwargs.get("inplace", True))

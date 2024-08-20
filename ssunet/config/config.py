@@ -112,19 +112,19 @@ class PathConfig:
 
     def load_data(self, method: Callable | None = None) -> np.ndarray:
         if isinstance(self.data_file, Path):
-            return self._load(self.data_file, method)
+            return self._load(self.data_file, method).astype(np.float32)
         else:
             raise ValueError("No data file available")
 
     def load_reference(self, method: Callable | None = None) -> np.ndarray | None:
         if self.reference_is_avaiable and isinstance(self.reference_file, Path):
-            return self._load(self.reference_file, method)
+            return self._load(self.reference_file, method).astype(np.float32)
         else:
             return None
 
     def load_ground_truth(self, method: Callable | None = None) -> np.ndarray | None:
         if self.ground_truth_is_available and isinstance(self.ground_truth_file, Path):
-            return self._load(self.ground_truth_file, method)
+            return self._load(self.ground_truth_file, method).astype(np.float32)
         else:
             return None
 
@@ -145,6 +145,10 @@ class MasterConfig:
     loader_config: LoaderConfig
     train_config: TrainConfig
 
+    def __post_init__(self):
+        global experiment_name
+        experiment_name = self.name
+
     def _as_dict(self):
         return {
             "path_config": self.path_config,
@@ -154,6 +158,18 @@ class MasterConfig:
             "loader_config": self.loader_config,
             "train_config": self.train_config,
         }
+
+    @property
+    def name(self) -> str:
+        name = "_".join(
+            [
+                self.data_config.name,
+                self.model_config.name,
+                self.loader_config.name,
+                self.train_config.name,
+            ]
+        )
+        return name
 
 
 def load_yaml(config_path: Path | str = Path("./config.yml")) -> dict:

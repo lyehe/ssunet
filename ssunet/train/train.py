@@ -13,9 +13,7 @@ from pytorch_lightning.callbacks import (
 from ssunet.dataloader import SingleVolumeDataset
 from dataclasses import dataclass, field
 from typing import Literal
-from logging import getLogger
-
-logger = getLogger(__name__)
+from pathlib import Path
 
 
 @dataclass
@@ -56,7 +54,7 @@ class LoaderConfig:
 
 @dataclass
 class TrainConfig:
-    default_root_dir: str = "./models"
+    default_root_dir: str = "../models"
     accelerator: str = "cuda"
     gradient_clip_val: int = 1
     precision: str | int | None = 32
@@ -164,11 +162,15 @@ class TrainConfig:
             "log_every_n_steps": self.log_every_n_steps,
         }
 
-    @property
-    def trainer(self) -> pl.Trainer:
+    def trainer(self, path: Path | str | None = None) -> pl.Trainer:
         """Create  a PyTorch Lightning Trainer instance from the config
+        :param path: Optional path to save trainer logs and checkpoints
 
         :return: The PyTorch Lightning Trainer
         :rtype: pl.Trainer
         """
-        return pl.Trainer(**self.to_dict)
+        params = self.to_dict
+        if path is not None:
+            root_path = Path(params["default_root_dir"])
+            params["default_root_dir"] = root_path / path
+        return pl.Trainer(**params)

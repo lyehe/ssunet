@@ -9,16 +9,6 @@ import seaborn as sns
 import matplotlib.patheffects as pe
 from pathlib import Path
 
-DEFALT_METRICS = [
-    "mse",
-    "mae",
-    "ncc",
-    "psnr",
-    "ssim",
-    "ms_ssim",
-    "niqe",
-    "brisque",
-]
 
 
 def import_config(config_path: Path) -> dict:

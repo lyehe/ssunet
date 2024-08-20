@@ -1,16 +1,12 @@
 from dataclasses import dataclass
 from abc import abstractmethod, ABC
-import logging
 
 import numpy as np
 from numpy.random import randint, rand
 import torch
 from torch.utils.data import Dataset
 import torchvision.transforms.v2.functional as tf
-
-EPSILON = 1e-8
-
-logger = logging.getLogger(__name__)
+from ssunet.constants import EPSILON, LOGGER
 
 
 def _lucky(factor: float = 0.5) -> bool:
@@ -44,12 +40,12 @@ class SSUnetData:
         try:
             return torch.from_numpy(input)
         except TypeError:
-            logger.warning("Data type not supported")
+            LOGGER.warning("Data type not supported")
             try:
-                logger.info("Trying to convert to int64")
+                LOGGER.info("Trying to convert to int64")
                 return torch.from_numpy(input.astype(np.int64))
             except TypeError:
-                logger.error("Data type not supported")
+                LOGGER.error("Data type not supported")
                 raise TypeError("Data type not supported")
 
 
