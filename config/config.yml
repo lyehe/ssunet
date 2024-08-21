@@ -12,7 +12,7 @@ PATH:
   grund_truth_end_slice: 3856
 
 DATA:
-  xy_size: 256
+  xy_size: 128
   z_size: 32
   virtual_size: 600
   augments: False
@@ -20,7 +20,7 @@ DATA:
   random_crop: True
   skip_frames: 1
   normalize_target: True
-  note: ""
+  note: "test"
 
 SPLIT:
   method: "signal"
@@ -61,7 +61,7 @@ MODEL:
     patience: 5
 
 LOADER:
-  batch_size: 3
+  batch_size: 15
   shuffle: False
   pin_memory: False
   drop_last: True

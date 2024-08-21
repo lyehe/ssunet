@@ -1,6 +1,7 @@
 from .gap import BernoulliDataset, BinomDataset, SplitParams
 from .n2n import N2NDatasetDualVolume, N2NDatasetSkipFrame
 from .singlevolume import DataConfig, SSUnetData, SingleVolumeDataset
+from .validation import ValidationDataset
 
 __all__ = [
     "BernoulliDataset",
@@ -11,4 +12,5 @@ __all__ = [
     "DataConfig",
     "SSUnetData",
     "SingleVolumeDataset",
+    "ValidationDataset",
 ]

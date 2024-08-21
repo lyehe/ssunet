@@ -134,6 +134,9 @@ class TrainConfig:
 
     @property
     def logger(self) -> TensorBoardLogger:
+        logger_path = Path(self.default_root_dir) / self.logger_name
+        if not logger_path.exists():
+            logger_path.mkdir(parents=True, exist_ok=True)
         return TensorBoardLogger(save_dir=self.default_root_dir, name=self.logger_name)
 
     @property

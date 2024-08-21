@@ -176,8 +176,8 @@ class MasterConfig:
             [
                 self.data_config.name,
                 self.model_config.name,
-                self.loader_config.name,
-                self.train_config.name,
+                # self.loader_config.name,
+                # self.train_config.name,
             ]
         )
         return name

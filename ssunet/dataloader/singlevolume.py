@@ -4,6 +4,8 @@ from abc import abstractmethod, ABC
 import numpy as np
 from numpy.random import randint, rand
 import torch
+import torch.nn.functional as F
+
 from torch.utils.data import Dataset
 import torchvision.transforms.v2.functional as tf
 from ssunet.constants import EPSILON, LOGGER
@@ -47,6 +49,27 @@ class SSUnetData:
             except TypeError:
                 LOGGER.error("Data type not supported")
                 raise TypeError("Data type not supported")
+
+    @staticmethod
+    def _apply_binning(
+        data: np.ndarray | torch.Tensor, bin: int, mode: str
+    ) -> torch.Tensor:
+        if isinstance(data, np.ndarray):
+            data = torch.from_numpy(data)
+
+        if isinstance(data, torch.Tensor):
+            if mode == "sum":
+                weight = torch.ones(1, 1, bin, bin, device=data.device)
+                return F.conv2d(data, weight, stride=bin, groups=data.size(1))
+            elif mode == "max":
+                return F.max_pool2d(data, kernel_size=bin, stride=bin)
+            else:
+                raise ValueError("Mode must be 'sum' or 'max'")
+
+    def binxy(self, bin: int = 2, mode: str = "sum"):
+        self.data = self._apply_binning(self.data, bin, mode=mode)
+        if self.reference is not None:
+            self.reference = self._apply_binning(self.reference, bin, mode=mode)
 
 
 @dataclass
