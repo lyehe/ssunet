@@ -1,10 +1,13 @@
 PATH:
   data_dir:  "../../temp_data"
   data_file: "RES_4341_p=0.00781_m=0.00776.tif"
-  reference_dir: "../../temp_data"
-  reference_file: "RES_4341_p=0.00781_m=0.00776.tif"
   begin_slice: 0
   end_slice: 3600
+
+  reference_dir: "../../temp_data"
+  reference_file: "RES_4341_p=0.00781_m=0.00776.tif"
+  reference_begin_slice: 0
+  reference_end_slice: 3600
 
   ground_truth_dir: null
   ground_truth_file: null
