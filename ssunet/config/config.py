@@ -5,28 +5,42 @@ from ssunet.train import LoaderConfig, TrainConfig
 import yaml
 import h5py
 import numpy as np
-from typing import Callable
+from typing import Callable, Optional, Union
 from pathlib import Path
 from itertools import islice
+from enum import Enum, auto
 from dataclasses import dataclass
 from tifffile import imread, TiffFile
+
+PathLike = Union[str, Path]
+FileInput = Union[int, str, Path]
+
+
+class FileType(Enum):
+    DATA = auto()
+    REFERENCE = auto()
+    GROUND_TRUTH = auto()
 
 
 @dataclass
 class PathConfig:
     """Configuration for paths"""
 
-    data_dir: str | Path
-    data_file: int | str | Path
-    reference_dir: str | Path | None = None
-    reference_file: int | str | Path | None = None
-    begin_slice: int = 0
-    end_slice: int = -1
+    data_dir: PathLike
+    data_file: FileInput
+    data_begin_slice: int = 0
+    data_end_slice: int = -1
 
-    ground_truth_dir: str | Path | None = None
-    ground_truth_file: int | str | Path | None = None
-    grund_truth_begin_slice: int = 0
-    grund_truth_end_slice: int = -1
+    reference_dir: PathLike | None = None
+    reference_file: FileInput | None = None
+    reference_begin_slice: int = 0
+
+    reference_end_slice: int = -1
+
+    ground_truth_dir: PathLike | None = None
+    ground_truth_file: FileInput | None = None
+    ground_truth_begin_slice: int = 0
+    ground_truth_end_slice: int = -1
 
     def __post_init__(self):
         self.data_dir = Path(self.data_dir)
@@ -38,7 +52,9 @@ class PathConfig:
         # Verify the data directory exists
         if not self.data_dir.exists():
             raise NotADirectoryError(f"Data directory {self.data_dir} does not exist")
-        self.data_file = self._resolve_file(self.data_file, self.data_dir, "Data")
+        self.data_file = self._resolve_file(
+            self.data_file, self.data_dir, FileType.DATA
+        )
 
         # Handle reference_file if reference_dir is provided
         if self.reference_dir and self.reference_file:
@@ -47,7 +63,7 @@ class PathConfig:
                     f"Reference directory {self.reference_dir} does not exist"
                 )
             self.reference_file = self._resolve_file(
-                self.reference_file, self.reference_dir, "Reference"
+                self.reference_file, self.reference_dir, FileType.REFERENCE
             )
 
         # Handle ground_truth_file if ground_truth_dir is provided
@@ -57,87 +73,143 @@ class PathConfig:
                     f"Ground truth directory {self.ground_truth_dir} does not exist"
                 )
             self.ground_truth_file = self._resolve_file(
-                self.ground_truth_file, self.ground_truth_dir, "Ground_Truth"
+                self.ground_truth_file, self.ground_truth_dir, FileType.GROUND_TRUTH
             )
 
+        self._validate_slices()
+
+    def _validate_slices(self):
+        for attr in ["data", "reference", "ground_truth"]:
+            begin = getattr(self, f"{attr}_begin_slice")
+            end = getattr(self, f"{attr}_end_slice")
+            if begin < 0 or (end != -1 and end <= begin):
+                raise ValueError(f"Invalid slice range for {attr}: {begin}:{end}")
+
     def _resolve_file(
-        self, file_input: int | str | Path, directory: Path, file_type: str
-    ):
+        self, file_input: FileInput, directory: Path, file_type: FileType
+    ) -> Path:
+        """Resolve the file path"""
+
         if isinstance(file_input, int):
             try:
                 return next(islice(directory.iterdir(), file_input, None))
             except StopIteration:
-                raise IndexError(f"{file_type} file index {file_input} out of range")
+                raise IndexError(
+                    f"{file_type.name} file index {file_input} out of range"
+                )
         elif isinstance(file_input, (str, Path)):
             file_path = Path(file_input)
             if not file_path.is_absolute():
                 file_path = directory / file_path
             if not file_path.exists():
-                raise FileNotFoundError(f"{file_type} file {file_path} does not exist")
+                raise FileNotFoundError(
+                    f"{file_type.name} file {file_path} does not exist"
+                )
             return file_path
 
     @property
-    def reference_is_avaiable(self) -> bool:
+    def reference_is_available(self) -> bool:
+        """Check if reference file is available"""
         return self.reference_dir is not None and self.reference_file is not None
 
     @property
     def ground_truth_is_available(self) -> bool:
+        """Check if ground truth file is available"""
         return self.ground_truth_dir is not None and self.ground_truth_file is not None
 
     def _load(
         self,
-        path: Path,
-        method: Callable | None,
+        data_path: Path,
+        method: Optional[Callable],
         begin: int,
         end: int,
     ) -> np.ndarray:
-        if path.suffix in [".tif", ".tiff"]:
-            if self.end_slice == -1:
-                return imread(path)
+        if data_path.suffix in [".tif", ".tiff"]:
+            if begin == 0 and end == -1:
+                return imread(data_path)
             else:
-                with TiffFile(str(path)) as tif:
+                with TiffFile(str(data_path)) as tif:
                     return tif.asarray(key=slice(begin, end))
 
-        elif path.suffix in [".h5", ".hdf5"]:
-            with h5py.File(str(path), "r") as f:
+        elif data_path.suffix in [".h5", ".hdf5"]:
+            with h5py.File(str(data_path), "r") as f:
                 keys = list(f.keys())
                 dataset = f.get(keys[0])
+
                 assert isinstance(
                     dataset, h5py.Dataset
                 ), "HDF5 file does not contain expected dataset"
                 return np.array(dataset[begin:end])
 
         elif method is not None:
-            return method(path, begin=begin, end=end)
+            return method(data_path, begin=begin, end=end)
         else:
-            raise ValueError(f"Unknown file type for path {path}")
+            raise ValueError(f"Unknown file type for path {data_path}")
 
-    def load_data(self, method: Callable | None = None) -> np.ndarray:
+    def load_data(
+        self,
+        method: Optional[Callable] = None,
+        begin: Optional[int] = None,
+        end: Optional[int] = None,
+    ) -> np.ndarray:
+        """Load the data file"""
+        if begin is None:
+            begin = self.data_begin_slice
+        if end is None:
+            end = self.data_end_slice
         if isinstance(self.data_file, Path):
             return self._load(
-                self.data_file, method, begin=self.begin_slice, end=self.end_slice
+                self.data_file,
+                method,
+                begin,
+                end,
             ).astype(np.float32)
         else:
             raise ValueError("No data file available")
 
-    def load_reference(self, method: Callable | None = None) -> np.ndarray | None:
-        if self.reference_is_avaiable and isinstance(self.reference_file, Path):
+    def load_reference(
+        self,
+        method: Optional[Callable] = None,
+        begin: Optional[int] = None,
+        end: Optional[int] = None,
+    ) -> Optional[np.ndarray]:
+        """Load the reference file"""
+        if begin is None:
+            begin = self.reference_begin_slice
+        if end is None:
+            end = self.reference_end_slice
+        if self.reference_is_available and isinstance(self.reference_file, Path):
             return self._load(
-                self.reference_file, method, begin=self.begin_slice, end=self.end_slice
+                self.reference_file,
+                method,
+                begin,
+                end,
             ).astype(np.float32)
         else:
-            return None
+            print("No reference file available, using data file instead")
+            return self.load_data(method)
 
-    def load_ground_truth(self, method: Callable | None = None) -> np.ndarray | None:
+    def load_ground_truth(
+        self,
+        method: Optional[Callable] = None,
+        begin: Optional[int] = None,
+        end: Optional[int] = None,
+    ) -> Optional[np.ndarray]:
+        """Load the ground truth file"""
+        if begin is None:
+            begin = self.ground_truth_begin_slice
+        if end is None:
+            end = self.ground_truth_end_slice
         if self.ground_truth_is_available and isinstance(self.ground_truth_file, Path):
             return self._load(
                 self.ground_truth_file,
                 method,
-                begin=self.grund_truth_begin_slice,
-                end=self.grund_truth_end_slice,
+                begin,
+                end,
             ).astype(np.float32)
         else:
-            return None
+            print("No ground truth file available, using reference file instead")
+            return self.load_reference(method)
 
     def load_ssunet_data(self, method: Callable | None = None) -> SSUnetData:
         data = self.load_data(method)
@@ -147,7 +219,7 @@ class PathConfig:
 
 @dataclass
 class MasterConfig:
-    """Cinfiguration class containing all configurations"""
+    """Configuration class containing all configurations"""
 
     data_config: DataConfig
     path_config: PathConfig
@@ -156,11 +228,8 @@ class MasterConfig:
     loader_config: LoaderConfig
     train_config: TrainConfig
 
-    def __post_init__(self):
-        global experiment_name
-        experiment_name = self.name
-
-    def _as_dict(self):
+    def _as_dict(self) -> dict:
+        """Convert the configuration to a dictionary"""
         return {
             "path_config": self.path_config,
             "data_config": self.data_config,
@@ -172,6 +241,7 @@ class MasterConfig:
 
     @property
     def name(self) -> str:
+        """Generate a name for the experiment"""
         name = "_".join(
             [
                 self.data_config.name,
@@ -185,13 +255,10 @@ class MasterConfig:
 
 def load_yaml(config_path: Path | str = Path("./config.yml")) -> dict:
     """Load yaml configuration file"""
-    if isinstance(config_path, str):
-        config_path = Path(config_path)
+    config_path = Path(config_path)
     if not config_path.exists():
         raise FileNotFoundError(f"Config file not found at {config_path}")
-    with open(config_path, "r") as file:
-        config = yaml.safe_load(file)
-    return config
+    return yaml.safe_load(config_path.read_text())
 
 
 def load_config(
@@ -213,9 +280,8 @@ def load_config(
 
 
 def save_config(config: dict, path: Path | str) -> None:
-    """Save the configruation to a yaml file"""
+    """Save the configuration to a yaml file"""
     path = Path(path) / "config.yml"
     if not path.parent.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as file:
-        yaml.dump(config, file)
+    yaml.safe_dump(config, path.open("w"))

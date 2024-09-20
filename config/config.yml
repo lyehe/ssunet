@@ -1,18 +1,18 @@
 PATH:
-  data_dir:  "../../temp_data"
+  data_dir: "../../tempdata/Simulated_data"
   data_file: "RES_4341_p=0.00781_m=0.00776.tif"
-  begin_slice: 0
-  end_slice: 3600
+  data_begin_slice: 0
+  data_end_slice: 3600
 
-  reference_dir: "../../temp_data"
+  reference_dir: "../../tempdata/Simulated_data"
   reference_file: "RES_4341_p=0.00781_m=0.00776.tif"
   reference_begin_slice: 0
   reference_end_slice: 3600
 
-  ground_truth_dir: null
-  ground_truth_file: null
-  grund_truth_begin_slice: 3601
-  grund_truth_end_slice: 3856
+  ground_truth_dir: "../../tempdata/Simulated_data"
+  ground_truth_file: "ref.tif"
+  ground_truth_begin_slice: 3601
+  ground_truth_end_slice: 3856
 
 DATA:
   xy_size: 128
