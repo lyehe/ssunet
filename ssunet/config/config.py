@@ -1,22 +1,27 @@
-from ssunet.dataloader import DataConfig, SSUnetData, SplitParams
+"""Configuration for the project."""
+
+from collections.abc import Callable
+from dataclasses import dataclass
+from enum import Enum, auto
+from itertools import islice
+from pathlib import Path
+
+import h5py
+import numpy as np
+import yaml
+from tifffile import TiffFile, imread
+
+from ssunet.dataloader import DataConfig, SplitParams, SSUnetData
 from ssunet.models import ModelConfig
 from ssunet.train import LoaderConfig, TrainConfig
 
-import yaml
-import h5py
-import numpy as np
-from typing import Callable, Optional, Union
-from pathlib import Path
-from itertools import islice
-from enum import Enum, auto
-from dataclasses import dataclass
-from tifffile import imread, TiffFile
-
-PathLike = Union[str, Path]
-FileInput = Union[int, str, Path]
+PathLike = str | Path
+FileInput = int | str | Path
 
 
 class FileType(Enum):
+    """Enum for file types."""
+
     DATA = auto()
     REFERENCE = auto()
     GROUND_TRUTH = auto()
@@ -24,7 +29,7 @@ class FileType(Enum):
 
 @dataclass
 class PathConfig:
-    """Configuration for paths"""
+    """Configuration for paths."""
 
     data_dir: PathLike
     data_file: FileInput
@@ -34,7 +39,6 @@ class PathConfig:
     reference_dir: PathLike | None = None
     reference_file: FileInput | None = None
     reference_begin_slice: int = 0
-
     reference_end_slice: int = -1
 
     ground_truth_dir: PathLike | None = None
@@ -43,25 +47,20 @@ class PathConfig:
     ground_truth_end_slice: int = -1
 
     def __post_init__(self):
+        """Initialize and validate paths and files."""
         self.data_dir = Path(self.data_dir)
         self.reference_dir = Path(self.reference_dir) if self.reference_dir else None
-        self.ground_truth_dir = (
-            Path(self.ground_truth_dir) if self.ground_truth_dir else None
-        )
+        self.ground_truth_dir = Path(self.ground_truth_dir) if self.ground_truth_dir else None
 
         # Verify the data directory exists
         if not self.data_dir.exists():
             raise NotADirectoryError(f"Data directory {self.data_dir} does not exist")
-        self.data_file = self._resolve_file(
-            self.data_file, self.data_dir, FileType.DATA
-        )
+        self.data_file = self._resolve_file(self.data_file, self.data_dir, FileType.DATA)
 
         # Handle reference_file if reference_dir is provided
         if self.reference_dir and self.reference_file:
             if not self.reference_dir.exists():
-                raise NotADirectoryError(
-                    f"Reference directory {self.reference_dir} does not exist"
-                )
+                raise NotADirectoryError(f"Reference directory {self.reference_dir} does not exist")
             self.reference_file = self._resolve_file(
                 self.reference_file, self.reference_dir, FileType.REFERENCE
             )
@@ -79,51 +78,46 @@ class PathConfig:
         self._validate_slices()
 
     def _validate_slices(self):
+        """Validate slice ranges for data, reference, and ground truth."""
         for attr in ["data", "reference", "ground_truth"]:
             begin = getattr(self, f"{attr}_begin_slice")
             end = getattr(self, f"{attr}_end_slice")
             if begin < 0 or (end != -1 and end <= begin):
                 raise ValueError(f"Invalid slice range for {attr}: {begin}:{end}")
 
-    def _resolve_file(
-        self, file_input: FileInput, directory: Path, file_type: FileType
-    ) -> Path:
-        """Resolve the file path"""
-
+    def _resolve_file(self, file_input: FileInput, directory: Path, file_type: FileType) -> Path:
+        """Resolve the file path."""
         if isinstance(file_input, int):
             try:
                 return next(islice(directory.iterdir(), file_input, None))
-            except StopIteration:
-                raise IndexError(
-                    f"{file_type.name} file index {file_input} out of range"
-                )
-        elif isinstance(file_input, (str, Path)):
+            except StopIteration as err:
+                raise ValueError(f"{file_type.name} file index {file_input} out of range") from err
+        elif isinstance(file_input, str | Path):
             file_path = Path(file_input)
             if not file_path.is_absolute():
                 file_path = directory / file_path
             if not file_path.exists():
-                raise FileNotFoundError(
-                    f"{file_type.name} file {file_path} does not exist"
-                )
+                raise FileNotFoundError(f"{file_type.name} file {file_path} does not exist")
             return file_path
 
     @property
     def reference_is_available(self) -> bool:
-        """Check if reference file is available"""
+        """Check if reference file is available."""
         return self.reference_dir is not None and self.reference_file is not None
 
     @property
     def ground_truth_is_available(self) -> bool:
-        """Check if ground truth file is available"""
+        """Check if ground truth file is available."""
         return self.ground_truth_dir is not None and self.ground_truth_file is not None
 
     def _load(
         self,
         data_path: Path,
-        method: Optional[Callable],
+        method: Callable | None,
         begin: int,
         end: int,
     ) -> np.ndarray:
+        """Load data from file."""
         if data_path.suffix in [".tif", ".tiff"]:
             if begin == 0 and end == -1:
                 return imread(data_path)
@@ -136,9 +130,8 @@ class PathConfig:
                 keys = list(f.keys())
                 dataset = f.get(keys[0])
 
-                assert isinstance(
-                    dataset, h5py.Dataset
-                ), "HDF5 file does not contain expected dataset"
+                if not isinstance(dataset, h5py.Dataset):
+                    raise ValueError("HDF5 file does not contain expected dataset")
                 return np.array(dataset[begin:end])
 
         elif method is not None:
@@ -148,11 +141,11 @@ class PathConfig:
 
     def load_data(
         self,
-        method: Optional[Callable] = None,
-        begin: Optional[int] = None,
-        end: Optional[int] = None,
+        method: Callable | None = None,
+        begin: int | None = None,
+        end: int | None = None,
     ) -> np.ndarray:
-        """Load the data file"""
+        """Load the data file."""
         if begin is None:
             begin = self.data_begin_slice
         if end is None:
@@ -169,11 +162,11 @@ class PathConfig:
 
     def load_reference(
         self,
-        method: Optional[Callable] = None,
-        begin: Optional[int] = None,
-        end: Optional[int] = None,
-    ) -> Optional[np.ndarray]:
-        """Load the reference file"""
+        method: Callable | None = None,
+        begin: int | None = None,
+        end: int | None = None,
+    ) -> np.ndarray | None:
+        """Load the reference file."""
         if begin is None:
             begin = self.reference_begin_slice
         if end is None:
@@ -186,16 +179,15 @@ class PathConfig:
                 end,
             ).astype(np.float32)
         else:
-            print("No reference file available, using data file instead")
             return self.load_data(method)
 
     def load_ground_truth(
         self,
-        method: Optional[Callable] = None,
-        begin: Optional[int] = None,
-        end: Optional[int] = None,
-    ) -> Optional[np.ndarray]:
-        """Load the ground truth file"""
+        method: Callable | None = None,
+        begin: int | None = None,
+        end: int | None = None,
+    ) -> np.ndarray | None:
+        """Load the ground truth file."""
         if begin is None:
             begin = self.ground_truth_begin_slice
         if end is None:
@@ -208,10 +200,10 @@ class PathConfig:
                 end,
             ).astype(np.float32)
         else:
-            print("No ground truth file available, using reference file instead")
             return self.load_reference(method)
 
     def load_ssunet_data(self, method: Callable | None = None) -> SSUnetData:
+        """Load SSUnetData."""
         data = self.load_data(method)
         reference = self.load_reference(method)
         return SSUnetData(data=data, reference=reference)
@@ -219,7 +211,7 @@ class PathConfig:
 
 @dataclass
 class MasterConfig:
-    """Configuration class containing all configurations"""
+    """Configuration class containing all configurations."""
 
     data_config: DataConfig
     path_config: PathConfig
@@ -229,7 +221,7 @@ class MasterConfig:
     train_config: TrainConfig
 
     def _as_dict(self) -> dict:
-        """Convert the configuration to a dictionary"""
+        """Convert the configuration to a dictionary."""
         return {
             "path_config": self.path_config,
             "data_config": self.data_config,
@@ -241,7 +233,7 @@ class MasterConfig:
 
     @property
     def name(self) -> str:
-        """Generate a name for the experiment"""
+        """Generate a name for the experiment."""
         name = "_".join(
             [
                 self.data_config.name,
@@ -254,7 +246,7 @@ class MasterConfig:
 
 
 def load_yaml(config_path: Path | str = Path("./config.yml")) -> dict:
-    """Load yaml configuration file"""
+    """Load yaml configuration file."""
     config_path = Path(config_path)
     if not config_path.exists():
         raise FileNotFoundError(f"Config file not found at {config_path}")
@@ -264,7 +256,7 @@ def load_yaml(config_path: Path | str = Path("./config.yml")) -> dict:
 def load_config(
     config_path: Path | str = Path("./config.yml"),
 ) -> MasterConfig:
-    """Convert the configuration dictionary to dataclasses"""
+    """Convert the configuration dictionary to dataclasses."""
     config = load_yaml(config_path)
     master_config = MasterConfig(
         path_config=PathConfig(**config["PATH"]),
@@ -280,7 +272,7 @@ def load_config(
 
 
 def save_config(config: dict, path: Path | str) -> None:
-    """Save the configuration to a yaml file"""
+    """Save the configuration to a yaml file."""
     path = Path(path) / "config.yml"
     if not path.parent.exists():
         path.parent.mkdir(parents=True, exist_ok=True)

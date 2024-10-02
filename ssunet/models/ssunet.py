@@ -1,16 +1,17 @@
+"""SSUnet model."""
+
 from dataclasses import dataclass, field
+
+import pytorch_lightning as pl
 import torch
 import torch.nn as nn
-import pytorch_lightning as pl
-import pyiqa
-
+import torch.optim as optim
 from torch.nn import init
 from torch.utils.checkpoint import checkpoint
 
-from ssunet.loss import loss_functions
-from ssunet.modules import conv111, BLOCK
 from ssunet.constants import DEFAULT_OPTIMIZER_CONFIG, EPSILON, LOGGER
-import torch.optim as optim
+from ssunet.models.factories import LossFunction, Metric
+from ssunet.modules import BLOCK, conv111
 
 OPTIMIZER = {
     "adam": optim.Adam,
@@ -21,6 +22,8 @@ OPTIMIZER = {
 
 @dataclass
 class ModelConfig:
+    """Configuration for the SSUnet model."""
+
     channels: int = 1
     depth: int = 4
     start_filts: int = 24
@@ -47,6 +50,7 @@ class ModelConfig:
 
     @property
     def name(self) -> str:
+        """Generate the name of the model."""
         name_str = [
             f"l={self.signal_levels}",
             f"d={self.depth}",
@@ -63,14 +67,22 @@ class ModelConfig:
 
 
 class SSUnet(pl.LightningModule):
+    """SSUnet model."""
+
     def __init__(
         self,
         config: ModelConfig,
+        loss_function: LossFunction,
+        psnr_metric: Metric,
+        ssim_metric: Metric,
         **kwargs,
     ):
+        """Initialize the SSUnet model."""
         super().__init__()
         self.config = config
-        self.loss_function = loss_functions[config.loss_function]
+        self.loss_function = loss_function
+        self._psnr_metric = psnr_metric
+        self._ssim_metric = ssim_metric
         self.kwargs = kwargs
 
         self._check_conflicts()
@@ -79,15 +91,13 @@ class SSUnet(pl.LightningModule):
         self.up_convs = self._up_conv_list()
         self.conv_final = self._final_conv()
 
-        self._psnr_metric = pyiqa.create_metric("psnr", device=self.device)
-        self._ssim_metric = pyiqa.create_metric("ssim", channels=1, device=self.device)
-
         self.save_hyperparameters()
         self._reset_params()
 
     def _down_conv_list(self) -> nn.ModuleList:
+        """Generate the list of down convolutional layers."""
         down_convs = []
-        DownConv = BLOCK[self.config.block_type][0]
+        down_conv_function = BLOCK[self.config.block_type][0]
         init = (
             self.config.channels * self.config.signal_levels
             if self.config.sin_encoding
@@ -97,13 +107,11 @@ class SSUnet(pl.LightningModule):
             z_conv = i < self.config.z_conv_stage
             skip_out = i >= self.config.skip_depth
             in_channels = (
-                init
-                if i == 0
-                else self.config.start_filts * (self.config.depth_scale ** (i - 1))
+                init if i == 0 else self.config.start_filts * (self.config.depth_scale ** (i - 1))
             )
             out_channels = self.config.start_filts * (self.config.depth_scale**i)
             last = True if i == self.config.depth - 1 else False
-            down_conv = DownConv(
+            down_conv = down_conv_function(
                 int(in_channels),
                 int(out_channels),
                 last=last,
@@ -118,16 +126,15 @@ class SSUnet(pl.LightningModule):
         return nn.ModuleList(down_convs)
 
     def _up_conv_list(self) -> nn.ModuleList:
+        """Generate the list of up convolutional layers."""
         up_convs = []
-        UpConv = BLOCK[self.config.block_type][1]
+        up_conv_function = BLOCK[self.config.block_type][1]
         for i in range(self.config.depth - 1, 0, -1):
             z_conv = (i - 1) < self.config.z_conv_stage
             skip_out = i >= self.config.skip_depth
             in_channels = self.config.start_filts * (self.config.depth_scale**i)
-            out_channels = self.config.start_filts * (
-                self.config.depth_scale ** (i - 1)
-            )
-            up_conv = UpConv(
+            out_channels = self.config.start_filts * (self.config.depth_scale ** (i - 1))
+            up_conv = up_conv_function(
                 int(in_channels),
                 int(out_channels),
                 z_conv=z_conv,
@@ -141,21 +148,25 @@ class SSUnet(pl.LightningModule):
         return nn.ModuleList(up_convs)
 
     def _final_conv(self):
+        """Generate the final convolutional layer."""
         return nn.Sequential(
             conv111(self.config.start_filts, self.config.channels),
         )
 
     @staticmethod
     def _weight_init(module: nn.Module):
+        """Initialize the weights of the model."""
         if isinstance(module, nn.Conv3d):
             init.xavier_normal_(module.weight)
             init.constant_(module.bias, 0)  # type: ignore
 
     def _reset_params(self):
+        """Reset the parameters of the model."""
         for module in self.modules():
             self._weight_init(module)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
+        """Forward pass of the model."""
         if self.config.sin_encoding:
             scales = [
                 torch.sin(input.clone() * (self.config.scale_factor ** (-i)))
@@ -172,7 +183,7 @@ class SSUnet(pl.LightningModule):
             encoder_outs.append(skip) if i < self.config.depth - 1 else ...
             del skip
 
-        for i, up_conv in enumerate(self.up_convs):
+        for up_conv in self.up_convs:
             skip = encoder_outs.pop()
             if self.config.up_checkpointing:
                 input = checkpoint(up_conv, input, skip, use_reentrant=False)  # type: ignore
@@ -181,6 +192,7 @@ class SSUnet(pl.LightningModule):
         return self.conv_final(input)
 
     def configure_optimizers(self) -> dict:
+        """Configure the optimizer and scheduler."""
         config = self.config.optimizer_config
         optimizer = (
             OPTIMIZER[config["name"]](self.parameters(), lr=config["lr"], fused=False)
@@ -204,6 +216,7 @@ class SSUnet(pl.LightningModule):
         batch: list[torch.Tensor],  # batch of training data
         batch_idx,
     ) -> torch.Tensor:
+        """Training step of the model."""
         input = batch[1]
         target = batch[0]
         output = self(input)
@@ -222,6 +235,7 @@ class SSUnet(pl.LightningModule):
         target: torch.Tensor,
         batch_idx: int,
     ):
+        """Log the training step."""
         self.log("train_loss", loss)
         self._log_image(output[0], "train_image", batch_idx, frequency=100)
 
@@ -230,6 +244,7 @@ class SSUnet(pl.LightningModule):
         batch: list[torch.Tensor],  # batch of validation data
         batch_idx: int,
     ) -> None:
+        """Validation step of the model."""
         target = batch[0]
         input = batch[1]
         ground_truth = batch[2] if len(batch) == 3 else None
@@ -245,6 +260,7 @@ class SSUnet(pl.LightningModule):
         ground_truth: torch.Tensor | None,
         batch_idx: int,
     ):
+        """Log the validation step."""
         if ground_truth is not None:
             self._log_metrics(output, ground_truth, batch_idx)
         self.log("val_loss", loss)
@@ -255,6 +271,7 @@ class SSUnet(pl.LightningModule):
         batch: list[torch.Tensor],  # batch of test data
         batch_idx: int,
     ) -> None:
+        """Test step of the model."""
         input = batch[1]
         target = batch[0]
         output = self(input)
@@ -268,6 +285,7 @@ class SSUnet(pl.LightningModule):
         target: torch.Tensor,
         batch_idx: int,
     ):
+        """Log the test step."""
         self.log("test_loss", loss)
 
     def _log_metrics(
@@ -276,6 +294,7 @@ class SSUnet(pl.LightningModule):
         ground_truth: torch.Tensor,
         batch_idx: int,
     ) -> None:
+        """Log the metrics."""
         size_z = ground_truth.shape[2]
         index_z = size_z // 2
 
@@ -294,22 +313,19 @@ class SSUnet(pl.LightningModule):
         self,
         image: torch.Tensor,
     ) -> torch.Tensor:
+        """Normalize the image for logging."""
         normalization = self.kwargs.get("log_image_normalization", "min-max")
         img = image[:, image.shape[1] // 2, ...]
         match normalization:
             case "min-max":
-                return ((img - img.min()) / (img.max() - img.min()) * 255).to(
-                    torch.uint8
-                )
+                return ((img - img.min()) / (img.max() - img.min()) * 255).to(torch.uint8)
             case "mean-std":
                 return ((img - img.mean()) / img.std() * 255).to(torch.uint8)
             case "mean":
                 return (img / img.mean() * 128).to(torch.uint8)
             case _:
                 LOGGER.warning("Normalization method not recognized. Using min-max.")
-                return ((img - img.min()) / (img.max() - img.min()) * 255).to(
-                    torch.uint8
-                )
+                return ((img - img.min()) / (img.max() - img.min()) * 255).to(torch.uint8)
 
     def _log_image(
         self,
@@ -318,11 +334,13 @@ class SSUnet(pl.LightningModule):
         batch_idx: int,
         frequency: int = 10,
     ) -> None:
+        """Log the image."""
         if batch_idx % frequency == 0:
             img = self._normalize_log_image(image)
             self.logger.experiment.add_image(name, img, self.current_epoch)  # type: ignore
 
     def _check_conflicts(self):
+        """Check for conflicts in the model configuration."""
         # NOTE: up_mode 'upsample' is incompatible with merge_mode 'add'
         if self.config.up_mode == "upsample" and self.config.merge_mode == "add":
             raise ValueError(

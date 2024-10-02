@@ -1,22 +1,25 @@
+"""Helper functions to create modules."""
+
 import torch
 import torch.nn as nn
-from .pixelshuffle import (
-    PixelShuffle3d,
-    PixelUnshuffle3d,
-    PixelShuffle2d,
-    PixelUnshuffle2d,
-)
-from .partialconv import PartialConv3d
-from .separableconv import SeparableConv3d
+
 from ssunet.constants import LOGGER
 
+from .partialconv import PartialConv3d
+from .pixelshuffle import (
+    PixelShuffle2d,
+    PixelShuffle3d,
+    PixelUnshuffle2d,
+    PixelUnshuffle3d,
+)
+from .separableconv import SeparableConv3d
 
 
 def conv111(
     in_channels: int,
     out_channels: int,
 ) -> nn.Conv3d:
-    """Helper function to create 1x1x1 convolutions
+    """Helper function to create 1x1x1 convolutions.
 
     :param in_channels: number of input channels
     :type in_channels: int
@@ -36,7 +39,7 @@ def convnnn(
     z_conv: bool,  # Ture = 3D convolution & False = 2D convolution
     partial: bool = False,
 ) -> nn.Conv3d:
-    """Helper function to create nxnxn convolutions with padding
+    """Helper function to create nxnxn convolutions with padding.
 
     :param in_channels: number of input channels
     :type in_channels: int
@@ -65,7 +68,7 @@ def conv333(
     out_channels: int,
     z_conv: bool,  # Ture = 3D convolution & False = 2D convolution
 ) -> nn.Conv3d:
-    """Helper function to create 3x3x3 convolutions with padding
+    """Helper function to create 3x3x3 convolutions with padding.
 
     :param in_channels: number of input channels
     :type in_channels: int
@@ -86,7 +89,7 @@ def conv555(
     z_conv: bool,  # Ture = 3D convolution & False = 2D convolution
     separable: bool = False,
 ) -> nn.Conv3d | nn.Module:
-    """Helper function to create 5x5x5 convolutions with padding
+    """Helper function to create 5x5x5 convolutions with padding.
 
     :param in_channels: number of input channels
     :type in_channels: int
@@ -112,7 +115,7 @@ def conv777(
     z_conv: bool,  # Ture = 3D convolution & False = 2D convolution
     separable: bool = False,
 ) -> nn.Conv3d | nn.Module:
-    """Helper function to create 7x7x7 convolutions with padding
+    """Helper function to create 7x7x7 convolutions with padding.
 
     :param in_channels: number of input channels
     :type in_channels: int
@@ -135,7 +138,7 @@ def conv777(
 def maxpool_downsample(
     z_conv: bool,  # Ture = 3D convolution & False = 2D convolution
 ) -> nn.MaxPool3d:
-    """Helper function to create maxpooling with padding
+    """Helper function to create maxpooling with padding.
 
     :param z_conv: Ture = 3D convolution & False = 2D convolution
     :type z_conv: bool
@@ -151,7 +154,7 @@ def maxpool_downsample(
 def avgpool_downsample(
     z_conv: bool,  # Ture = 3D convolution & False = 2D convolution
 ) -> nn.AvgPool3d:
-    """Helper function to create avgpooling with padding
+    """Helper function to create avgpooling with padding.
 
     :param z_conv: Ture = 3D convolution & False = 2D convolution
     :type z_conv: bool
@@ -169,7 +172,7 @@ def conv_downsample(
     out_channels: int,
     z_conv: bool,  # Ture = 3D convolution & False = 2D convolution
 ) -> nn.Conv3d:
-    """Helper function to create 3x3x3 convolutions with padding
+    """Helper function to create 3x3x3 convolutions with padding.
 
     :param in_channels: number of input channels
     :type in_channels: int
@@ -187,10 +190,8 @@ def conv_downsample(
     return nn.Conv3d(in_channels, out_channels, kernel, stride=stride, padding=padding)
 
 
-def pixelunshuffle(
-    in_channels: int, out_channels: int, z_conv: bool, scale: int = 2
-) -> nn.Module:
-    """Helper function to create pixelunshuffle layers
+def pixelunshuffle(in_channels: int, out_channels: int, z_conv: bool, scale: int = 2) -> nn.Module:
+    """Helper function to create pixelunshuffle layers.
 
     :param in_channels: number of input channels
     :type in_channels: int
@@ -227,7 +228,7 @@ def pool(
     z_conv: bool,
     last: bool = False,
 ) -> nn.Module:
-    """Helper function to create pooling layers
+    """Helper function to create pooling layers.
 
     :param in_channels: number of input channels
     :type in_channels: int
@@ -259,10 +260,8 @@ def pool(
             return maxpool_downsample(z_conv)
 
 
-def pixelshuffle(
-    in_channels: int, out_channels: int, z_conv: bool, scale: int = 2
-) -> nn.Module:
-    """Helper function to create pixelshuffle layers
+def pixelshuffle(in_channels: int, out_channels: int, z_conv: bool, scale: int = 2) -> nn.Module:
+    """Helper function to create pixelshuffle layers.
 
     :param in_channels: number of input channels
     :type in_channels: int
@@ -298,7 +297,7 @@ def upconv222(
     z_conv: bool,
     up_mode: str = "transpose",  # type of upconvolution ("transpose" | "upsample" | "pixelshuffle")
 ) -> nn.Module:
-    """Helper function to create 2x2x2 upconvolutions
+    """Helper function to create 2x2x2 upconvolutions.
 
     :param in_channels: number of input channels
     :type in_channels: int
@@ -347,7 +346,7 @@ def partial333(
     z_conv: bool,
     multi_channel: bool = False,
 ) -> PartialConv3d:
-    """Helper function to create 3x3x3 partial convolutions with padding
+    """Helper function to create 3x3x3 partial convolutions with padding.
 
     :param in_channels: number of input channels
     :type in_channels: int
@@ -376,7 +375,7 @@ def merge(
     input_b: torch.Tensor | None,
     merge_mode: str = "concat",
 ) -> torch.Tensor:
-    """Helper function to merge two tensors
+    """Helper function to merge two tensors.
 
     :param input_a: input tensor A
     :type input_a: torch.Tensor
@@ -412,7 +411,7 @@ def merge_conv(
     z_conv: bool,
     mode: str = "concat",
 ) -> nn.Module:
-    """Helper function to merge two tensors
+    """Helper function to merge two tensors.
 
     :param in_channels: number of input channels
     :type in_channels: int
@@ -436,7 +435,7 @@ def merge_conv(
 
 
 def activation_function(activation: str, **kwargs) -> nn.Module:
-    """Helper function to create activation layers
+    """Helper function to create activation layers.
 
     :param activation: activation function
     :type activation: str

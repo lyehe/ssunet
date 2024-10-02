@@ -1,21 +1,34 @@
-import numpy as np
-import yaml
-import torch
-import pyiqa
+"""Module for handling metrics."""
+
+from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from dataclasses import dataclass, field
-from typing import Iterator
-import pandas as pd
-import seaborn as sns
-import matplotlib.patheffects as pe
 from pathlib import Path
 
+import matplotlib.patheffects as pe
+import numpy as np
+import pandas as pd
+import pyiqa
+import seaborn as sns
+import torch
+import yaml
+
+_default_device = torch.device("cpu")
+
+
+class Metric(ABC):
+    """Abstract class for metrics."""
+
+    @abstractmethod
+    def __call__(self, output: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """Compute the metric."""
 
 
 def import_config(config_path: Path) -> dict:
     """Import configuration file."""
     if not config_path.exists():
         raise FileNotFoundError(f"File {config_path} not found.")
-    with open(config_path, "r") as file:
+    with open(config_path) as file:
         config = yaml.safe_load(file)
     return config
 
@@ -33,7 +46,7 @@ class ImageMetrics:
         self,
         image: np.ndarray | torch.Tensor,
         target: np.ndarray | torch.Tensor,
-        device: torch.device = torch.device("cpu"),
+        device: torch.device = _default_device,
         **kwargs,
     ):
         """Class constructor."""
@@ -73,6 +86,7 @@ class ImageMetrics:
 
     @classmethod
     def set_device(cls, device: torch.device) -> None:
+        """Set the device for the metrics."""
         cls._psnr_metric = pyiqa.create_metric("psnr", device=device)
         cls._ssim_metric = pyiqa.create_metric("ssim", channels=1, device=device)
         cls._ms_ssim_metric = pyiqa.create_metric("ms_ssim", device=device)
@@ -103,9 +117,7 @@ class ImageMetrics:
         mean_target = torch.mean(self._target)
         std_image = torch.std(self._image)
         std_target = torch.std(self._target)
-        covariance = torch.mean(
-            (self._image - mean_image) * (self._target - mean_target)
-        )
+        covariance = torch.mean((self._image - mean_image) * (self._target - mean_target))
         ncc_val = covariance / (std_image * std_target)
         return ncc_val.item()
 
@@ -154,9 +166,11 @@ class ImageMetrics:
 
     @classmethod
     def metric_list(cls) -> list[str]:
+        """Get the list of metrics."""
         return [p for p, v in vars(cls).items() if isinstance(v, property)]
 
     def export_metrics(self, metrics: list[str] | None = None) -> dict[str, float]:
+        """Export the metrics."""
         if metrics is None:
             metrics = self.metric_list()
         return {p: getattr(self, p) for p in self.metric_list()}
@@ -164,7 +178,7 @@ class ImageMetrics:
 
 @dataclass
 class MetricStats:
-    """A data class to handle and store metric statistics of image stack"""
+    """A data class to handle and store metric statistics of image stack."""
 
     data: list[float] = field(repr=False, default_factory=list)
     mean: float = field(init=False)
@@ -173,15 +187,18 @@ class MetricStats:
     min: float = field(init=False)
 
     def __post_init__(self):
+        """Post initialization function."""
         self.mean = np.mean(self.data).item()
         self.std = np.std(self.data).item()
         self.max = np.max(self.data)
         self.min = np.min(self.data)
 
     def __str__(self):
+        """String representation."""
         return f"Mean: {self.mean}, Std: {self.std}, Min: {self.min}, Max: {self.max}"
 
     def __call__(self) -> list[float]:
+        """Call method."""
         return [self.mean, self.std, self.min, self.max]
 
 
@@ -192,13 +209,14 @@ class StackMetrics:
         self,
         image: np.ndarray | torch.Tensor,
         target: np.ndarray | torch.Tensor,
-        device: torch.device = torch.device("cpu"),
+        device: torch.device = _default_device,
         metric_list: list[str] | None = None,
         **kwargs,
     ):
-        """Class constructor"""
+        """Class constructor."""
         self.device = device
-
+        if device != ImageMetrics._psnr_metric.device:
+            ImageMetrics.set_device(device)
         if image.shape != target.shape:
             raise ValueError("Image and target shapes must match.")
         if image.ndim != 3:
@@ -206,25 +224,25 @@ class StackMetrics:
 
         self.metric_list = metric_list or ImageMetrics.metric_list()
         self.data_list = [
-            ImageMetrics(image[i], target[i], device, **kwargs)
-            for i in range(image.shape[0])
+            ImageMetrics(image[i], target[i], device, **kwargs) for i in range(image.shape[0])
         ]
 
         self._values_df = None
         self._stats_df = None
 
     def get_metrics(self, metric_type: str) -> list[float]:
+        """Get the metrics."""
         if not hasattr(self, metric_type):
-            setattr(
-                self, metric_type, [getattr(m, metric_type) for m in self.data_list]
-            )
+            setattr(self, metric_type, [getattr(m, metric_type) for m in self.data_list])
         return getattr(self, metric_type)
 
     def metric_stats(self, metric_type: str) -> MetricStats:
+        """Get the metric statistics."""
         return MetricStats(self.get_metrics(metric_type))
 
     @property
     def values_df(self) -> pd.DataFrame:
+        """Get the metrics as a dataframe."""
         if self._values_df is None:
             values = {m: self.get_metrics(m) for m in self.metric_list}
             self._values_df = pd.DataFrame(values)
@@ -234,6 +252,7 @@ class StackMetrics:
 
     @property
     def stats_df(self) -> pd.DataFrame:
+        """Get the metric statistics as a dataframe."""
         if self._stats_df is None:
             data = {p: self.metric_stats(p)() for p in self.metric_list}
             self._stats_df = pd.DataFrame(data, index=["Mean", "Std", "Min", "Max"])
@@ -243,6 +262,7 @@ class StackMetrics:
 
     @property
     def stats_string(self) -> dict[str, str]:
+        """Get the metric statistics as a string."""
         data = {p: self.metric_stats(p)() for p in self.metric_list}
         stats_str = {}
         nl = "\n"
@@ -257,6 +277,7 @@ class StackMetrics:
         return stats_str
 
     def plot_trends(self, **kwargs):
+        """Plot the metrics trends."""
         data_values = self.values_df.reset_index().melt(
             id_vars="Frame", var_name="Metric", value_name="Value"
         )
@@ -275,7 +296,7 @@ class StackMetrics:
             y="Value",
             hue="Metric",
             style="Metric",
-            facet_kws=dict(sharey=False),
+            facet_kws={"sharey": False},
             **params,
         )
         for i, ax in enumerate(plot.axes):
@@ -290,6 +311,7 @@ class StackMetrics:
         plot.tight_layout()
 
     def _save_plot(self, plot, kwargs):
+        """Save the plot."""
         dir_path = Path(kwargs.get("save_dir", "."))
         dir_path.mkdir(parents=True, exist_ok=True)
         png_path = dir_path / (kwargs.get("save_name", "trend") + ".png")
@@ -298,12 +320,15 @@ class StackMetrics:
         plot.savefig(svg_path, format="svg")
 
     def __len__(self) -> int:
+        """Get the length of the stack."""
         return len(self.data_list)
 
     def __get_item__(self, index: int) -> ImageMetrics:
+        """Get the item at the index."""
         return self.data_list[index]
 
     def __iter__(self) -> Iterator:
+        """Iterate over the stack."""
         return iter(self.data_list)
 
 
@@ -317,10 +342,8 @@ class StackMetricsGroups:
         metric_list: list[str] | None = None,
         **kwargs,
     ):
-        """Class constructor"""
-        self.group_names = group_names or [
-            f"G{i+1:>02}" for i in range(len(metrics_list))
-        ]
+        """Class constructor."""
+        self.group_names = group_names or [f"G{i+1:>02}" for i in range(len(metrics_list))]
         self.length = len(self.group_names)
         self.data = {self.group_names[i]: metrics_list[i] for i in range(self.length)}
         self.metric_list = metric_list or metrics_list[0].metric_list
@@ -331,13 +354,14 @@ class StackMetricsGroups:
         cls,
         image_list: list[np.ndarray],
         target_list: list[np.ndarray],
-        device: torch.device = torch.device("cpu"),
+        device: torch.device = _default_device,
         metric_list: list[str] | None = None,
         group_names: list[str] | None = None,
         **kwargs,
     ):
+        """Create a StackMetricsGroups from image pairs."""
         data_list = []
-        for i, t in zip(image_list, target_list):
+        for i, t in zip(image_list, target_list, strict=False):
             data_list.append(StackMetrics(i, t, device, metric_list, **kwargs))
         return cls(data_list, group_names, **kwargs)
 
@@ -345,17 +369,19 @@ class StackMetricsGroups:
     def from_dict(
         cls,
         data_dict: dict[str, list[np.ndarray]],
-        device: torch.device = torch.device("cpu"),
+        device: torch.device = _default_device,
         metric_list: list[str] | None = None,
         **kwargs,
     ):
+        """Create a StackMetricsGroups from a dictionary of image pairs."""
         data_list = []
-        for k, v in data_dict.items():
+        for _k, v in data_dict.items():
             data_list.append(StackMetrics(v[0], v[1], device, metric_list, **kwargs))
         return cls(data_list, list(data_dict.keys()), **kwargs)
 
     @property
     def group_values(self) -> pd.DataFrame:
+        """Get the metrics as a dataframe."""
         data_dict = {}
         for k, v in self.data.items():
             data_dict[k] = v.values_df.reset_index().melt(
@@ -365,6 +391,7 @@ class StackMetricsGroups:
 
     @property
     def group_stats(self) -> pd.DataFrame:
+        """Get the metric statistics as a dataframe."""
         data_dict = {}
         for k, v in self.data.items():
             data_dict[k] = v.stats_df
@@ -372,6 +399,7 @@ class StackMetricsGroups:
 
     @property
     def y_range(self) -> tuple[np.ndarray, np.ndarray]:
+        """Get the y range."""
         y_maxs = np.array([])
         y_mins = np.array([])
         for v in self.data.values():
@@ -382,11 +410,13 @@ class StackMetricsGroups:
 
     @property
     def x_range(self) -> tuple[int, int]:
+        """Get the x range."""
         x_min = 0
         x_max = len(self.data[self.group_names[0]]) - 1
         return x_min, x_max
 
     def plot_group_trends(self, **kwargs):
+        """Plot the metrics trends."""
         data_df = self.group_values
         y_mins, y_maxs = self.y_range
         x_min, x_max = self.x_range
@@ -404,7 +434,7 @@ class StackMetricsGroups:
             y="Value",
             hue="Group",
             style="Group",
-            facet_kws=dict(sharey=False),
+            facet_kws={"sharey": False},
             **params,
         )
         for i, ax in enumerate(plot.axes):
@@ -419,6 +449,7 @@ class StackMetricsGroups:
         plot.tight_layout()
 
     def plot_group_stats(self, **kwargs):
+        """Plot the metric statistics."""
         data_df = self.group_values
         y_mins, y_maxs = self.y_range
         params = {
@@ -451,13 +482,11 @@ class StackMetricsGroups:
             means = [mean_df.loc[g, p] for g in self.group_names]
             stds = [std_df.loc[g, p] for g in self.group_names]
             nl = "\n"
-            stats_str = [f"{m:.3}{nl}+/-{nl}{s:.3}" for m, s in zip(means, stds)]
+            stats_str = [f"{m:.3}{nl}+/-{nl}{s:.3}" for m, s in zip(means, stds, strict=False)]
             text_y = (y_maxs[i] + y_mins[i]) / 2
             va = "top"
             path_effect = [
-                pe.SimplePatchShadow(
-                    offset=(0.5, -0.5), alpha=1, shadow_rgbFace="white"
-                ),
+                pe.SimplePatchShadow(offset=(0.5, -0.5), alpha=1, shadow_rgbFace="white"),
                 pe.Normal(),
             ]
 
@@ -492,15 +521,19 @@ class StackMetricsGroups:
         plot.savefig(svg_path, format="svg")
 
     def __len__(self) -> int:
+        """Get the length of the groups."""
         return self.length
 
     def __get_item__(self, index: int) -> StackMetrics:
+        """Get the item at the index."""
         return self.data[self.group_names[index]]
 
     def __iter__(self) -> Iterator:
+        """Iterate over the groups."""
         return iter(self.data.values())
 
     @classmethod
     def from_config(cls, config: Path | dict, **kwargs):
+        """Create a StackMetricsGroups from a config file."""
         if isinstance(config, Path):
             config = import_config(config)

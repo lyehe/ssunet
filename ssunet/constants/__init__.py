@@ -1,8 +1,10 @@
+"""Constants for the project."""
+
 from .constants import (
+    DEFALT_METRICS,
+    DEFAULT_OPTIMIZER_CONFIG,
     EPSILON,
     LOGGER,
-    DEFAULT_OPTIMIZER_CONFIG,
-    DEFALT_METRICS,
 )
 
 __all__ = [

@@ -1,10 +1,12 @@
+"""Separable Convolution Layers."""
+
 import torch
 import torch.nn as nn
 
 
 class SeparableConv3d(nn.Module):
-    """
-    This class is a 3d version of separable convolution.
+    """This class is a 3d version of separable convolution.
+
     https://arxiv.org/abs/1610.02357
     If z_conv is False, it will perform 2D convolution.
     """
@@ -17,7 +19,8 @@ class SeparableConv3d(nn.Module):
         z_conv: bool,
         mid_channels: int | None = None,
     ):
-        """
+        """Initialize SeparableConv3d.
+
         :param in_channels: number of input channels
         :param out_channels: number of output channels
         :param kernel_size: size of the convolving kernel
@@ -35,4 +38,5 @@ class SeparableConv3d(nn.Module):
         self.pointwise = nn.Conv3d(mid_channels, out_channels, 1)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
+        """Forward pass."""
         return self.pointwise(self.depthwise(input))

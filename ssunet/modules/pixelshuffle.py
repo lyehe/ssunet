@@ -1,3 +1,5 @@
+"""Pixel Shuffle Layers."""
+
 import torch
 import torch.nn as nn
 
@@ -6,21 +8,18 @@ class PixelShuffle3d(nn.Module):
     """This class is a 3d version of pixelshuffle."""
 
     def __init__(self, scale: int = 2):
-        """
-        :param scale: upsample scale
-        """
+        """:param scale: upsample scale"""
         super().__init__()
         self.scale = scale
 
     def forward(self, input: torch.Tensor):
+        """Forward pass."""
         if input.dim() != 5:
             raise ValueError(f"Input tensor must be 5D , but got {input.dim()}")
         scale = self.scale
         batch, in_channels, z, x, y = input.shape
         if in_channels % (scale**3) != 0:
-            raise ValueError(
-                f"Input channels must be divisible by scale^3, but got {in_channels}"
-            )
+            raise ValueError(f"Input channels must be divisible by scale^3, but got {in_channels}")
         out_channels = in_channels // (scale**3)
         out_z, out_x, out_y = z * scale, x * scale, y * scale
         view_shape = (batch, out_channels, scale, scale, scale, z, x, y)
@@ -33,13 +32,12 @@ class PixelUnshuffle3d(nn.Module):
     """This class is a 3d version of pixelunshuffle."""
 
     def __init__(self, scale: int = 2):
-        """
-        :param scale: downsample scale
-        """
+        """:param scale: downsample scale"""
         super().__init__()
         self.scale = scale
 
     def forward(self, input: torch.Tensor):
+        """Forward pass."""
         if input.dim() != 5:
             raise ValueError(f"Input tensor must be 5D , but got {input.dim()}")
         scale = self.scale
@@ -58,21 +56,18 @@ class PixelShuffle2d(nn.Module):
     """This class is a 2d version of pixelshuffle on BCZXY data on XY."""
 
     def __init__(self, scale: int = 2):
-        """
-        :param scale: upsample scale
-        """
+        """:param scale: upsample scale"""
         super().__init__()
         self.scale = scale
 
     def forward(self, input: torch.Tensor):
+        """Forward pass."""
         if input.dim() != 5:
             raise ValueError(f"Input tensor must be 5D , but got {input.dim()}")
         scale = self.scale
         batch, in_channels, z, x, y = input.shape
         if in_channels % (scale**2) != 0:
-            raise ValueError(
-                f"Input channels must be divisible by scale^2, but got {in_channels}"
-            )
+            raise ValueError(f"Input channels must be divisible by scale^2, but got {in_channels}")
         out_channels = in_channels // (scale**2)
         out_x, out_y = x * scale, y * scale
         input_view = input.contiguous().view(batch, out_channels, scale, scale, z, x, y)
@@ -84,13 +79,12 @@ class PixelUnshuffle2d(nn.Module):
     """This class is a 2d version of pixelunshuffle on BCZXY data on XY."""
 
     def __init__(self, scale: int = 2):
-        """
-        :param scale: downsample scale
-        """
+        """:param scale: downsample scale"""
         super().__init__()
         self.scale = scale
 
     def forward(self, input: torch.Tensor):
+        """Forward pass."""
         if input.dim() != 5:
             raise ValueError(f"Input tensor must be 5D , but got {input.dim()}")
         scale = self.scale

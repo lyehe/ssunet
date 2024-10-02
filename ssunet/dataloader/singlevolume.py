@@ -1,13 +1,15 @@
+"""Single volume dataset."""
+
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from abc import abstractmethod, ABC
 
 import numpy as np
-from numpy.random import randint, rand
 import torch
-import torch.nn.functional as F
-
-from torch.utils.data import Dataset
+import torch.nn.functional as tnf
 import torchvision.transforms.v2.functional as tf
+from numpy.random import rand, randint
+from torch.utils.data import Dataset
+
 from ssunet.constants import EPSILON, LOGGER
 
 
@@ -18,17 +20,16 @@ def _lucky(factor: float = 0.5) -> bool:
 
 @dataclass
 class SSUnetData:
+    """Data class for the input data of a single volume dataset."""
+
     data: np.ndarray | torch.Tensor
     reference: np.ndarray | torch.Tensor | None = None
 
     def __post_init__(self):
+        """Post initialization function."""
         # Check if the data and reference shapes match
         if self.reference is not None:
-            data_shape = (
-                self.data.shape
-                if isinstance(self.data, np.ndarray)
-                else self.data.size()
-            )
+            data_shape = self.data.shape if isinstance(self.data, np.ndarray) else self.data.size()
             reference_shape = (
                 self.reference.shape
                 if isinstance(self.reference, np.ndarray)
@@ -39,6 +40,7 @@ class SSUnetData:
 
     @staticmethod
     def _to_tensor(input: np.ndarray) -> torch.Tensor:
+        """Convert the input data to a tensor."""
         try:
             return torch.from_numpy(input)
         except TypeError:
@@ -46,27 +48,27 @@ class SSUnetData:
             try:
                 LOGGER.info("Trying to convert to int64")
                 return torch.from_numpy(input.astype(np.int64))
-            except TypeError:
+            except TypeError as err:
                 LOGGER.error("Data type not supported")
-                raise TypeError("Data type not supported")
+                raise TypeError("Data type not supported") from err
 
     @staticmethod
-    def _apply_binning(
-        data: np.ndarray | torch.Tensor, bin: int, mode: str
-    ) -> torch.Tensor:
+    def _apply_binning(data: np.ndarray | torch.Tensor, bin: int, mode: str) -> torch.Tensor:
+        """Apply binning to the input data."""
         if isinstance(data, np.ndarray):
             data = torch.from_numpy(data)
 
         if isinstance(data, torch.Tensor):
             if mode == "sum":
                 weight = torch.ones(1, 1, bin, bin, device=data.device)
-                return F.conv2d(data, weight, stride=bin, groups=data.size(1))
+                return tnf.conv2d(data, weight, stride=bin, groups=data.size(1))
             elif mode == "max":
-                return F.max_pool2d(data, kernel_size=bin, stride=bin)
+                return tnf.max_pool2d(data, kernel_size=bin, stride=bin)
             else:
                 raise ValueError("Mode must be 'sum' or 'max'")
 
     def binxy(self, bin: int = 2, mode: str = "sum"):
+        """Apply binning to the input data."""
         self.data = self._apply_binning(self.data, bin, mode=mode)
         if self.reference is not None:
             self.reference = self._apply_binning(self.reference, bin, mode=mode)
@@ -88,16 +90,23 @@ class DataConfig:
 
     @property
     def name(self) -> str:
-        return f"{self.note}_{self.virtual_size}x{self.z_size}x{self.xy_size}x{self.xy_size}_skip={self.skip_frames}"
+        """Get the name of the dataset."""
+        return (
+            f"{self.note}_{self.virtual_size}x{self.z_size}x{self.xy_size}x{self.xy_size}_skip"
+            f"={self.skip_frames}"
+        )
 
 
 class SingleVolumeDataset(Dataset, ABC):
+    """Single volume dataset."""
+
     def __init__(
         self,
         input: SSUnetData,
         config: DataConfig,
         **kwargs,
     ):
+        """Initialize the single volume dataset."""
         super().__init__()
         self.input = input
         self.config = config
@@ -106,6 +115,7 @@ class SingleVolumeDataset(Dataset, ABC):
         self.__post_init__()
 
     def __len__(self) -> int:
+        """Get the length of the dataset."""
         return self.length
 
     def __post_init__(self):
@@ -114,44 +124,48 @@ class SingleVolumeDataset(Dataset, ABC):
 
     @property
     @abstractmethod
-    def data_size(self) -> int: ...
-
-    """Function to define the number of samples in a volume."""
+    def data_size(self) -> int:
+        """Function to define the number of samples in a volume."""
 
     @property
     def data(self) -> torch.Tensor:
+        """Get the data tensor."""
         if isinstance(self.input.data, np.ndarray):
             self.input.data = self.input._to_tensor(self.input.data)
         return self.input.data
 
     @property
     def reference(self) -> torch.Tensor | None:
+        """Get the reference tensor."""
         if isinstance(self.input.reference, np.ndarray):
             self.input.reference = self.input._to_tensor(self.input.reference)
         return self.input.reference
 
     @property
     def x_size(self) -> int:
+        """Get the x size."""
         return self.config.xy_size
 
     @property
     def y_size(self) -> int:
+        """Get the y size."""
         return self.config.xy_size
 
     @property
     def z_size(self) -> int:
+        """Get the z size."""
         return self.config.z_size
 
     @property
     def length(self) -> int:
+        """Get the length of the dataset."""
         return (
-            self.data_size
-            if self.config.virtual_size == 0
-            else self.config.virtual_size
+            self.data_size if self.config.virtual_size == 0 else self.config.virtual_size
         ) // self.config.skip_frames
 
     @staticmethod
     def normalize_by_mean(input: torch.Tensor) -> torch.Tensor:
+        """Normalize the input data by the mean."""
         return input / (input.mean() + EPSILON)
 
     def _new_crop_params(self) -> tuple[int, int, int, int]:

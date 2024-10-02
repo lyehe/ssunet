@@ -1,7 +1,9 @@
-import logging
+"""Constants for the project."""
+
+from logging import getLogger
 
 EPSILON = 1e-8
-LOGGER = logging.getLogger(__name__)
+LOGGER = getLogger(__name__)
 DEFAULT_OPTIMIZER_CONFIG = {
     "name": "adamw",  # optimizer name
     "lr": 2e-5,  # learning rate

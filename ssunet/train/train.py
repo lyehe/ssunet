@@ -1,24 +1,28 @@
-import torch
-import torch.utils.data as dt
-import pytorch_lightning as pl
+"""Training script."""
 
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Union, Literal, List
-from dataclasses import dataclass, field
+from typing import Literal
 
+import pytorch_lightning as pl
+import torch
+import torch.utils.data as dt
 from lightning.pytorch.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import (
+    DeviceStatsMonitor,
+    EarlyStopping,
     LearningRateMonitor,
     ModelCheckpoint,
-    EarlyStopping,
-    DeviceStatsMonitor,
 )
+
 from ssunet.dataloader import SingleVolumeDataset
 
 
 @dataclass
 class LoaderConfig:
+    """Data loader configuration."""
+
     batch_size: int = 20
     shuffle: bool = False
     pin_memory: bool = False
@@ -28,10 +32,12 @@ class LoaderConfig:
 
     @property
     def to_dict(self) -> dict:
+        """Convert the dataclass to a dictionary."""
         return {k: v for k, v in self.__dict__.items() if not k.startswith("_")}
 
     @property
     def name(self) -> str:
+        """Get the name of the dataloader."""
         name_str = [
             f"bs={self.batch_size}",
             f"sh={self.shuffle}",
@@ -43,17 +49,20 @@ class LoaderConfig:
         return "_".join(name for name in name_str if name is not None and name != "")
 
     def loader(self, data: SingleVolumeDataset) -> dt.DataLoader:
+        """Create a data loader."""
         return dt.DataLoader(data, **self.to_dict)
 
 
 @dataclass
 class TrainConfig:
-    default_root_dir: Union[str, Path] = Path("../models")
+    """Training configuration."""
+
+    default_root_dir: str | Path = Path("../models")
     accelerator: str = "cuda"
     gradient_clip_val: float = 1.0
-    precision: Union[str, int, None] = 32
+    precision: str | int | None = 32
     max_epochs: int = 50
-    device_numbers: Union[int, List[int]] = 0
+    device_numbers: int | list[int] = 0
 
     # callbacks - model checkpoint
     callbacks_model_checkpoint: bool = True
@@ -87,6 +96,7 @@ class TrainConfig:
     )
 
     def __post_init__(self):
+        """Setting the default root directory and matmul precision."""
         self.default_root_dir = Path(self.default_root_dir)
         self.default_root_dir.mkdir(parents=True, exist_ok=True)
         torch.set_float32_matmul_precision(self.matmul_precision)
@@ -94,6 +104,7 @@ class TrainConfig:
 
     @property
     def name(self) -> str:
+        """Get the name of the training session."""
         name_parts = [
             self.time_stamp,
             f"e={self.max_epochs}",
@@ -104,15 +115,15 @@ class TrainConfig:
         return "_".join(name_parts)
 
     @property
-    def devices(self) -> List[int]:
+    def devices(self) -> list[int]:
+        """Get the device numbers in a list."""
         return (
-            [self.device_numbers]
-            if isinstance(self.device_numbers, int)
-            else self.device_numbers
+            [self.device_numbers] if isinstance(self.device_numbers, int) else self.device_numbers
         )
 
     @property
     def model_checkpoint(self) -> ModelCheckpoint:
+        """Create a model checkpoint callback."""
         return ModelCheckpoint(
             save_weights_only=self.mc_save_weights_only,
             mode=self.mc_mode,
@@ -122,21 +133,25 @@ class TrainConfig:
 
     @property
     def learning_rate_monitor(self) -> LearningRateMonitor:
+        """Create a learning rate monitor callback."""
         return LearningRateMonitor(self.lrm_logging_interval)
 
     @property
     def early_stopping(self) -> EarlyStopping:
+        """Create an early stopping callback."""
         return EarlyStopping(self.es_monitor, patience=self.es_patience)
 
     @property
     def logger(self) -> TensorBoardLogger:
+        """Create a logger."""
         logger_path = Path(self.default_root_dir) / self.logger_name
         if not logger_path.exists():
             logger_path.mkdir(parents=True, exist_ok=True)
         return TensorBoardLogger(save_dir=self.default_root_dir, name=self.logger_name)
 
     @property
-    def callbacks(self) -> List:
+    def callbacks(self) -> list:
+        """Create a list of callbacks."""
         callbacks = []
         if self.callbacks_model_checkpoint:
             callbacks.append(self.model_checkpoint)
@@ -150,6 +165,7 @@ class TrainConfig:
 
     @property
     def to_dict(self) -> dict:
+        """Convert the dataclass to a dictionary."""
         return {
             "default_root_dir": self.default_root_dir,
             "accelerator": self.accelerator,
@@ -166,18 +182,15 @@ class TrainConfig:
 
     @property
     def trainer(self) -> pl.Trainer:
-        print(f"Saving logs and checkpoints to {self.default_root_dir}")
+        """Create a trainer."""
         return pl.Trainer(**self.to_dict)
 
-    def set_new_root(self, new_root: Union[Path, str]):
-        """Set a new default root directory
+    def set_new_root(self, new_root: Path | str):
+        """Set a new default root directory.
 
         :param new_root: New root directory path. If a string, will be joined to existing root dir
         :type new_root: Path | str
         """
         self.default_root_dir = (
-            Path(self.default_root_dir) / new_root
-            if isinstance(new_root, str)
-            else new_root
+            Path(self.default_root_dir) / new_root if isinstance(new_root, str) else new_root
         )
-        print(f"New model root directory: {self.default_root_dir}")

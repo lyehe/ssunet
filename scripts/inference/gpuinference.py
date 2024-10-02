@@ -1,19 +1,20 @@
+"""GPU inference script."""
+
+import logging
+import math
+from dataclasses import dataclass, field
+
 import numpy as np
 import pytorch_lightning as pl
 import torch
-import logging
-from tqdm import tqdm
-from dataclasses import dataclass, field
 from torch.cuda.amp.autocast_mode import autocast
-import math
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
 
-def gpu_inference(
-    model: pl.LightningModule, data: np.ndarray, device_num: int = 0
-) -> np.ndarray:
-    """Run inference on GPU"""
+def gpu_inference(model: pl.LightningModule, data: np.ndarray, device_num: int = 0) -> np.ndarray:
+    """Run inference on GPU."""
     device = torch.device(f"cuda:{device_num}")
     model.to(device)
     model.eval()
@@ -32,6 +33,7 @@ def gpu_patch_inference(
     test_vram=False,
     mixed_precision=False,
 ) -> np.ndarray:
+    """Run patch inference on GPU."""
     if isinstance(device, int):
         device = f"cuda:{device}"
     if isinstance(device, str):
@@ -52,16 +54,12 @@ def gpu_patch_inference(
     patch_size = (patch_depth, c, x, y)
 
     patch_depth = (
-        patch_sizer(
-            model, patch_size, patch_depth, min_overlap, device, mixed_precision
-        )
+        patch_sizer(model, patch_size, patch_depth, min_overlap, device, mixed_precision)
         if test_vram
         else patch_depth
     )
     num_patches = (z + patch_depth - min_overlap - 1) // (patch_depth - min_overlap)
-    overlap = (
-        (num_patches * patch_depth - z) // (num_patches - 1) if num_patches > 1 else 0
-    )
+    overlap = (num_patches * patch_depth - z) // (num_patches - 1) if num_patches > 1 else 0
 
     output = np.zeros_like(data, dtype=np.float32)
     stream_for_data = torch.cuda.Stream(device=device)
@@ -76,9 +74,7 @@ def gpu_patch_inference(
 
             with torch.cuda.stream(stream_for_data):  # type: ignore
                 patch = data[:, start_depth:end_depth]
-                torch_patch = torch.from_numpy(patch)[None, ...].to(
-                    device, non_blocking=True
-                )
+                torch_patch = torch.from_numpy(patch)[None, ...].to(device, non_blocking=True)
             stream_for_data.synchronize()
             with torch.cuda.stream(stream_for_inference):  # type: ignore
                 if mixed_precision:
@@ -112,6 +108,10 @@ def gpu_skip_inference(
     patch_depth: int = 32,
     mixed_precision=False,
 ) -> tuple[np.ndarray, np.ndarray]:
+    """Run skip inference on GPU.
+
+    Some frames are skipped to reduce the memory usage and data size.
+    """
     if isinstance(device, int):
         device = f"cuda:{device}"
     if isinstance(device, str):
@@ -147,9 +147,7 @@ def gpu_skip_inference(
 
             with torch.cuda.stream(stream_for_data):  # type: ignore
                 patch = data[:, start_depth:end_depth].astype(np.float32)
-                torch_patch = torch.from_numpy(patch)[None, ...].to(
-                    device, non_blocking=True
-                )
+                torch_patch = torch.from_numpy(patch)[None, ...].to(device, non_blocking=True)
             stream_for_data.synchronize()
             with torch.cuda.stream(stream_for_inference):  # type: ignore
                 if mixed_precision:
@@ -164,9 +162,7 @@ def gpu_skip_inference(
             pbar.set_postfix(
                 vram_usage=f"{torch.cuda.memory_allocated(device) / (1024 ^ 3):.1f} GB"
             )
-    return (
-        (skipped_data, output) if num_dims == 4 else (skipped_data[:, 0], output[:, 0])
-    )
+    return (skipped_data, output) if num_dims == 4 else (skipped_data[:, 0], output[:, 0])
 
 
 def patch_sizer(
@@ -177,7 +173,7 @@ def patch_sizer(
     device: torch.device,
     mixed_precision: bool = False,
 ) -> int:
-    """Test VRAM capacity"""
+    """Determine the patch depth based on the VRAM capacity."""
     patch_depth = inital_patch_depth
     while patch_depth > min_overlap * 2 + 1:
         try:
@@ -198,7 +194,7 @@ def test_model_vram(
     patch_size: tuple[int, int, int, int],
     mixed_precision=False,
 ) -> None:
-    """Estimate the VRAM usage of the model"""
+    """Estimate the VRAM usage of the model."""
     dummy_input = torch.rand(1, *patch_size).to(model.device)
     with torch.no_grad():
         if mixed_precision:
@@ -218,6 +214,7 @@ def grid_inference(
     min_overlap: int = 8,
     initial_patch_depth: int = 16,
 ) -> np.ndarray:
+    """Run grid inference on GPU."""
     dz, dx, dy = data.shape
     split_x, split_y = split if isinstance(split, tuple) else (split, split)
     processed_data = np.zeros((dz, dx, dy))
@@ -276,6 +273,8 @@ def grid_inference(
 
 @dataclass
 class PatchIdx:
+    """Class to handle patch indices."""
+
     _dim_size: int
     _patch_size: int
     _num_patches: int
@@ -288,20 +287,24 @@ class PatchIdx:
     _end_non_overlap: list = field(init=False, default_factory=list)
 
     def __post_init__(self):
+        """Post initialization function."""
         self._calculate_idx()
 
     @classmethod
     def from_patch_size(cls, dim_size: int, patch_size: int, overlap: int = 0):
+        """Create patch indices from patch size."""
         num_patches = math.ceil((dim_size - overlap) / (patch_size - overlap))
         return cls(dim_size, patch_size, num_patches, overlap)
 
     @classmethod
     def from_num_patches(cls, dim_size: int, num_patches: int, overlap: int = 0):
+        """Create patch indices from number of patches."""
         patch_size = math.ceil((dim_size - overlap) / num_patches) + overlap
         return cls(dim_size, patch_size, num_patches, overlap)
 
     @classmethod
     def from_num_size(cls, dim_size: int, num_patches: int, patch_size: int):
+        """Create patch indices from number of patches and patch size."""
         total_size = num_patches * patch_size
         if total_size < dim_size:
             raise ValueError("values too small")
@@ -309,6 +312,7 @@ class PatchIdx:
         return cls(dim_size, patch_size, num_patches, overlap)
 
     def _calculate_idx(self):
+        """Calculate patch indices."""
         self._start_idx = []
         self._end_idx = []
         self._local_start_idx = []
@@ -323,36 +327,46 @@ class PatchIdx:
 
     @property
     def start_idx(self) -> list:
+        """Get start indices."""
         return self._start_idx
 
     @property
     def end_idx(self) -> list:
+        """Get end indices."""
         return self._end_idx
 
     @property
     def num_patches(self) -> int:
+        """Get number of patches."""
         return self._num_patches
 
     @property
     def patch_size(self) -> int:
+        """Get patch size."""
         return self._patch_size
 
     @property
     def overlap(self) -> int:
+        """Get overlap."""
         return self._overlap
 
     @property
     def dim_size(self) -> int:
+        """Get dimension size."""
         return self._dim_size
 
     def __call__(self) -> tuple[list, list]:
+        """Get start and end indices."""
         return self._start_idx, self._end_idx
 
     def __len__(self) -> int:
+        """Get number of patches."""
         return self._num_patches
 
     def __get_item__(self, index: int) -> tuple[int, int]:
+        """Get start and end indices."""
         return self._start_idx[index], self._end_idx[index]
 
     def __iter__(self):
-        return zip(self._start_idx, self._end_idx)
+        """Iterate over start and end indices."""
+        return zip(self._start_idx, self._end_idx, strict=False)

@@ -1,9 +1,11 @@
+"""Module init."""
+
 from .modules import (
     DownConvDual3D,
-    UpConvDual3D,
     DownConvTri3D,
-    UpConvTri3D,
     LKDownConv3D,
+    UpConvDual3D,
+    UpConvTri3D,
 )
 from .modulets import conv111
 

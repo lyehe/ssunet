@@ -1,20 +1,23 @@
-import torch
-import torch.nn as nn
-from .modulets import (
-    conv111,
-    conv333,
-    conv777,
-    pool,
-    upconv222,
-    partial333,
-    merge,
-    merge_conv,
-    activation_function,
-)
+"""Modules for the SSUnet."""
 
 from abc import abstractmethod
 from functools import partial
 from typing import TypeAlias
+
+import torch
+import torch.nn as nn
+
+from .modulets import (
+    activation_function,
+    conv111,
+    conv333,
+    conv777,
+    merge,
+    merge_conv,
+    partial333,
+    pool,
+    upconv222,
+)
 
 _EncoderOut: TypeAlias = tuple[torch.Tensor, torch.Tensor] | tuple[torch.Tensor, None]
 
@@ -67,7 +70,6 @@ class UnetBlockConv3D(nn.Module):
         :param kwargs: additional keyword arguments
         :type kwargs: dict
         """
-
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -92,22 +94,25 @@ class UnetBlockConv3D(nn.Module):
         self.__other__()
 
     @abstractmethod
-    def __other__(self): ...
+    def __other__(self):
+        """Define other modules."""
 
 
 class DownConvDual3D(UnetBlockConv3D):
-    """
-    Simplified DownConv block with residual connection.
+    """Simplified DownConv block with residual connection.
+
     Performs 2 convolutions and 1 MaxPool. A ReLU activation follows each convolution.
     """
 
     def __other__(self):
+        """Define other modules."""
         self.residual = conv111(self.in_channels, self.out_channels)
         self.conv1 = self.conv333(self.in_channels, self.out_channels)
         self.conv2 = self.conv333(self.out_channels, self.out_channels)
         self.pool = self.down_sample(self.out_channels, self.out_channels)
 
     def forward(self, input: torch.Tensor) -> _EncoderOut:
+        """Forward pass."""
         residual = self.residual(input)
         input = self.activation(self.conv1(input))
         input = self.activation(self.group_norm(self.conv2(input)))
@@ -118,17 +123,20 @@ class DownConvDual3D(UnetBlockConv3D):
 
 
 class UpConvDual3D(UnetBlockConv3D):
+    """A helper Module that performs 2 convolutions and 1 UpConvolution.
+
+    A ReLU activation follows each convolution.
+    """
+
     def __other__(self):
-        merge_channels = (
-            self.in_channels if self.merge_mode == "concat" else self.out_channels
-        )
+        """Define other modules."""
+        merge_channels = self.in_channels if self.merge_mode == "concat" else self.out_channels
         self.resconv = self.merge_conv(self.out_channels, self.out_channels)
         self.conv1 = self.conv333(merge_channels, self.out_channels)
         self.conv2 = self.conv333(self.out_channels, self.out_channels)
 
-    def forward(
-        self, input: torch.Tensor, skip: torch.Tensor | None = None
-    ) -> torch.Tensor:
+    def forward(self, input: torch.Tensor, skip: torch.Tensor | None = None) -> torch.Tensor:
+        """Forward pass."""
         input = self.up_sample(input)
         input = self.merge(input, skip)
         residual = self.group_norm(self.resconv(input)) if skip is not None else input
@@ -140,18 +148,20 @@ class UpConvDual3D(UnetBlockConv3D):
 
 
 class DownConvTri3D(UnetBlockConv3D):
-    """
-    Helper Module that performs 2 convolutions and 1 MaxPool.
+    """Helper Module that performs 2 convolutions and 1 MaxPool.
+
     A ReLU activation follows each convolution.
     """
 
     def __other__(self):
+        """Define other modules."""
         self.resconv = self.conv333(self.in_channels, self.out_channels)
         self.conv2 = self.conv333(self.out_channels, self.out_channels)
         self.conv3 = self.conv333(self.out_channels, self.out_channels)
         self.pool = self.down_sample(self.out_channels, self.out_channels)
 
     def forward(self, input: torch.Tensor) -> _EncoderOut:
+        """Forward pass."""
         residual = self.group_norm(self.resconv(input))
         input = self.activation(self.group_norm(self.conv2(residual)))
         input = self.activation(self.group_norm(self.conv3(input) + residual))
@@ -161,19 +171,19 @@ class DownConvTri3D(UnetBlockConv3D):
 
 
 class UpConvTri3D(UnetBlockConv3D):
-    """
-    A helper Module that performs 2 convolutions and 1 UpConvolution.
+    """A helper Module that performs 2 convolutions and 1 UpConvolution.
+
     A ReLU activation follows each convolution.
     """
 
     def __other__(self):
+        """Define other modules."""
         self.resconv = self.merge_conv(self.out_channels, self.out_channels)
         self.conv2 = self.conv333(self.out_channels, self.out_channels)
         self.conv3 = self.conv333(self.out_channels, self.out_channels)
 
-    def forward(
-        self, input: torch.Tensor, skip: torch.Tensor | None = None
-    ) -> torch.Tensor:
+    def forward(self, input: torch.Tensor, skip: torch.Tensor | None = None) -> torch.Tensor:
+        """Forward pass."""
         input = self.up_sample(input)
         input = self.merge(input, skip)
         residual = self.group_norm(self.resconv(input)) if skip is not None else input
@@ -184,12 +194,13 @@ class UpConvTri3D(UnetBlockConv3D):
 
 
 class LKDownConv3D(UnetBlockConv3D):
-    """
-    A helper Module that performs 2 convolutions and 1 MaxPool.
+    """A helper Module that performs 2 convolutions and 1 MaxPool.
+
     A ReLU activation follows each convolution.
     """
 
     def __other__(self):
+        """Define other modules."""
         in_channels = self.in_channels
         out_channels = self.out_channels
         z_conv = self.z_conv
@@ -205,6 +216,7 @@ class LKDownConv3D(UnetBlockConv3D):
         self.pool = self.down_sample(self.out_channels, self.out_channels)
 
     def forward(self, input: torch.Tensor) -> _EncoderOut:
+        """Forward pass."""
         input = self.activation(self.group_norm(self.conv333_1(input)))
         input = self.activation(
             input + self.conv111(input) + self.conv333_2(input) + self.conv777(input)
@@ -215,15 +227,18 @@ class LKDownConv3D(UnetBlockConv3D):
 
 
 class PartialDownConv3D(UnetBlockConv3D):
+    """A helper Module that performs 1 convolution and 1 MaxPool.
+
+    A ReLU activation follows each convolution.
+    """
+
     def __other__(self):
+        """Define other modules."""
         self.conv = partial333(self.in_channels, self.in_channels, z_conv=self.z_conv)
         self.MaxPool = nn.MaxPool3d(2)
 
     def forward(self, input: torch.Tensor, mask_in: torch.Tensor | None):
+        """Forward pass."""
         input, mask_out = self.conv(input, mask_in=mask_in)
         input = self.activation(input)
-        return (
-            (self.MaxPool(input), self.MaxPool(mask_out))
-            if not self.last
-            else (input, mask_out)
-        )
+        return (self.MaxPool(input), self.MaxPool(mask_out)) if not self.last else (input, mask_out)

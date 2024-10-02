@@ -1,12 +1,14 @@
+"""Configuration for the project."""
+
 from .config import (
-    MasterConfig,
-    PathConfig,
     DataConfig,
-    SplitParams,
-    ModelConfig,
     LoaderConfig,
-    TrainConfig,
+    MasterConfig,
+    ModelConfig,
+    PathConfig,
+    SplitParams,
     SSUnetData,
+    TrainConfig,
     load_config,
 )
 

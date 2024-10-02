@@ -1,11 +1,17 @@
+"""N2N dataset."""
+
 import torch
-from .singlevolume import SingleVolumeDataset
+
 from ssunet.constants import LOGGER
+
+from .singlevolume import SingleVolumeDataset
+
 
 class N2NDatasetSkipFrame(SingleVolumeDataset):
     """N2N using even and odd frames as input/target."""
 
     def __getitem__(self, index: int) -> list[torch.Tensor]:
+        """Get a N2N sample."""
         start_index = self._index(index)
         end_index = start_index + self.z_size * 2
         output = self.data[start_index:end_index]
@@ -21,6 +27,7 @@ class N2NDatasetSkipFrame(SingleVolumeDataset):
 
     @property
     def data_size(self) -> int:
+        """Get the length of the dataset."""
         return self.data.shape[0] - self.z_size * 2
 
 
@@ -28,6 +35,7 @@ class N2NDatasetDualVolume(SingleVolumeDataset):
     """N2N using 2 differnet volumes. The target volume is the reference."""
 
     def __getitem__(self, index: int) -> list[torch.Tensor]:
+        """Get a N2N sample."""
         if self.reference is None:
             LOGGER.error("Reference data is required for the dual N2N dataset")
             raise ValueError("Reference data is required for the dual N2N dataset")
@@ -43,4 +51,5 @@ class N2NDatasetDualVolume(SingleVolumeDataset):
 
     @property
     def data_size(self) -> int:
+        """Get the length of the dataset."""
         return self.data.shape[0] - self.z_size + 1

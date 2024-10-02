@@ -1,17 +1,20 @@
+"""Partial Convolutional Layers."""
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from ssunet.constants import LOGGER, EPSILON
+import torch.nn.functional as tnf
+
+from ssunet.constants import EPSILON, LOGGER
 
 
 class PartialConv3d(nn.Conv3d):
     """3D Partial Convolutional Layer for Image Inpainting from NVIDIA.
+
     https://arxiv.org/abs/1811.11718 for padding in this application.
     """
 
-    def __init__(
-        self, *args, multi_channel: bool = False, return_mask: bool = False, **kwargs
-    ):
+    def __init__(self, *args, multi_channel: bool = False, return_mask: bool = False, **kwargs):
+        """Initialize PartialConv3d."""
         super().__init__(*args, **kwargs)
         self.multi_channel = multi_channel
         self.return_mask = return_mask
@@ -27,6 +30,7 @@ class PartialConv3d(nn.Conv3d):
         self.mask_ratio = torch.tensor([])
 
     def forward(self, input: torch.Tensor, mask_in: torch.Tensor | None = None):
+        """Forward pass."""
         if len(input.shape) != 5:
             LOGGER.error(f"Pconv3D: Input must be 5D , but got {len(input.shape)}")
             raise ValueError(f"Pconv3D: Input must be 5D , but got {len(input.shape)}")
@@ -48,7 +52,7 @@ class PartialConv3d(nn.Conv3d):
                     else mask_in
                 )
 
-                self.update_mask = F.conv3d(
+                self.update_mask = tnf.conv3d(
                     mask,
                     self.weight_maskUpdater,
                     bias=None,
@@ -62,9 +66,7 @@ class PartialConv3d(nn.Conv3d):
                 self.update_mask = torch.clamp(self.update_mask, 0, 1)
                 self.mask_ratio = torch.mul(self.mask_ratio, self.update_mask)
 
-        raw_out = super().forward(
-            torch.mul(input, mask_in) if mask_in is not None else input
-        )
+        raw_out = super().forward(torch.mul(input, mask_in) if mask_in is not None else input)
 
         if self.bias is not None:
             bias_view = self.bias.view(1, self.out_channels, 1, 1, 1)
@@ -77,9 +79,13 @@ class PartialConv3d(nn.Conv3d):
 
 
 class PartialConv2d(nn.Conv2d):
-    def __init__(
-        self, *args, multi_channel: bool = False, return_mask: bool = False, **kwargs
-    ):
+    """2D Partial Convolutional Layer for Image Inpainting from NVIDIA.
+
+    https://arxiv.org/abs/1811.11718 for padding in this application.
+    """
+
+    def __init__(self, *args, multi_channel: bool = False, return_mask: bool = False, **kwargs):
+        """Initialize PartialConv2d."""
         self.multi_channel = multi_channel
         self.return_mask = return_mask
 
@@ -97,6 +103,7 @@ class PartialConv2d(nn.Conv2d):
         self.mask_ratio = torch.tensor([])
 
     def forward(self, input: torch.Tensor, mask_in: torch.Tensor | None = None):
+        """Forward pass."""
         if len(input.shape) != 4:
             LOGGER.error(f"Pconv2D: Input must be 4D , but got {len(input.shape)}")
             raise ValueError(f"Pconv2D: Input must be 4D , but got {len(input.shape)}")
@@ -118,7 +125,7 @@ class PartialConv2d(nn.Conv2d):
                     else mask_in
                 )
 
-                self.update_mask = F.conv2d(
+                self.update_mask = tnf.conv2d(
                     mask,
                     self.weight_maskUpdater,
                     bias=None,
@@ -132,9 +139,7 @@ class PartialConv2d(nn.Conv2d):
                 self.update_mask = torch.clamp(self.update_mask, 0, 1)
                 self.mask_ratio = torch.mul(self.mask_ratio, self.update_mask)
 
-        raw_out = super().forward(
-            torch.mul(input, mask) if mask_in is not None else input
-        )
+        raw_out = super().forward(torch.mul(input, mask) if mask_in is not None else input)
 
         if self.bias is not None:
             bias_view = self.bias.view(1, self.out_channels, 1, 1)
