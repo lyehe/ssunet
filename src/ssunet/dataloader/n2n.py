@@ -2,8 +2,7 @@
 
 import torch
 
-from ssunet.constants import LOGGER
-
+from ..constants import LOGGER
 from .singlevolume import SingleVolumeDataset
 
 

@@ -16,7 +16,7 @@ from pytorch_lightning.callbacks import (
     ModelCheckpoint,
 )
 
-from ssunet.dataloader import SingleVolumeDataset
+from .dataloader import SingleVolumeDataset
 
 
 @dataclass

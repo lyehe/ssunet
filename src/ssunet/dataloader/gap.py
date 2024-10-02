@@ -7,8 +7,7 @@ import torch
 from numpy.random import choice, rand, seed
 from torch.distributions.binomial import Binomial
 
-from ssunet.constants import EPSILON, LOGGER
-
+from ..constants import EPSILON, LOGGER
 from .singlevolume import SingleVolumeDataset
 
 

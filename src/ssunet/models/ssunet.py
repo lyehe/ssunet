@@ -2,22 +2,26 @@
 
 from dataclasses import dataclass, field
 
+import pyiqa
 import pytorch_lightning as pl
 import torch
 from torch import nn, optim
 from torch.nn import init
 from torch.utils.checkpoint import checkpoint
 
-from ssunet.constants import DEFAULT_OPTIMIZER_CONFIG, EPSILON, LOGGER
-from ssunet.exceptions import InvalidUpModeError
-from ssunet.models.factories import LossFunction, Metric
-from ssunet.modules import BLOCK, conv111
+from ..constants import DEFAULT_OPTIMIZER_CONFIG, EPSILON, LOGGER
+from ..exceptions import InvalidUpModeError
+from ..losses import loss_functions
+from ..modules import BLOCK, conv111
 
 OPTIMIZER = {
     "adam": optim.Adam,
     "sgd": optim.SGD,
     "adamw": optim.AdamW,
 }
+
+psnr_metric = pyiqa.create_metric("psnr")
+ssim_metric = pyiqa.create_metric("ssim")
 
 
 @dataclass
@@ -72,9 +76,6 @@ class SSUnet(pl.LightningModule):
     def __init__(
         self,
         config: ModelConfig,
-        loss_function: LossFunction,
-        psnr_metric: Metric,
-        ssim_metric: Metric,
         **kwargs,
     ) -> None:
         """Initialize the SSUnet model.
@@ -87,11 +88,8 @@ class SSUnet(pl.LightningModule):
         """
         super().__init__()
         self.config = config
-        self.loss_function = loss_function
-        self._psnr_metric = psnr_metric
-        self._ssim_metric = ssim_metric
+        self.loss_function = loss_functions[config.loss_function]
         self.kwargs = kwargs
-
         self._check_conflicts()
 
         self.down_convs = self._down_conv_list()
@@ -311,8 +309,8 @@ class SSUnet(pl.LightningModule):
         ground_truth_mean = torch.mean(ground_truth) + EPSILON
         normalized_output = normalized_output / output_mean * ground_truth_mean
 
-        psnr = self._psnr_metric(normalized_output, ground_truth)
-        ssim = self._ssim_metric(normalized_output, ground_truth)
+        psnr = psnr_metric(normalized_output, ground_truth)
+        ssim = ssim_metric(normalized_output, ground_truth)
         self.log("val_psnr", psnr.mean())
         self.log("val_ssim", ssim.mean())
 

@@ -3,7 +3,7 @@
 import torch
 from torch import nn
 
-from ssunet.exceptions import (
+from ..exceptions import (
     ChannelDivisibilityError,
     InputDimensionError,
     SizeDivisibilityError,

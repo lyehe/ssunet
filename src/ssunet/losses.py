@@ -2,7 +2,7 @@
 
 import torch
 
-from ssunet.constants import EPSILON
+from .constants import EPSILON
 
 
 def mse_loss(

@@ -3,9 +3,8 @@
 import torch
 from torch import nn
 
-from ssunet.constants import LOGGER
-from ssunet.exceptions import ShapeMismatchError
-
+from ..constants import LOGGER
+from ..exceptions import ShapeMismatchError
 from .partialconv import PartialConv3d
 from .pixelshuffle import (
     PixelShuffle2d,

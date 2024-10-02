@@ -7,7 +7,7 @@ from typing import cast
 import pyiqa
 import torch
 
-from ssunet.losses import loss_functions
+from ..losses import loss_functions
 
 
 class Metric(ABC):

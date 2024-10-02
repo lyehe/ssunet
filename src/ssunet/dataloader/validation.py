@@ -2,8 +2,7 @@
 
 import torch
 
-from ssunet.constants import EPSILON
-
+from ..constants import EPSILON
 from .singlevolume import SingleVolumeDataset
 
 

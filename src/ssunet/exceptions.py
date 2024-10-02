@@ -3,7 +3,7 @@
 from enum import Enum
 from pathlib import Path
 
-from constants import LOGGER
+from .constants import LOGGER
 
 
 class SSUnetError(Exception):

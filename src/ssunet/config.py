@@ -11,8 +11,8 @@ import numpy as np
 import yaml
 from tifffile import TiffFile, imread
 
-from ssunet.dataloader import DataConfig, SplitParams, SSUnetData
-from ssunet.exceptions import (
+from .dataloader import DataConfig, SplitParams, SSUnetData
+from .exceptions import (
     ConfigFileNotFoundError,
     DirectoryNotFoundError,
     FileIndexOutOfRangeError,
@@ -22,8 +22,8 @@ from ssunet.exceptions import (
     NoDataFileAvailableError,
     UnknownFileTypeError,
 )
-from ssunet.models import ModelConfig
-from ssunet.train import LoaderConfig, TrainConfig
+from .models import ModelConfig
+from .train import LoaderConfig, TrainConfig
 
 PathLike = str | Path
 FileInput = int | str | Path

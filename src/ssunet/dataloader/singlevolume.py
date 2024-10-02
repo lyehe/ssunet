@@ -10,7 +10,7 @@ import torchvision.transforms.v2.functional as tf
 from numpy.random import rand, randint
 from torch.utils.data import Dataset
 
-from ssunet.constants import EPSILON, LOGGER
+from ..constants import EPSILON, LOGGER
 
 
 def _lucky(factor: float = 0.5) -> bool:

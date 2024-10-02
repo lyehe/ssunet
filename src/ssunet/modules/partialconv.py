@@ -4,8 +4,8 @@ import torch
 import torch.nn.functional as tnf
 from torch import nn
 
-from ssunet.constants import EPSILON
-from ssunet.exceptions import InvalidInputShapeError
+from ..constants import EPSILON
+from ..exceptions import InvalidInputShapeError
 
 
 class PartialConv3d(nn.Conv3d):

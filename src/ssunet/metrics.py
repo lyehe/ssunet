@@ -13,7 +13,7 @@ import seaborn as sns
 import torch
 import yaml
 
-from ssunet.exceptions import (
+from .exceptions import (
     ConfigFileNotFoundError,
     ImageShapeMismatchError,
     InvalidImageDimensionError,
