@@ -27,6 +27,70 @@ class FileType(Enum):
     GROUND_TRUTH = auto()
 
 
+class DirectoryNotFoundError(Exception):
+    """Error raised when a directory is not found."""
+
+    def __init__(self, directory: Path):
+        self.message = f"Directory {directory} does not exist"
+        super().__init__(self.message)
+
+
+class FileIndexOutOfRangeError(ValueError):
+    """Error raised when a file index is out of range."""
+
+    def __init__(self, file_type: FileType, index: int):
+        self.message = f"{file_type.name} file index {index} out of range"
+        super().__init__(self.message)
+
+
+class FileNotFoundError(Exception):
+    """Error raised when a file is not found."""
+
+    def __init__(self, file_type: FileType, file_path: Path):
+        self.message = f"{file_type.name} file {file_path} does not exist"
+        super().__init__(self.message)
+
+
+class InvalidSliceRangeError(ValueError):
+    """Error raised when an invalid slice range is provided."""
+
+    def __init__(self, attr: str, begin: int, end: int):
+        self.message = f"Invalid slice range for {attr}: {begin}:{end}"
+        super().__init__(self.message)
+
+
+class UnknownFileTypeError(ValueError):
+    """Error raised when an unknown file type is encountered."""
+
+    def __init__(self, file_path: Path):
+        self.message = f"Unknown file type for path {file_path}"
+        super().__init__(self.message)
+
+
+class InvalidHDF5DatasetError(ValueError):
+    """Error raised when an HDF5 file does not contain the expected dataset."""
+
+    def __init__(self):
+        self.message = "HDF5 file does not contain expected dataset"
+        super().__init__(self.message)
+
+
+class NoDataFileAvailableError(ValueError):
+    """Error raised when no data file is available."""
+
+    def __init__(self):
+        self.message = "No data file available"
+        super().__init__(self.message)
+
+
+class ConfigFileNotFoundError(Exception):
+    """Error raised when the config file is not found."""
+
+    def __init__(self, config_path: Path):
+        self.message = f"Config file not found at {config_path}"
+        super().__init__(self.message)
+
+
 @dataclass
 class PathConfig:
     """Configuration for paths."""
@@ -54,13 +118,13 @@ class PathConfig:
 
         # Verify the data directory exists
         if not self.data_dir.exists():
-            raise NotADirectoryError(f"Data directory {self.data_dir} does not exist")
+            raise DirectoryNotFoundError(self.data_dir)
         self.data_file = self._resolve_file(self.data_file, self.data_dir, FileType.DATA)
 
         # Handle reference_file if reference_dir is provided
         if self.reference_dir and self.reference_file:
             if not self.reference_dir.exists():
-                raise NotADirectoryError(f"Reference directory {self.reference_dir} does not exist")
+                raise DirectoryNotFoundError(self.reference_dir)
             self.reference_file = self._resolve_file(
                 self.reference_file, self.reference_dir, FileType.REFERENCE
             )
@@ -68,22 +132,20 @@ class PathConfig:
         # Handle ground_truth_file if ground_truth_dir is provided
         if self.ground_truth_dir and self.ground_truth_file:
             if not self.ground_truth_dir.exists():
-                raise NotADirectoryError(
-                    f"Ground truth directory {self.ground_truth_dir} does not exist"
-                )
+                raise DirectoryNotFoundError(self.ground_truth_dir)
             self.ground_truth_file = self._resolve_file(
                 self.ground_truth_file, self.ground_truth_dir, FileType.GROUND_TRUTH
             )
 
         self._validate_slices()
 
-    def _validate_slices(self):
+    def _validate_slices(self) -> None:
         """Validate slice ranges for data, reference, and ground truth."""
         for attr in ["data", "reference", "ground_truth"]:
             begin = getattr(self, f"{attr}_begin_slice")
             end = getattr(self, f"{attr}_end_slice")
             if begin < 0 or (end != -1 and end <= begin):
-                raise ValueError(f"Invalid slice range for {attr}: {begin}:{end}")
+                raise InvalidSliceRangeError(attr, begin, end)
 
     def _resolve_file(self, file_input: FileInput, directory: Path, file_type: FileType) -> Path:
         """Resolve the file path."""
@@ -91,13 +153,13 @@ class PathConfig:
             try:
                 return next(islice(directory.iterdir(), file_input, None))
             except StopIteration as err:
-                raise ValueError(f"{file_type.name} file index {file_input} out of range") from err
+                raise FileIndexOutOfRangeError(file_type, file_input) from err
         elif isinstance(file_input, str | Path):
             file_path = Path(file_input)
             if not file_path.is_absolute():
                 file_path = directory / file_path
             if not file_path.exists():
-                raise FileNotFoundError(f"{file_type.name} file {file_path} does not exist")
+                raise FileNotFoundError(file_type, file_path)
             return file_path
 
     @property
@@ -131,13 +193,13 @@ class PathConfig:
                 dataset = f.get(keys[0])
 
                 if not isinstance(dataset, h5py.Dataset):
-                    raise ValueError("HDF5 file does not contain expected dataset")
+                    raise InvalidHDF5DatasetError()
                 return np.array(dataset[begin:end])
 
         elif method is not None:
             return method(data_path, begin=begin, end=end)
         else:
-            raise ValueError(f"Unknown file type for path {data_path}")
+            raise UnknownFileTypeError(data_path)
 
     def load_data(
         self,
@@ -158,7 +220,7 @@ class PathConfig:
                 end,
             ).astype(np.float32)
         else:
-            raise ValueError("No data file available")
+            raise NoDataFileAvailableError()
 
     def load_reference(
         self,
@@ -249,7 +311,7 @@ def load_yaml(config_path: Path | str = Path("./config.yml")) -> dict:
     """Load yaml configuration file."""
     config_path = Path(config_path)
     if not config_path.exists():
-        raise FileNotFoundError(f"Config file not found at {config_path}")
+        raise ConfigFileNotFoundError(config_path)
     return yaml.safe_load(config_path.read_text())
 
 

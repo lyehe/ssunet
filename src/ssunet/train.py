@@ -1,7 +1,7 @@
 """Training script."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -92,7 +92,7 @@ class TrainConfig:
 
     matmul_precision: Literal["highest", "high", "medium"] = "high"
     time_stamp: str = field(
-        init=False, default_factory=lambda: datetime.now().strftime("%Y%m%d_%H%M%S")
+        init=False, default_factory=lambda: datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
     )
 
     def __post_init__(self):
@@ -185,7 +185,7 @@ class TrainConfig:
         """Create a trainer."""
         return pl.Trainer(**self.to_dict)
 
-    def set_new_root(self, new_root: Path | str):
+    def set_new_root(self, new_root: Path | str) -> None:
         """Set a new default root directory.
 
         :param new_root: New root directory path. If a string, will be joined to existing root dir

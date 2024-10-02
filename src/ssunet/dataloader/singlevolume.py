@@ -18,6 +18,36 @@ def _lucky(factor: float = 0.5) -> bool:
     return rand() < factor
 
 
+class SSUnetDataError(Exception):
+    """Base class for SSUnetData errors."""
+
+    pass
+
+
+class ShapeMismatchError(SSUnetDataError):
+    """Error raised when data and reference shapes do not match."""
+
+    def __init__(self, message="Data and reference shapes do not match"):
+        self.message = message
+        super().__init__(self.message)
+
+
+class UnsupportedDataTypeError(SSUnetDataError):
+    """Error raised when data type is not supported."""
+
+    def __init__(self, message="Data type not supported"):
+        self.message = message
+        super().__init__(self.message)
+
+
+class UnsupportedInputModeError(SSUnetDataError):
+    """Error raised when input mode is not supported."""
+
+    def __init__(self, message="Input mode not supported"):
+        self.message = message
+        super().__init__(self.message)
+
+
 @dataclass
 class SSUnetData:
     """Data class for the input data of a single volume dataset."""
@@ -36,7 +66,7 @@ class SSUnetData:
                 else self.reference.size()
             )
             if data_shape != reference_shape:
-                raise ValueError("Data and reference shapes do not match")
+                raise ShapeMismatchError()
 
     @staticmethod
     def _to_tensor(input: np.ndarray) -> torch.Tensor:
@@ -50,13 +80,12 @@ class SSUnetData:
                 return torch.from_numpy(input.astype(np.int64))
             except TypeError as err:
                 LOGGER.error("Data type not supported")
-                raise TypeError("Data type not supported") from err
+                raise UnsupportedDataTypeError() from err
 
-    @staticmethod
-    def _apply_binning(data: np.ndarray | torch.Tensor, bin: int, mode: str) -> torch.Tensor:
+    def _apply_binning(self, data: np.ndarray | torch.Tensor, bin: int, mode: str) -> torch.Tensor:
         """Apply binning to the input data."""
         if isinstance(data, np.ndarray):
-            data = torch.from_numpy(data)
+            data = self._to_tensor(data)
 
         if isinstance(data, torch.Tensor):
             if mode == "sum":
@@ -65,9 +94,9 @@ class SSUnetData:
             elif mode == "max":
                 return tnf.max_pool2d(data, kernel_size=bin, stride=bin)
             else:
-                raise ValueError("Mode must be 'sum' or 'max'")
+                raise UnsupportedInputModeError()
 
-    def binxy(self, bin: int = 2, mode: str = "sum"):
+    def binxy(self, bin: int = 2, mode: str = "sum") -> None:
         """Apply binning to the input data."""
         self.data = self._apply_binning(self.data, bin, mode=mode)
         if self.reference is not None:
@@ -97,6 +126,12 @@ class DataConfig:
         )
 
 
+class SingleVolumeDatasetError(Exception):
+    """Base class for SingleVolumeDataset errors."""
+
+    pass
+
+
 class SingleVolumeDataset(Dataset, ABC):
     """Single volume dataset."""
 
@@ -105,7 +140,7 @@ class SingleVolumeDataset(Dataset, ABC):
         input: SSUnetData,
         config: DataConfig,
         **kwargs,
-    ):
+    ) -> None:
         """Initialize the single volume dataset."""
         super().__init__()
         self.input = input

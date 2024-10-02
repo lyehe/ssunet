@@ -4,12 +4,12 @@ from dataclasses import dataclass, field
 
 import pytorch_lightning as pl
 import torch
-import torch.nn as nn
-import torch.optim as optim
+from torch import nn, optim
 from torch.nn import init
 from torch.utils.checkpoint import checkpoint
 
 from ssunet.constants import DEFAULT_OPTIMIZER_CONFIG, EPSILON, LOGGER
+from ssunet.exceptions import InvalidUpModeError
 from ssunet.models.factories import LossFunction, Metric
 from ssunet.modules import BLOCK, conv111
 
@@ -76,7 +76,7 @@ class SSUnet(pl.LightningModule):
         psnr_metric: Metric,
         ssim_metric: Metric,
         **kwargs,
-    ):
+    ) -> None:
         """Initialize the SSUnet model.
 
         :param config: configuration for the model
@@ -161,13 +161,13 @@ class SSUnet(pl.LightningModule):
         )
 
     @staticmethod
-    def _weight_init(module: nn.Module):
+    def _weight_init(module: nn.Module) -> None:
         """Initialize the weights of the model."""
         if isinstance(module, nn.Conv3d):
             init.xavier_normal_(module.weight)
             init.constant_(module.bias, 0)  # type: ignore
 
-    def _reset_params(self):
+    def _reset_params(self) -> None:
         """Reset the parameters of the model."""
         for module in self.modules():
             self._weight_init(module)
@@ -241,7 +241,7 @@ class SSUnet(pl.LightningModule):
         output: torch.Tensor,
         target: torch.Tensor,
         batch_idx: int,
-    ):
+    ) -> None:
         """Log the training step."""
         self.log("train_loss", loss)
         self._log_image(output[0], "train_image", batch_idx, frequency=100)
@@ -266,7 +266,7 @@ class SSUnet(pl.LightningModule):
         target: torch.Tensor,
         ground_truth: torch.Tensor | None,
         batch_idx: int,
-    ):
+    ) -> None:
         """Log the validation step. Can be extended for logging metrics."""
         if ground_truth is not None:
             self._log_metrics(output, ground_truth, batch_idx)
@@ -291,7 +291,7 @@ class SSUnet(pl.LightningModule):
         output: torch.Tensor,
         target: torch.Tensor,
         batch_idx: int,
-    ):
+    ) -> None:
         """Log the test step. Can be extended for logging metrics."""
         self.log("test_loss", loss)
 
@@ -346,14 +346,8 @@ class SSUnet(pl.LightningModule):
             img = self._normalize_log_image(image)
             self.logger.experiment.add_image(name, img, self.current_epoch)  # type: ignore
 
-    def _check_conflicts(self):
+    def _check_conflicts(self) -> None:
         """Check for conflicts in the model configuration."""
         # NOTE: up_mode 'upsample' is incompatible with merge_mode 'add'
         if self.config.up_mode == "upsample" and self.config.merge_mode == "add":
-            raise ValueError(
-                'up_mode "upsample" is incompatible '
-                'with merge_mode "add" at the moment '
-                "because it doesn't make sense to use "
-                "nearest neighbor to reduce "
-                "depth channels (by half)."
-            )
+            raise InvalidUpModeError(self.config.up_mode)

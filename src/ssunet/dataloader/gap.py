@@ -12,6 +12,22 @@ from ssunet.constants import EPSILON, LOGGER
 from .singlevolume import SingleVolumeDataset
 
 
+class InvalidPValueError(ValueError):
+    """Exception raised when p value is invalid."""
+
+    def __init__(self, message: str):
+        super().__init__(message)
+        LOGGER.error(f"InvalidPValueError: {message}")
+
+
+class MissingPListError(ValueError):
+    """Exception raised when p_list is missing for list method."""
+
+    def __init__(self):
+        super().__init__("p_list must be provided when method is list")
+        LOGGER.error("MissingPListError: p_list must be provided when method is list")
+
+
 @dataclass
 class SplitParams:
     """Configuration for splitting the data into target and noise components."""
@@ -81,28 +97,25 @@ class BinomDataset(SingleVolumeDataset):
         p_sampling_method: Callable | None = self.kwargs.get("p_sampling_method", None)
         if p_sampling_method is not None and callable(p_sampling_method):
             return p_sampling_method(input, **self.kwargs)
+        elif self.split_params.method == "db":
+            return self._sample_db(input)
+        elif self.split_params.method == "signal":
+            return self._sample_signal()
+        elif self.split_params.method == "fixed":
+            return self._sample_fixed()
+        elif self.split_params.method == "list":
+            return self._sample_list()
         else:
-            if self.split_params.method == "db":
-                return self._sample_db(input)
-            elif self.split_params.method == "signal":
-                return self._sample_signal()
-            elif self.split_params.method == "fixed":
-                return self._sample_fixed()
-            elif self.split_params.method == "list":
-                return self._sample_list()
-            else:
-                LOGGER.warning(f"Method {self.split_params.method} not supported, using default")
-                return self._sample_signal()
+            LOGGER.warning(f"Method {self.split_params.method} not supported, using default")
+            return self._sample_signal()
 
     @staticmethod
     def _validate_p(p_value: float) -> float:
         """Check the p level is within the valid range."""
         if p_value <= 0:
-            LOGGER.warning("p value must be greater than 0, using 0")
-            return 0.0
+            raise InvalidPValueError("p<=0")
         if p_value >= 1:
-            LOGGER.warning("p value must be less than 1, using 1")
-            return 1.0
+            raise InvalidPValueError("p>=1")
         return p_value
 
     def _sample_db(self, input: torch.Tensor) -> float:
@@ -133,7 +146,7 @@ class BinomDataset(SingleVolumeDataset):
         """Random sample the choice level for the input image."""
         p_list = self.split_params.p_list
         if p_list is None or len(p_list) == 0:
-            raise ValueError("p_list must be provided when method is list")
+            raise MissingPListError()
         p_value = choice(p_list)
         return self._validate_p(p_value)
 

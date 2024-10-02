@@ -2,7 +2,6 @@
 
 import math
 from dataclasses import dataclass, field
-from logging import getLogger
 
 import numpy as np
 import pytorch_lightning as pl
@@ -10,7 +9,31 @@ import torch
 from torch.cuda.amp.autocast_mode import autocast
 from tqdm import tqdm
 
-logger = getLogger(__name__)
+from ssunet.constants import LOGGER
+
+
+class InvalidDataDimensionError(ValueError):
+    """Exception raised when the input data has invalid dimensions."""
+
+    def __init__(self):
+        super().__init__("Data must be 3D or 4D")
+        LOGGER.error("InvalidDataDimensionError: Data must be 3D or 4D")
+
+
+class PatchSizeTooLargeError(RuntimeError):
+    """Exception raised when the patch size is too large for available VRAM."""
+
+    def __init__(self):
+        super().__init__("Patch size too large for available VRAM")
+        LOGGER.error("PatchSizeTooLargeError: Patch size too large for available VRAM")
+
+
+class InvalidPatchValuesError(ValueError):
+    """Exception raised when patch values are too small."""
+
+    def __init__(self):
+        super().__init__("Patch values are too small")
+        LOGGER.error("InvalidPatchValuesError: Patch values are too small")
 
 
 def gpu_inference(model: pl.LightningModule, data: np.ndarray, device_num: int = 0) -> np.ndarray:
@@ -47,7 +70,7 @@ def gpu_patch_inference(
     elif num_dims == 4:
         pass
     else:
-        raise ValueError("Data must be 3D or 4D")
+        raise InvalidDataDimensionError()
 
     z, c, x, y = data.shape
     patch_depth = initial_patch_depth
@@ -125,7 +148,7 @@ def gpu_skip_inference(
     elif num_dims == 4:
         pass
     else:
-        raise ValueError("Data must be 3D or 4D")
+        raise InvalidDataDimensionError()
 
     z, c, x, y = data.shape
     skipped_start_idx = patch_depth // 2
@@ -179,12 +202,12 @@ def patch_sizer(
             test_model_vram(model, patch_size, mixed_precision)
             break
         except RuntimeError:
-            logger.info(f"Patch depth {patch_size} too large. Reducing patch depth")
+            LOGGER.info(f"Patch depth {patch_size} too large. Reducing patch depth")
             patch_depth = patch_depth // 2
         if patch_depth < min_overlap:
-            logger.error("Patch size too large. Exiting")
-            raise RuntimeError("Patch size too large")
-    logger.info(f"Patch depth: {patch_depth}")
+            LOGGER.error("Patch size too large. Exiting")
+            raise PatchSizeTooLargeError()
+    LOGGER.info(f"Patch depth: {patch_depth}")
     return patch_depth
 
 
@@ -306,11 +329,11 @@ class PatchIdx:
         """Create patch indices from number of patches and patch size."""
         total_size = num_patches * patch_size
         if total_size < dim_size:
-            raise ValueError("values too small")
+            raise InvalidPatchValuesError()
         overlap = (num_patches * patch_size - dim_size) // (num_patches - 1)
         return cls(dim_size, patch_size, num_patches, overlap)
 
-    def _calculate_idx(self):
+    def _calculate_idx(self) -> None:
         """Calculate patch indices."""
         self._start_idx = []
         self._end_idx = []

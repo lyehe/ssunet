@@ -1,13 +1,19 @@
 """Pixel Shuffle Layers."""
 
 import torch
-import torch.nn as nn
+from torch import nn
+
+from ssunet.exceptions import (
+    ChannelDivisibilityError,
+    InputDimensionError,
+    SizeDivisibilityError,
+)
 
 
 class PixelShuffle3d(nn.Module):
     """This class is a 3d version of pixelshuffle."""
 
-    def __init__(self, scale: int = 2):
+    def __init__(self, scale: int = 2) -> None:
         """Initialize PixelShuffle3d.
 
         :param scale: upsample scale
@@ -18,11 +24,11 @@ class PixelShuffle3d(nn.Module):
     def forward(self, input: torch.Tensor):
         """Forward pass."""
         if input.dim() != 5:
-            raise ValueError(f"Input tensor must be 5D , but got {input.dim()}")
+            raise InputDimensionError(5, input.dim())
         scale = self.scale
         batch, in_channels, z, x, y = input.shape
         if in_channels % (scale**3) != 0:
-            raise ValueError(f"Input channels must be divisible by scale^3, but got {in_channels}")
+            raise ChannelDivisibilityError(in_channels, 3)
         out_channels = in_channels // (scale**3)
         out_z, out_x, out_y = z * scale, x * scale, y * scale
         view_shape = (batch, out_channels, scale, scale, scale, z, x, y)
@@ -34,7 +40,7 @@ class PixelShuffle3d(nn.Module):
 class PixelUnshuffle3d(nn.Module):
     """This class is a 3d version of pixelunshuffle."""
 
-    def __init__(self, scale: int = 2):
+    def __init__(self, scale: int = 2) -> None:
         """Initialize PixelUnshuffle3d.
 
         :param scale: downsample scale
@@ -45,11 +51,11 @@ class PixelUnshuffle3d(nn.Module):
     def forward(self, input: torch.Tensor):
         """Forward pass."""
         if input.dim() != 5:
-            raise ValueError(f"Input tensor must be 5D , but got {input.dim()}")
+            raise InputDimensionError(5, input.dim())
         scale = self.scale
         batch, in_channels, z, x, y = input.shape
         if z % self.scale != 0 or x % self.scale != 0 or y % self.scale != 0:
-            raise ValueError(f"Size must be divisible by scale, but got {z}, {x}, {y}")
+            raise SizeDivisibilityError((z, x, y))
         out_channels = in_channels * (self.scale**3)
         out_z, out_x, out_y = z // scale, x // scale, y // scale
         view_shape = (batch, in_channels, out_z, scale, out_x, scale, out_y, scale)
@@ -61,7 +67,7 @@ class PixelUnshuffle3d(nn.Module):
 class PixelShuffle2d(nn.Module):
     """This class is a 2d version of pixelshuffle on BCZXY data on XY."""
 
-    def __init__(self, scale: int = 2):
+    def __init__(self, scale: int = 2) -> None:
         """Initialize PixelShuffle2d.
 
         :param scale: upsample scale
@@ -72,11 +78,11 @@ class PixelShuffle2d(nn.Module):
     def forward(self, input: torch.Tensor):
         """Forward pass."""
         if input.dim() != 5:
-            raise ValueError(f"Input tensor must be 5D , but got {input.dim()}")
+            raise InputDimensionError(5, input.dim())
         scale = self.scale
         batch, in_channels, z, x, y = input.shape
         if in_channels % (scale**2) != 0:
-            raise ValueError(f"Input channels must be divisible by scale^2, but got {in_channels}")
+            raise ChannelDivisibilityError(in_channels, 2)
         out_channels = in_channels // (scale**2)
         out_x, out_y = x * scale, y * scale
         input_view = input.contiguous().view(batch, out_channels, scale, scale, z, x, y)
@@ -87,7 +93,7 @@ class PixelShuffle2d(nn.Module):
 class PixelUnshuffle2d(nn.Module):
     """This class is a 2d version of pixelunshuffle on BCZXY data on XY."""
 
-    def __init__(self, scale: int = 2):
+    def __init__(self, scale: int = 2) -> None:
         """Initialize PixelUnshuffle2d.
 
         :param scale: downsample scale
@@ -98,11 +104,11 @@ class PixelUnshuffle2d(nn.Module):
     def forward(self, input: torch.Tensor):
         """Forward pass."""
         if input.dim() != 5:
-            raise ValueError(f"Input tensor must be 5D , but got {input.dim()}")
+            raise InputDimensionError(5, input.dim())
         scale = self.scale
         batch, in_channels, z, x, y = input.shape
         if x % self.scale != 0 or y % self.scale != 0:
-            raise ValueError(f"Size must be divisible by scale, but got {x}, {y}")
+            raise SizeDivisibilityError((x, y))
         out_channels = in_channels * (self.scale**2)
         out_x, out_y = x // scale, y // scale
         view_shape = (batch, in_channels, z, out_x, scale, out_y, scale)

@@ -1,10 +1,11 @@
 """Partial Convolutional Layers."""
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as tnf
+from torch import nn
 
-from ssunet.constants import EPSILON, LOGGER
+from ssunet.constants import EPSILON
+from ssunet.exceptions import InvalidInputShapeError
 
 
 class PartialConv3d(nn.Conv3d):
@@ -13,7 +14,9 @@ class PartialConv3d(nn.Conv3d):
     https://arxiv.org/abs/1811.11718 for padding in this application.
     """
 
-    def __init__(self, *args, multi_channel: bool = False, return_mask: bool = False, **kwargs):
+    def __init__(
+        self, *args, multi_channel: bool = False, return_mask: bool = False, **kwargs
+    ) -> None:
         """Initialize PartialConv3d."""
         super().__init__(*args, **kwargs)
         self.multi_channel = multi_channel
@@ -32,8 +35,7 @@ class PartialConv3d(nn.Conv3d):
     def forward(self, input: torch.Tensor, mask_in: torch.Tensor | None = None):
         """Forward pass."""
         if len(input.shape) != 5:
-            LOGGER.error(f"Pconv3D: Input must be 5D , but got {len(input.shape)}")
-            raise ValueError(f"Pconv3D: Input must be 5D , but got {len(input.shape)}")
+            raise InvalidInputShapeError(5, input.shape)
 
         if mask_in is not None or self.last_size != tuple(input.shape):
             self.last_size = tuple(input.shape)
@@ -84,7 +86,9 @@ class PartialConv2d(nn.Conv2d):
     https://arxiv.org/abs/1811.11718 for padding in this application.
     """
 
-    def __init__(self, *args, multi_channel: bool = False, return_mask: bool = False, **kwargs):
+    def __init__(
+        self, *args, multi_channel: bool = False, return_mask: bool = False, **kwargs
+    ) -> None:
         """Initialize PartialConv2d."""
         self.multi_channel = multi_channel
         self.return_mask = return_mask
@@ -105,8 +109,7 @@ class PartialConv2d(nn.Conv2d):
     def forward(self, input: torch.Tensor, mask_in: torch.Tensor | None = None):
         """Forward pass."""
         if len(input.shape) != 4:
-            LOGGER.error(f"Pconv2D: Input must be 4D , but got {len(input.shape)}")
-            raise ValueError(f"Pconv2D: Input must be 4D , but got {len(input.shape)}")
+            raise InvalidInputShapeError(4, input.shape)
 
         if mask_in is not None or self.last_size != tuple(input.shape):
             self.last_size = tuple(input.shape)

@@ -1,9 +1,10 @@
 """Helper functions to create modules."""
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 from ssunet.constants import LOGGER
+from ssunet.exceptions import ShapeMismatchError
 
 from .partialconv import PartialConv3d
 from .pixelshuffle import (
@@ -33,7 +34,7 @@ def convnnn(
     in_channels: int,
     out_channels: int,
     kernel_size: int,
-    z_conv: bool,  # Ture = 3D convolution & False = 2D convolution
+    z_conv: bool,  # True = 3D convolution & False = 2D convolution
     partial: bool = False,
 ) -> nn.Conv3d:
     """Helper function to create nxnxn convolutions with padding.
@@ -41,7 +42,8 @@ def convnnn(
     :param in_channels: number of input channels
     :param out_channels: number of output channels
     :param kernel_size: size of the convolving kernel
-    :param z_conv: Ture = 3D convolution & False = 2D convolution
+    :param z_conv: True = 3D convolution & False = 2D convolution
+    :param partial: if True, use partial convolutions, defaults to False
 
     :return: nxnxn convolution
     """
@@ -58,13 +60,13 @@ def convnnn(
 def conv333(
     in_channels: int,
     out_channels: int,
-    z_conv: bool,  # Ture = 3D convolution & False = 2D convolution
+    z_conv: bool,  # True = 3D convolution & False = 2D convolution
 ) -> nn.Conv3d:
     """Helper function to create 3x3x3 convolutions with padding.
 
     :param in_channels: number of input channels
     :param out_channels: number of output channels
-    :param z_conv: Ture = 3D convolution & False = 2D convolution
+    :param z_conv: True = 3D convolution & False = 2D convolution
 
     :return: 3x3x3 convolution
     """
@@ -74,14 +76,14 @@ def conv333(
 def conv555(
     in_channels: int,
     out_channels: int,
-    z_conv: bool,  # Ture = 3D convolution & False = 2D convolution
+    z_conv: bool,  # True = 3D convolution & False = 2D convolution
     separable: bool = False,
 ) -> nn.Conv3d | nn.Module:
     """Helper function to create 5x5x5 convolutions with padding.
 
     :param in_channels: number of input channels
     :param out_channels: number of output channels
-    :param z_conv: Ture = 3D convolution & False = 2D convolution
+    :param z_conv: True = 3D convolution & False = 2D convolution
     :param separable: if True, use separable convolutions, defaults to False
 
     :return: 5x5x5 convolution
@@ -95,14 +97,14 @@ def conv555(
 def conv777(
     in_channels: int,
     out_channels: int,
-    z_conv: bool,  # Ture = 3D convolution & False = 2D convolution
+    z_conv: bool,  # True = 3D convolution & False = 2D convolution
     separable: bool = False,
 ) -> nn.Conv3d | nn.Module:
     """Helper function to create 7x7x7 convolutions with padding.
 
     :param in_channels: number of input channels
     :param out_channels: number of output channels
-    :param z_conv: Ture = 3D convolution & False = 2D convolution
+    :param z_conv: True = 3D convolution & False = 2D convolution
     :param separable: if True, use separable convolutions, defaults to False
 
     :return: 7x7x7 convolution
@@ -114,11 +116,11 @@ def conv777(
 
 
 def maxpool_downsample(
-    z_conv: bool,  # Ture = 3D convolution & False = 2D convolution
+    z_conv: bool,  # True = 3D convolution & False = 2D convolution
 ) -> nn.MaxPool3d:
     """Helper function to create maxpooling with padding.
 
-    :param z_conv: Ture = 3D convolution & False = 2D convolution
+    :param z_conv: True = 3D convolution & False = 2D convolution
 
     :return: maxpooling layer
     """
@@ -128,11 +130,11 @@ def maxpool_downsample(
 
 
 def avgpool_downsample(
-    z_conv: bool,  # Ture = 3D convolution & False = 2D convolution
+    z_conv: bool,  # True = 3D convolution & False = 2D convolution
 ) -> nn.AvgPool3d:
     """Helper function to create avgpooling with padding.
 
-    :param z_conv: Ture = 3D convolution & False = 2D convolution
+    :param z_conv: True = 3D convolution & False = 2D convolution
 
     :return: avgpooling layer
     """
@@ -144,13 +146,13 @@ def avgpool_downsample(
 def conv_downsample(
     in_channels: int,
     out_channels: int,
-    z_conv: bool,  # Ture = 3D convolution & False = 2D convolution
+    z_conv: bool,  # True = 3D convolution & False = 2D convolution
 ) -> nn.Conv3d:
     """Helper function to create 3x3x3 convolutions with padding.
 
     :param in_channels: number of input channels
     :param out_channels: number of output channels
-    :param z_conv: Ture = 3D convolution & False = 2D convolution
+    :param z_conv: True = 3D convolution & False = 2D convolution
 
     :return: 3x3x3 convolution
     """
@@ -165,7 +167,7 @@ def pixelunshuffle(in_channels: int, out_channels: int, z_conv: bool, scale: int
 
     :param in_channels: number of input channels
     :param out_channels: number of output channels
-    :param z_conv: Ture = 3D convolution & False = 2D convolution
+    :param z_conv: True = 3D convolution & False = 2D convolution
     :param scale: scale of pixelunshuffle in each dim, defaults to 2
 
     :return: pixelunshuffle layer
@@ -198,8 +200,8 @@ def pool(
     :param in_channels: number of input channels
     :param out_channels: number of output channels
     :param down_mode: type of downsample ("maxpool" | "avgpool" | "conv" | "unshuffle")
-    :param z_conv: Ture = 3D convolution & False = 2D convolution
-    :param last: no pooling at the laster layer, defaults to False
+    :param z_conv: True = 3D convolution & False = 2D convolution
+    :param last: no pooling at the last layer, defaults to False
 
     :return: pooling layer
     """
@@ -224,7 +226,7 @@ def pixelshuffle(in_channels: int, out_channels: int, z_conv: bool, scale: int =
 
     :param in_channels: number of input channels
     :param out_channels: number of output channels
-    :param z_conv: Ture = 3D convolution & False = 2D convolution
+    :param z_conv: True = 3D convolution & False = 2D convolution
     :param scale: scale of pixelshuffle in each dim, defaults to 2
 
     :return: pixelshuffle layer
@@ -255,7 +257,7 @@ def upconv222(
 
     :param in_channels: number of input channels
     :param out_channels: number of output channels
-    :param z_conv: Ture = 3D convolution & False = 2D convolution
+    :param z_conv: True = 3D convolution & False = 2D convolution
     :param up_mode: type of upconvolution ("transpose" | "upsample" | "pixelshuffle")
 
     :return: 2x2x2 upconvolution
@@ -299,7 +301,7 @@ def partial333(
 
     :param in_channels: number of input channels
     :param out_channels: number of output channels
-    :param z_conv: Ture = 3D convolution & False = 2D convolution
+    :param z_conv: True = 3D convolution & False = 2D convolution
     :param multi_channel: if True, the mask will be applied to all channels, defaults to False
 
     :return: 3x3x3 partial convolution
@@ -333,13 +335,11 @@ def merge(
     match merge_mode:
         case "concat":
             if input_a.shape[1:] != input_b.shape[1:]:
-                LOGGER.error(f"Unequal shape: a={input_a.shape}, b={input_b.shape}")
-                raise ValueError(f"Unequal shape: a={input_a.shape}, b={input_b.shape}")
+                raise ShapeMismatchError()
             return torch.cat((input_a, input_b), dim=1)
         case "add":
             if input_a.shape != input_b.shape:
-                LOGGER.error(f"Unequal shape: a={input_a.shape}, b={input_b.shape}")
-                raise ValueError(f"Unequal shape: a={input_a.shape}, b={input_b.shape}")
+                raise ShapeMismatchError()
             return input_a + input_b
         case _:
             LOGGER.warning(f"Unknown merge_mode: {merge_mode}. Using concat instead.")
@@ -356,7 +356,7 @@ def merge_conv(
 
     :param in_channels: number of input channels
     :param out_channels: number of output channels
-    :param z_conv: Ture = 3D convolution & False = 2D convolution
+    :param z_conv: True = 3D convolution & False = 2D convolution
     :param mode: merge mode ("concat" | "add")
 
     :return: 3x3x3 convolution
@@ -396,9 +396,9 @@ def activation_function(activation: str, **kwargs) -> nn.Module:
         case "silu":
             return nn.SiLU(inplace=kwargs.get("inplace", True))
         case "tanh":
-            return nn.Tanh(kwargs)
+            return nn.Tanh()
         case "sigmoid":
-            return nn.Sigmoid(kwargs)
+            return nn.Sigmoid()
         case "softmax":
             return nn.Softmax(dim=kwargs.get("dim", None))
         case "logsoftmax":

@@ -1,7 +1,7 @@
 """Separable Convolution Layers."""
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 
 class SeparableConv3d(nn.Module):
@@ -18,7 +18,7 @@ class SeparableConv3d(nn.Module):
         kernel_size: int,
         z_conv: bool,
         mid_channels: int | None = None,
-    ):
+    ) -> None:
         """Initialize SeparableConv3d.
 
         :param in_channels: number of input channels

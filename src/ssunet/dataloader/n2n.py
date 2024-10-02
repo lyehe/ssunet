@@ -7,6 +7,14 @@ from ssunet.constants import LOGGER
 from .singlevolume import SingleVolumeDataset
 
 
+class MissingReferenceError(ValueError):
+    """Exception raised when reference data is required."""
+
+    def __init__(self):
+        super().__init__("Reference data is required")
+        LOGGER.error("MissingReferenceError: Reference data is required")
+
+
 class N2NDatasetSkipFrame(SingleVolumeDataset):
     """N2N using even and odd frames as input/target."""
 
@@ -37,8 +45,7 @@ class N2NDatasetDualVolume(SingleVolumeDataset):
     def __getitem__(self, index: int) -> list[torch.Tensor]:
         """Get a N2N sample."""
         if self.reference is None:
-            LOGGER.error("Reference data is required for the dual N2N dataset")
-            raise ValueError("Reference data is required for the dual N2N dataset")
+            raise MissingReferenceError()
 
         start_index = self._index(index)
         end_index = start_index + self.z_size

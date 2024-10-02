@@ -4,7 +4,7 @@ from abc import abstractmethod
 from functools import partial
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 from .modulets import (
     activation_function,
@@ -39,7 +39,7 @@ class UnetBlockConv3D(nn.Module):
         merge_mode: str = "concat",
         activation: str = "relu",
         **kwargs,
-    ):
+    ) -> None:
         """Initializes the UnetBlockConv3D class.
 
         :param in_channels: number of input channels

@@ -13,6 +13,13 @@ import seaborn as sns
 import torch
 import yaml
 
+from ssunet.exceptions import (
+    ConfigFileNotFoundError,
+    ImageShapeMismatchError,
+    InvalidImageDimensionError,
+    InvalidStackDimensionError,
+)
+
 _default_device = torch.device("cpu")
 
 
@@ -27,7 +34,7 @@ class Metric(ABC):
 def import_config(config_path: Path) -> dict:
     """Import configuration file."""
     if not config_path.exists():
-        raise FileNotFoundError(f"File {config_path} not found.")
+        raise ConfigFileNotFoundError(config_path)
     with open(config_path) as file:
         config = yaml.safe_load(file)
     return config
@@ -48,7 +55,7 @@ class ImageMetrics:
         target: np.ndarray | torch.Tensor,
         device: torch.device = _default_device,
         **kwargs,
-    ):
+    ) -> None:
         """Class constructor."""
         self.device = device
         if device != self._psnr_metric.device:
@@ -56,12 +63,12 @@ class ImageMetrics:
         self._image = self._to_tensor(image)
         self._target = self._to_tensor(target)
         if self._image.shape != self._target.shape:
-            raise ValueError("Image and target shapes must match.")
+            raise ImageShapeMismatchError()
 
         self._grayscale = self._image.ndim == 2
         self._rgb = self._image.shape[0] == 3
         if not self._grayscale and not self._rgb:
-            raise ValueError("Image must be grayscale or RGB.")
+            raise InvalidImageDimensionError()
 
         self.kwargs = kwargs
 
@@ -193,7 +200,7 @@ class MetricStats:
         self.max = np.max(self.data)
         self.min = np.min(self.data)
 
-    def __str__(self):
+    def __str__(self) -> str:
         """String representation."""
         return f"Mean: {self.mean}, Std: {self.std}, Min: {self.min}, Max: {self.max}"
 
@@ -212,15 +219,15 @@ class StackMetrics:
         device: torch.device = _default_device,
         metric_list: list[str] | None = None,
         **kwargs,
-    ):
+    ) -> None:
         """Class constructor."""
         self.device = device
         if device != ImageMetrics._psnr_metric.device:
             ImageMetrics.set_device(device)
         if image.shape != target.shape:
-            raise ValueError("Image and target shapes must match.")
+            raise ImageShapeMismatchError()
         if image.ndim != 3:
-            raise ValueError("Image must be a 3D tensor.")
+            raise InvalidStackDimensionError()
 
         self.metric_list = metric_list or ImageMetrics.metric_list()
         self.data_list = [
@@ -276,7 +283,7 @@ class StackMetrics:
             stats_str[k] = nl.join(stats_str_list)
         return stats_str
 
-    def plot_trends(self, **kwargs):
+    def plot_trends(self, **kwargs) -> None:
         """Plot the metrics trends."""
         data_values = self.values_df.reset_index().melt(
             id_vars="Frame", var_name="Metric", value_name="Value"
@@ -310,7 +317,7 @@ class StackMetrics:
             self._save_plot(plot, kwargs)
         plot.tight_layout()
 
-    def _save_plot(self, plot, kwargs):
+    def _save_plot(self, plot, kwargs) -> None:
         """Save the plot."""
         dir_path = Path(kwargs.get("save_dir", "."))
         dir_path.mkdir(parents=True, exist_ok=True)
@@ -341,7 +348,7 @@ class StackMetricsGroups:
         group_names: list[str] | None = None,
         metric_list: list[str] | None = None,
         **kwargs,
-    ):
+    ) -> None:
         """Class constructor."""
         self.group_names = group_names or [f"G{i+1:>02}" for i in range(len(metrics_list))]
         self.length = len(self.group_names)
@@ -415,7 +422,7 @@ class StackMetricsGroups:
         x_max = len(self.data[self.group_names[0]]) - 1
         return x_min, x_max
 
-    def plot_group_trends(self, **kwargs):
+    def plot_group_trends(self, **kwargs) -> None:
         """Plot the metrics trends."""
         data_df = self.group_values
         y_mins, y_maxs = self.y_range
@@ -448,7 +455,7 @@ class StackMetricsGroups:
             self._save_plot(plot, "group_trends", kwargs)
         plot.tight_layout()
 
-    def plot_group_stats(self, **kwargs):
+    def plot_group_stats(self, **kwargs) -> None:
         """Plot the metric statistics."""
         data_df = self.group_values
         y_mins, y_maxs = self.y_range
@@ -512,7 +519,7 @@ class StackMetricsGroups:
             self._save_plot(plot, "group_stats", kwargs)
         plot.tight_layout()
 
-    def _save_plot(self, plot, name, kwargs):
+    def _save_plot(self, plot, name, kwargs) -> None:
         dir_path = Path(kwargs.get("save_dir", "."))
         dir_path.mkdir(parents=True, exist_ok=True)
         png_path = dir_path / (kwargs.get("save_name", f"{name}") + ".png")
@@ -533,7 +540,7 @@ class StackMetricsGroups:
         return iter(self.data.values())
 
     @classmethod
-    def from_config(cls, config: Path | dict, **kwargs):
+    def from_config(cls, config: Path | dict, **kwargs) -> None:
         """Create a StackMetricsGroups from a config file."""
         if isinstance(config, Path):
             config = import_config(config)
