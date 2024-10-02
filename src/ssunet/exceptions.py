@@ -1,10 +1,9 @@
 """Centralized error and exception definitions for the SSUnet project."""
 
-import logging
+from enum import Enum
 from pathlib import Path
 
-# Set up logging
-logger = logging.getLogger(__name__)
+from constants import LOGGER
 
 
 class SSUnetError(Exception):
@@ -12,7 +11,7 @@ class SSUnetError(Exception):
 
     def __init__(self, message: str):
         super().__init__(message)
-        logger.error(f"{self.__class__.__name__}: {message}")
+        LOGGER.error(f"{self.__class__.__name__}: {message}")
 
 
 class ConfigError(SSUnetError):
@@ -164,3 +163,55 @@ class SizeDivisibilityError(PixelShuffleError):
 
     def __init__(self, sizes: tuple):
         super().__init__(f"Size must be divisible by scale, but got {', '.join(map(str, sizes))}")
+
+
+# Add the following exceptions from config.py:
+
+
+class DirectoryNotFoundError(SSUnetError):
+    """Error raised when a directory is not found."""
+
+    def __init__(self, directory: Path):
+        super().__init__(f"Directory {directory} does not exist")
+
+
+class FileIndexOutOfRangeError(SSUnetError):
+    """Error raised when a file index is out of range."""
+
+    def __init__(self, file_type: Enum, index: int):
+        super().__init__(f"{file_type.name} file index {index} out of range")
+
+
+class FileNotFoundError(SSUnetError):
+    """Error raised when a file is not found."""
+
+    def __init__(self, file_type: Enum, file_path: Path):
+        super().__init__(f"{file_type.name} file {file_path} does not exist")
+
+
+class InvalidSliceRangeError(SSUnetError):
+    """Error raised when an invalid slice range is provided."""
+
+    def __init__(self, attr: str, begin: int, end: int):
+        super().__init__(f"Invalid slice range for {attr}: {begin}:{end}")
+
+
+class UnknownFileTypeError(SSUnetError):
+    """Error raised when an unknown file type is encountered."""
+
+    def __init__(self, file_path: Path):
+        super().__init__(f"Unknown file type for path {file_path}")
+
+
+class InvalidHDF5DatasetError(SSUnetError):
+    """Error raised when an HDF5 file does not contain the expected dataset."""
+
+    def __init__(self):
+        super().__init__("HDF5 file does not contain expected dataset")
+
+
+class NoDataFileAvailableError(SSUnetError):
+    """Error raised when no data file is available."""
+
+    def __init__(self):
+        super().__init__("No data file available")

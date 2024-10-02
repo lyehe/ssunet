@@ -1,7 +1,7 @@
 """SSUnet utils package."""
 
-from ssunet.config import SSUnetData, load_config
-from ssunet.models import SSUnet
+from .config import SSUnetData, load_config
+from .models import SSUnet
 
 __all__ = [
     "SSUnet",

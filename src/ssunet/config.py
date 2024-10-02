@@ -12,6 +12,16 @@ import yaml
 from tifffile import TiffFile, imread
 
 from ssunet.dataloader import DataConfig, SplitParams, SSUnetData
+from ssunet.exceptions import (
+    ConfigFileNotFoundError,
+    DirectoryNotFoundError,
+    FileIndexOutOfRangeError,
+    FileNotFoundError,
+    InvalidHDF5DatasetError,
+    InvalidSliceRangeError,
+    NoDataFileAvailableError,
+    UnknownFileTypeError,
+)
 from ssunet.models import ModelConfig
 from ssunet.train import LoaderConfig, TrainConfig
 
@@ -25,70 +35,6 @@ class FileType(Enum):
     DATA = auto()
     REFERENCE = auto()
     GROUND_TRUTH = auto()
-
-
-class DirectoryNotFoundError(Exception):
-    """Error raised when a directory is not found."""
-
-    def __init__(self, directory: Path):
-        self.message = f"Directory {directory} does not exist"
-        super().__init__(self.message)
-
-
-class FileIndexOutOfRangeError(ValueError):
-    """Error raised when a file index is out of range."""
-
-    def __init__(self, file_type: FileType, index: int):
-        self.message = f"{file_type.name} file index {index} out of range"
-        super().__init__(self.message)
-
-
-class FileNotFoundError(Exception):
-    """Error raised when a file is not found."""
-
-    def __init__(self, file_type: FileType, file_path: Path):
-        self.message = f"{file_type.name} file {file_path} does not exist"
-        super().__init__(self.message)
-
-
-class InvalidSliceRangeError(ValueError):
-    """Error raised when an invalid slice range is provided."""
-
-    def __init__(self, attr: str, begin: int, end: int):
-        self.message = f"Invalid slice range for {attr}: {begin}:{end}"
-        super().__init__(self.message)
-
-
-class UnknownFileTypeError(ValueError):
-    """Error raised when an unknown file type is encountered."""
-
-    def __init__(self, file_path: Path):
-        self.message = f"Unknown file type for path {file_path}"
-        super().__init__(self.message)
-
-
-class InvalidHDF5DatasetError(ValueError):
-    """Error raised when an HDF5 file does not contain the expected dataset."""
-
-    def __init__(self):
-        self.message = "HDF5 file does not contain expected dataset"
-        super().__init__(self.message)
-
-
-class NoDataFileAvailableError(ValueError):
-    """Error raised when no data file is available."""
-
-    def __init__(self):
-        self.message = "No data file available"
-        super().__init__(self.message)
-
-
-class ConfigFileNotFoundError(Exception):
-    """Error raised when the config file is not found."""
-
-    def __init__(self, config_path: Path):
-        self.message = f"Config file not found at {config_path}"
-        super().__init__(self.message)
 
 
 @dataclass
