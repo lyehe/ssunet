@@ -11,7 +11,7 @@ DEFAULT_OPTIMIZER_CONFIG = {
     "factor": 0.5,  # factor for ReduceLROnPlateau
     "patience": 5,  # patience for ReduceLROnPlateau
 }
-DEFALT_METRICS = [
+DEFAULT_METRICS = [
     "mse",
     "mae",
     "ncc",

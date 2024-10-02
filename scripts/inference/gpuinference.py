@@ -1,8 +1,8 @@
 """GPU inference script."""
 
-import logging
 import math
 from dataclasses import dataclass, field
+from logging import getLogger
 
 import numpy as np
 import pytorch_lightning as pl
@@ -10,7 +10,7 @@ import torch
 from torch.cuda.amp.autocast_mode import autocast
 from tqdm import tqdm
 
-logger = logging.getLogger(__name__)
+logger = getLogger(__name__)
 
 
 def gpu_inference(model: pl.LightningModule, data: np.ndarray, device_num: int = 0) -> np.ndarray:
@@ -19,8 +19,8 @@ def gpu_inference(model: pl.LightningModule, data: np.ndarray, device_num: int =
     model.to(device)
     model.eval()
     with torch.no_grad():
-        troch_data = torch.from_numpy(data)[None, None, ...].to(device)
-        output = torch.exp(model(troch_data))[0, 0]
+        torch_data = torch.from_numpy(data)[None, None, ...].to(device)
+        output = torch.exp(model(torch_data))[0, 0]
     return output.detach().cpu().numpy()
 
 
@@ -128,10 +128,10 @@ def gpu_skip_inference(
         raise ValueError("Data must be 3D or 4D")
 
     z, c, x, y = data.shape
-    skiped_start_idx = patch_depth // 2
-    skiped_end_idx = z - patch_depth // 2
-    frame_idx = list(range(skiped_start_idx, skiped_end_idx, skip))
-    skipped_data = data[skiped_start_idx:skiped_end_idx:skip, ...]
+    skipped_start_idx = patch_depth // 2
+    skipped_end_idx = z - patch_depth // 2
+    frame_idx = list(range(skipped_start_idx, skipped_end_idx, skip))
+    skipped_data = data[skipped_start_idx:skipped_end_idx:skip, ...]
     output = np.zeros_like(skipped_data, dtype=np.float32)
     num_patches = len(skipped_data)
 
@@ -168,12 +168,12 @@ def gpu_skip_inference(
 def patch_sizer(
     model: pl.LightningModule,
     patch_size: tuple[int, int, int, int],
-    inital_patch_depth: int,
+    initial_patch_depth: int,
     min_overlap: int,
     mixed_precision: bool = False,
 ) -> int:
     """Determine the patch depth based on the VRAM capacity."""
-    patch_depth = inital_patch_depth
+    patch_depth = initial_patch_depth
     while patch_depth > min_overlap * 2 + 1:
         try:
             test_model_vram(model, patch_size, mixed_precision)
@@ -332,7 +332,7 @@ class PatchIdx:
         """Get number of patches."""
         return self.num_patches
 
-    def __get_item__(self, index: int) -> tuple[int, int]:
+    def __getitem__(self, index: int) -> tuple[int, int]:
         """Get start and end indices."""
         return self._start_idx[index], self._end_idx[index]
 

@@ -2,7 +2,6 @@
 
 from abc import abstractmethod
 from functools import partial
-from typing import TypeAlias
 
 import torch
 import torch.nn as nn
@@ -19,7 +18,7 @@ from .modulets import (
     upconv222,
 )
 
-_EncoderOut: TypeAlias = tuple[torch.Tensor, torch.Tensor] | tuple[torch.Tensor, None]
+_EncoderOut = tuple[torch.Tensor, torch.Tensor] | tuple[torch.Tensor, None]
 
 
 class UnetBlockConv3D(nn.Module):
@@ -33,7 +32,7 @@ class UnetBlockConv3D(nn.Module):
         skip_out: bool = True,
         batch_norm: bool = False,
         group_norm: int = 0,
-        dropout_p: float = 0,
+        dropout_p: float = 0.0,
         last: bool = False,
         down_mode: str = "maxpool",
         up_mode: str = "transpose",
@@ -44,31 +43,18 @@ class UnetBlockConv3D(nn.Module):
         """Initializes the UnetBlockConv3D class.
 
         :param in_channels: number of input channels
-        :type in_channels: int
         :param out_channels: number of output channels
-        :type out_channels: int
         :param z_conv: if True, the convolution will be 3D, defaults to True
-        :type z_conv: bool, optional
         :param skip_out: if True, the output will include the skip connection, defaults to True
-        :type skip_out: bool, optional
         :param batch_norm: determines whether to use batch normalization, defaults to False
-        :type batch_norm: bool, optional
         :param group_norm: determines whether to use group normalization, defaults to 0
-        :type group_norm: int, optional
         :param dropout_p: dropout probability, defaults to 0
-        :type dropout_p: float, optional
         :param last: if True, the block is the last in the network, defaults to False
-        :type last: bool, optional
         :param down_mode: mode of downsampling, defaults to "maxpool"
-        :type down_mode: str, optional
         :param up_mode: mode of upsampling, defaults to "transpose"
-        :type up_mode: str, optional
         :param merge_mode: mode of merging, defaults to "concat"
-        :type merge_mode: str, optional
         :param activation: activation function, defaults to "relu"
-        :type activation: str, optional
         :param kwargs: additional keyword arguments
-        :type kwargs: dict
         """
         super().__init__()
         self.in_channels = in_channels
@@ -111,7 +97,7 @@ class DownConvDual3D(UnetBlockConv3D):
         self.conv2 = self.conv333(self.out_channels, self.out_channels)
         self.pool = self.down_sample(self.out_channels, self.out_channels)
 
-    def forward(self, input: torch.Tensor) -> _EncoderOut:
+    def forward(self, input):
         """Forward pass."""
         residual = self.residual(input)
         input = self.activation(self.conv1(input))
@@ -237,7 +223,7 @@ class PartialDownConv3D(UnetBlockConv3D):
         self.conv = partial333(self.in_channels, self.in_channels, z_conv=self.z_conv)
         self.MaxPool = nn.MaxPool3d(2)
 
-    def forward(self, input: torch.Tensor, mask_in: torch.Tensor | None):
+    def forward(self, input: torch.Tensor, mask_in: torch.Tensor | None) -> _EncoderOut:
         """Forward pass."""
         input, mask_out = self.conv(input, mask_in=mask_in)
         input = self.activation(input)

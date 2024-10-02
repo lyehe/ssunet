@@ -77,7 +77,14 @@ class SSUnet(pl.LightningModule):
         ssim_metric: Metric,
         **kwargs,
     ):
-        """Initialize the SSUnet model."""
+        """Initialize the SSUnet model.
+
+        :param config: configuration for the model
+        :param loss_function: loss function
+        :param psnr_metric: peak signal-to-noise ratio metric
+        :param ssim_metric: structural similarity index metric
+        :param kwargs: additional arguments
+        """
         super().__init__()
         self.config = config
         self.loss_function = loss_function
@@ -250,9 +257,9 @@ class SSUnet(pl.LightningModule):
         ground_truth = batch[2] if len(batch) == 3 else None
         output = self(input)
         loss = self.loss_function(output, target)
-        self.tb_val_log(loss, output, target, ground_truth, batch_idx)
+        self._tb_val_log(loss, output, target, ground_truth, batch_idx)
 
-    def tb_val_log(
+    def _tb_val_log(
         self,
         loss: torch.Tensor,
         output: torch.Tensor,
@@ -260,7 +267,7 @@ class SSUnet(pl.LightningModule):
         ground_truth: torch.Tensor | None,
         batch_idx: int,
     ):
-        """Log the validation step."""
+        """Log the validation step. Can be extended for logging metrics."""
         if ground_truth is not None:
             self._log_metrics(output, ground_truth, batch_idx)
         self.log("val_loss", loss)
@@ -276,16 +283,16 @@ class SSUnet(pl.LightningModule):
         target = batch[0]
         output = self(input)
         loss = self.loss_function(output, target)
-        self.tb_test_log(loss, output, target, batch_idx)
+        self._tb_test_log(loss, output, target, batch_idx)
 
-    def tb_test_log(
+    def _tb_test_log(
         self,
         loss: torch.Tensor,
         output: torch.Tensor,
         target: torch.Tensor,
         batch_idx: int,
     ):
-        """Log the test step."""
+        """Log the test step. Can be extended for logging metrics."""
         self.log("test_loss", loss)
 
     def _log_metrics(
@@ -347,6 +354,6 @@ class SSUnet(pl.LightningModule):
                 'up_mode "upsample" is incompatible '
                 'with merge_mode "add" at the moment '
                 "because it doesn't make sense to use "
-                "nearest neighbour to reduce "
+                "nearest neighbor to reduce "
                 "depth channels (by half)."
             )

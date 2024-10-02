@@ -8,7 +8,10 @@ class PixelShuffle3d(nn.Module):
     """This class is a 3d version of pixelshuffle."""
 
     def __init__(self, scale: int = 2):
-        """:param scale: upsample scale"""
+        """Initialize PixelShuffle3d.
+
+        :param scale: upsample scale
+        """
         super().__init__()
         self.scale = scale
 
@@ -32,7 +35,10 @@ class PixelUnshuffle3d(nn.Module):
     """This class is a 3d version of pixelunshuffle."""
 
     def __init__(self, scale: int = 2):
-        """:param scale: downsample scale"""
+        """Initialize PixelUnshuffle3d.
+
+        :param scale: downsample scale
+        """
         super().__init__()
         self.scale = scale
 
@@ -56,7 +62,10 @@ class PixelShuffle2d(nn.Module):
     """This class is a 2d version of pixelshuffle on BCZXY data on XY."""
 
     def __init__(self, scale: int = 2):
-        """:param scale: upsample scale"""
+        """Initialize PixelShuffle2d.
+
+        :param scale: upsample scale
+        """
         super().__init__()
         self.scale = scale
 
@@ -79,7 +88,10 @@ class PixelUnshuffle2d(nn.Module):
     """This class is a 2d version of pixelunshuffle on BCZXY data on XY."""
 
     def __init__(self, scale: int = 2):
-        """:param scale: downsample scale"""
+        """Initialize PixelUnshuffle2d.
+
+        :param scale: downsample scale
+        """
         super().__init__()
         self.scale = scale
 

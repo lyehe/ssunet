@@ -77,7 +77,7 @@ class BinomDataset(SingleVolumeDataset):
 
     def _sample_p(self, input: torch.Tensor) -> float:
         """Random sample the p level for the input image."""
-        # User can pass a custom function to sample the PSNR level
+        # User can pass a custom function to sample the p level
         p_sampling_method: Callable | None = self.kwargs.get("p_sampling_method", None)
         if p_sampling_method is not None and callable(p_sampling_method):
             return p_sampling_method(input, **self.kwargs)
@@ -98,10 +98,10 @@ class BinomDataset(SingleVolumeDataset):
     def _validate_p(p_value: float) -> float:
         """Check the p level is within the valid range."""
         if p_value <= 0:
-            LOGGER.warning("PSNR level must be greater than 0, using 0")
+            LOGGER.warning("p value must be greater than 0, using 0")
             return 0.0
         if p_value >= 1:
-            LOGGER.warning("PSNR level must be less than 1, using 1")
+            LOGGER.warning("p value must be less than 1, using 1")
             return 1.0
         return p_value
 

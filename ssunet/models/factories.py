@@ -33,5 +33,5 @@ def create_psnr_metric(device: torch.device) -> Metric:
 
 
 def create_ssim_metric(device: torch.device) -> Metric:
-    """Create a SSIM metric."""
+    """Create an SSIM metric."""
     return cast(Metric, pyiqa.create_metric("ssim", channels=1, device=device))

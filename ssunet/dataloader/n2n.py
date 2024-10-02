@@ -32,7 +32,7 @@ class N2NDatasetSkipFrame(SingleVolumeDataset):
 
 
 class N2NDatasetDualVolume(SingleVolumeDataset):
-    """N2N using 2 differnet volumes. The target volume is the reference."""
+    """N2N using 2 different volumes. The target volume is the reference."""
 
     def __getitem__(self, index: int) -> list[torch.Tensor]:
         """Get a N2N sample."""
