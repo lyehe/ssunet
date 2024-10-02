@@ -54,7 +54,7 @@ def gpu_patch_inference(
     patch_size = (patch_depth, c, x, y)
 
     patch_depth = (
-        patch_sizer(model, patch_size, patch_depth, min_overlap, device, mixed_precision)
+        patch_sizer(model, patch_size, initial_patch_depth, min_overlap, mixed_precision)
         if test_vram
         else patch_depth
     )
@@ -170,7 +170,6 @@ def patch_sizer(
     patch_size: tuple[int, int, int, int],
     inital_patch_depth: int,
     min_overlap: int,
-    device: torch.device,
     mixed_precision: bool = False,
 ) -> int:
     """Determine the patch depth based on the VRAM capacity."""
@@ -275,16 +274,16 @@ def grid_inference(
 class PatchIdx:
     """Class to handle patch indices."""
 
-    _dim_size: int
-    _patch_size: int
-    _num_patches: int
-    _overlap: int
-    _start_idx: list = field(init=False, default_factory=list)
-    _end_idx: list = field(init=False, default_factory=list)
-    _local_start_idx: list = field(init=False, default_factory=list)
-    _local_end_idx: list = field(init=False, default_factory=list)
-    _start_non_overlap: list = field(init=False, default_factory=list)
-    _end_non_overlap: list = field(init=False, default_factory=list)
+    dim_size: int
+    patch_size: int
+    num_patches: int
+    overlap: int
+    start_idx: list = field(init=False, default_factory=list)
+    end_idx: list = field(init=False, default_factory=list)
+    local_start_idx: list = field(init=False, default_factory=list)
+    local_end_idx: list = field(init=False, default_factory=list)
+    start_non_overlap: list = field(init=False, default_factory=list)
+    end_non_overlap: list = field(init=False, default_factory=list)
 
     def __post_init__(self):
         """Post initialization function."""
@@ -319,41 +318,11 @@ class PatchIdx:
         self._local_end_idx = []
         self._start_non_overlap = []
         self._end_non_overlap = []
-        for i in range(self._num_patches):
-            start = i * (self._patch_size - self._overlap)
-            end = min(start + self._patch_size, self._dim_size)
+        for i in range(self.num_patches):
+            start = i * (self.patch_size - self.overlap)
+            end = min(start + self.patch_size, self.dim_size)
             self._start_idx.append(start)
             self._end_idx.append(end)
-
-    @property
-    def start_idx(self) -> list:
-        """Get start indices."""
-        return self._start_idx
-
-    @property
-    def end_idx(self) -> list:
-        """Get end indices."""
-        return self._end_idx
-
-    @property
-    def num_patches(self) -> int:
-        """Get number of patches."""
-        return self._num_patches
-
-    @property
-    def patch_size(self) -> int:
-        """Get patch size."""
-        return self._patch_size
-
-    @property
-    def overlap(self) -> int:
-        """Get overlap."""
-        return self._overlap
-
-    @property
-    def dim_size(self) -> int:
-        """Get dimension size."""
-        return self._dim_size
 
     def __call__(self) -> tuple[list, list]:
         """Get start and end indices."""
@@ -361,7 +330,7 @@ class PatchIdx:
 
     def __len__(self) -> int:
         """Get number of patches."""
-        return self._num_patches
+        return self.num_patches
 
     def __get_item__(self, index: int) -> tuple[int, int]:
         """Get start and end indices."""
