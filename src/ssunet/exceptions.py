@@ -30,7 +30,6 @@ class InferenceError(SSUnetError):
     """Base class for inference-related errors."""
 
 
-# Configuration Errors
 class ConfigFileNotFoundError(ConfigError):
     """Error raised when the config file is not found."""
 
@@ -38,7 +37,6 @@ class ConfigFileNotFoundError(ConfigError):
         super().__init__(f"Config file not found at {config_path}")
 
 
-# Data Errors
 class ShapeMismatchError(DataError):
     """Error raised when data and reference shapes do not match."""
 
@@ -215,3 +213,11 @@ class NoDataFileAvailableError(SSUnetError):
 
     def __init__(self):
         super().__init__("No data file available")
+
+
+class SSUnetDataError(DataError):
+    """Base class for SSUnetData errors."""
+
+
+class SingleVolumeDatasetError(DataError):
+    """Base class for SingleVolumeDataset errors."""

@@ -2,4 +2,12 @@
 torch
 torchvision
 torchaudio
--e .
+lightning
+numpy<2
+h5py
+pyyaml
+tqdm
+matplotlib
+seaborn
+pandas
+pyiqa

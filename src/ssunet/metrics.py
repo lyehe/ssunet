@@ -5,7 +5,6 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import matplotlib.patheffects as pe
 import numpy as np
 import pandas as pd
 import pyiqa
@@ -65,8 +64,10 @@ class ImageMetrics:
         if self._image.shape != self._target.shape:
             raise ImageShapeMismatchError()
 
-        self._grayscale = self._image.ndim == 2
-        self._rgb = self._image.shape[0] == 3
+        self._grayscale = self._image.ndim == 2 or (
+            self._image.ndim == 3 and self._image.shape[0] > 3
+        )
+        self._rgb = self._image.ndim == 3 and self._image.shape[0] == 3
         if not self._grayscale and not self._rgb:
             raise InvalidImageDimensionError()
 
@@ -181,6 +182,14 @@ class ImageMetrics:
         if metrics is None:
             metrics = self.metric_list()
         return {p: getattr(self, p) for p in self.metric_list()}
+
+    def set_image(self, image: torch.Tensor) -> None:
+        """Set the image tensor."""
+        self._image = self._to_tensor(image)
+
+    def set_target(self, target: torch.Tensor) -> None:
+        """Set the target tensor."""
+        self._target = self._to_tensor(target)
 
 
 @dataclass
@@ -492,10 +501,6 @@ class StackMetricsGroups:
             stats_str = [f"{m:.3}{nl}+/-{nl}{s:.3}" for m, s in zip(means, stds, strict=False)]
             text_y = (y_maxs[i] + y_mins[i]) / 2
             va = "top"
-            path_effect = [
-                pe.SimplePatchShadow(offset=(0.5, -0.5), alpha=1, shadow_rgbFace="white"),
-                pe.Normal(),
-            ]
 
             if params["kind"] != "bar":
                 y_min = f"{y_mins[i]:.3}"
@@ -513,7 +518,6 @@ class StackMetricsGroups:
                     ha="center",
                     va=va,
                     fontsize=8,
-                    path_effects=path_effect,
                 )
         if kwargs.get("save", False):
             self._save_plot(plot, "group_stats", kwargs)

@@ -1,17 +1,10 @@
 """N2N dataset."""
 
+import numpy as np
 import torch
 
-from ..constants import LOGGER
+from ..exceptions import MissingReferenceError
 from .singlevolume import SingleVolumeDataset
-
-
-class MissingReferenceError(ValueError):
-    """Exception raised when reference data is required."""
-
-    def __init__(self):
-        super().__init__("Reference data is required")
-        LOGGER.error("MissingReferenceError: Reference data is required")
 
 
 class N2NDatasetSkipFrame(SingleVolumeDataset):
@@ -43,9 +36,6 @@ class N2NDatasetDualVolume(SingleVolumeDataset):
 
     def __getitem__(self, index: int) -> list[torch.Tensor]:
         """Get a N2N sample."""
-        if self.reference is None:
-            raise MissingReferenceError()
-
         start_index = self._index(index)
         end_index = start_index + self.z_size
         output = [
@@ -59,3 +49,12 @@ class N2NDatasetDualVolume(SingleVolumeDataset):
     def data_size(self) -> int:
         """Get the length of the dataset."""
         return self.data.shape[0] - self.z_size + 1
+
+    @property
+    def reference(self) -> torch.Tensor:
+        """Get the reference tensor."""
+        if self.input.reference is None:
+            raise MissingReferenceError()
+        if isinstance(self.input.reference, np.ndarray):
+            self.input.reference = self.input._to_tensor(self.input.reference)
+        return self.input.reference

@@ -1,0 +1,26 @@
+name: ssunet
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    - torch
+    - torchvision
+    - torchaudio
+    - numpy==1.26.4
+    - h5py
+    - pyyaml
+    - tqdm
+    - matplotlib
+    - seaborn
+    - pandas
+    - lightning
+    - pyiqa
+    - pytest
+    - ruff
+    - tox
+    - pre-commit
+    - -e .

@@ -347,5 +347,9 @@ class SSUnet(pl.LightningModule):
     def _check_conflicts(self) -> None:
         """Check for conflicts in the model configuration."""
         # NOTE: up_mode 'upsample' is incompatible with merge_mode 'add'
-        if self.config.up_mode == "upsample" and self.config.merge_mode == "add":
+        if (
+            self.config.up_mode == "upsample"
+            and self.config.merge_mode == "add"
+            or self.config.up_mode not in ["upsample", "transpose"]
+        ):
             raise InvalidUpModeError(self.config.up_mode)

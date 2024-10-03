@@ -11,41 +11,16 @@ from numpy.random import rand, randint
 from torch.utils.data import Dataset
 
 from ..constants import EPSILON, LOGGER
+from ..exceptions import (
+    ShapeMismatchError,
+    UnsupportedDataTypeError,
+    UnsupportedInputModeError,
+)
 
 
 def _lucky(factor: float = 0.5) -> bool:
     """Check if you are lucky."""
     return rand() < factor
-
-
-class SSUnetDataError(Exception):
-    """Base class for SSUnetData errors."""
-
-    pass
-
-
-class ShapeMismatchError(SSUnetDataError):
-    """Error raised when data and reference shapes do not match."""
-
-    def __init__(self, message="Data and reference shapes do not match"):
-        self.message = message
-        super().__init__(self.message)
-
-
-class UnsupportedDataTypeError(SSUnetDataError):
-    """Error raised when data type is not supported."""
-
-    def __init__(self, message="Data type not supported"):
-        self.message = message
-        super().__init__(self.message)
-
-
-class UnsupportedInputModeError(SSUnetDataError):
-    """Error raised when input mode is not supported."""
-
-    def __init__(self, message="Input mode not supported"):
-        self.message = message
-        super().__init__(self.message)
 
 
 @dataclass
@@ -124,12 +99,6 @@ class DataConfig:
             f"{self.note}_{self.virtual_size}x{self.z_size}x{self.xy_size}x{self.xy_size}_skip"
             f"={self.skip_frames}"
         )
-
-
-class SingleVolumeDatasetError(Exception):
-    """Base class for SingleVolumeDataset errors."""
-
-    pass
 
 
 class SingleVolumeDataset(Dataset, ABC):

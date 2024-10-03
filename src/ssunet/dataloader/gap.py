@@ -8,23 +8,8 @@ from numpy.random import choice, rand, seed
 from torch.distributions.binomial import Binomial
 
 from ..constants import EPSILON, LOGGER
-from .singlevolume import SingleVolumeDataset
-
-
-class InvalidPValueError(ValueError):
-    """Exception raised when p value is invalid."""
-
-    def __init__(self, message: str):
-        super().__init__(message)
-        LOGGER.error(f"InvalidPValueError: {message}")
-
-
-class MissingPListError(ValueError):
-    """Exception raised when p_list is missing for list method."""
-
-    def __init__(self):
-        super().__init__("p_list must be provided when method is list")
-        LOGGER.error("MissingPListError: p_list must be provided when method is list")
+from ..exceptions import InvalidPValueError, MissingPListError
+from .singlevolume import DataConfig, SingleVolumeDataset, SSUnetData
 
 
 @dataclass
@@ -50,6 +35,16 @@ class SplitParams:
 class BinomDataset(SingleVolumeDataset):
     """Dataset that splits the data into target and noise using binomial sampling."""
 
+    def __init__(
+        self,
+        input: SSUnetData,
+        config: DataConfig,
+        split_params: SplitParams,
+        **kwargs,
+    ) -> None:
+        """Initialize the BinomDataset."""
+        super().__init__(input, config, split_params=split_params, **kwargs)
+
     def __getitem__(self, index: int) -> list[torch.Tensor]:
         """Get the target and noise components for the input image."""
         index = self._index(index)
@@ -74,7 +69,10 @@ class BinomDataset(SingleVolumeDataset):
     @property
     def split_params(self) -> SplitParams:
         """Get the split parameters."""
-        return self.kwargs.get("split_params", SplitParams())
+        split_params = self.kwargs.get("split_params", SplitParams())
+        self._validate_p(split_params.min_p)
+        self._validate_p(split_params.max_p)
+        return split_params
 
     @property
     def data_size(self) -> int:
@@ -123,7 +121,7 @@ class BinomDataset(SingleVolumeDataset):
         max_psnr = max(self.split_params.min_p, self.split_params.max_p)
         uniform = rand() * (max_psnr - min_psnr) + min_psnr
         p_value = (10 ** (uniform / 10.0)) / (input.float().mean().item() + EPSILON)
-        return self._validate_p(p_value)
+        return self._validate_p(max(EPSILON, min(1 - EPSILON, p_value)))
 
     def _sample_signal(self) -> float:
         """Random sample the signal level for the input image."""
@@ -152,7 +150,7 @@ class BinomDataset(SingleVolumeDataset):
     @staticmethod
     def _sample_noise(input: torch.Tensor, p_value: float) -> torch.Tensor:
         """Sample the noise data for the input image using a binomial distribution."""
-        input = torch.floor_(input.float())
+        input = torch.clamp(input, min=0).floor_()
         binom = Binomial(total_count=input, probs=torch.tensor([p_value]))  # type: ignore
         return binom.sample()
 
@@ -162,4 +160,4 @@ class BernoulliDataset(BinomDataset):
 
     @staticmethod
     def _sample_noise(input: torch.Tensor, p_value: float) -> torch.Tensor:
-        return torch.bernoulli(input * p_value)
+        return torch.bernoulli(torch.clamp(input * p_value, 0, 1))
