@@ -72,12 +72,12 @@ select = [
 ]
 ignore = ["D100", "D104", "D107"]  # Ignore missing docstrings in certain cases
 
-[tool.ruff.lint.per-file-ignores]
+[tool.ruff.per-file-ignores]
 "__init__.py" = ["F401"]
 "tests/*" = ["S101"]
 
-[tool.ruff.lint.isort]
+[tool.ruff.isort]
 known-first-party = ["ssunet"]
 
-[tool.ruff.lint.pydocstyle]
+[tool.ruff.pydocstyle]
 convention = "google"
