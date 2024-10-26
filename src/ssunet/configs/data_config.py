@@ -75,6 +75,6 @@ class SSUnetData:
 
     def binxy(self, bin: int = 2, mode: str = "sum") -> None:
         """Apply binning to the input data."""
-        self.data = self._apply_binning(self.data, bin, mode=mode)
-        if self.reference is not None:
-            self.reference = self._apply_binning(self.reference, bin, mode=mode)
+        self.primary_data = self._apply_binning(self.primary_data, bin, mode=mode)
+        if self.secondary_data is not None:
+            self.secondary_data = self._apply_binning(self.secondary_data, bin, mode=mode)

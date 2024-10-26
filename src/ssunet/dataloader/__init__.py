@@ -1,7 +1,7 @@
 """Dataloader module."""
 
 from .gap import BernoulliDataset, BinomDataset, SplitParams
-from .n2n import N2NDatasetDualVolume, N2NDatasetSkipFrame
+from .paired import N2NDatasetDualVolume, N2NDatasetSkipFrame
 from .singlevolume import SingleVolumeDataset
 from .validation import ValidationDataset
 

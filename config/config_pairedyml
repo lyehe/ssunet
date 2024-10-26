@@ -1,0 +1,111 @@
+# Path configurations
+PATH:
+  # Path to the data directory
+  data_dir: "../tempdata/"
+  data_file: "RES_4341_p=0.00781_m=0.00776.tif"
+  data_begin_slice: 0
+  data_end_slice: 3600
+
+  # Path to the reference directory
+  reference_dir: "../tempdata/"
+  reference_file: "RES_4341_p=0.00781_m=0.00776.tif"
+  reference_begin_slice: 3601
+  reference_end_slice: 3856
+
+  # Path to the ground truth directory
+  ground_truth_dir: "../tempdata/"
+  ground_truth_file: "ref.tif"
+  ground_truth_begin_slice: 3601
+  ground_truth_end_slice: 3856
+
+# Data configurations
+DATA:
+  xy_size: 128 # Size of the sampled image in the xy plane, 128 is a good choice
+  z_size: 32 # Size of the sampled image in the z direction, 32 is a good choice
+  virtual_size: 1000 # Size/length of the virtual image in each batch, use 0 for the entire dataset
+  augments: False # Whether to apply data augmentation, False is a good choice for natural images
+  rotation: 0 # Rotation of the sampled image, can cause artifacts if not 0
+  random_crop: True # Whether to apply random cropping, True is a good choice
+  skip_frames: 1 # Number of frames to skip between each sampled data stack
+  normalize_target: True # Whether to normalize the target, True is a good choice
+  note: "test" # Note for the data
+
+# Split configurations
+SPLIT:
+  method: "signal"
+  min_p: 0.000001
+  max_p: 0.999999
+  p_list: Null
+  normalize_target: True
+  seed: Null
+
+# Model configurations
+MODEL:
+  channels: 1
+  depth: 5
+  start_filts: 32
+  depth_scale: 2
+  depth_scale_stop: 10
+  z_conv_stage: 3
+  group_norm: 8
+  skip_depth: 0
+  dropout_p: 0.0
+  scale_factor: 10.0
+  sin_encoding: False
+  signal_levels: 10
+  masked: True
+  down_checkpointing: true
+  up_checkpointing: False
+  loss_function: "photon"
+  up_mode: "pixelshuffle"
+  merge_mode: "concat"
+  down_mode: "maxpool"
+  activation: "gelu"
+  block_type: "tri"
+  note: ""
+  optimizer_config:
+    name: "adamw" # "adam" | "sgd" | "adamw"
+    lr: 0.0002
+    mode: "min" # "min" | "max"
+    factor: 0.5
+    patience: 5
+
+# Loader configurations
+LOADER:
+  batch_size: 12
+  shuffle: False
+  pin_memory: False
+  drop_last: True
+  num_workers: 6
+  persistent_workers: True
+
+# Trainer configurations
+TRAIN:
+  default_root_dir: "./models"
+  accelerator: "cuda"
+  gradient_clip_val: 1
+  precision: "32"
+  max_epochs: 150
+  device_numbers: 0
+
+  callbacks_model_checkpoint: True
+  mc_save_weights_only: True
+  mc_mode: "min"
+  mc_monitor: "val_loss"
+  mc_save_top_k: 2
+
+  callbacks_learning_rate_monitor: True
+  lrm_logging_interval: "epoch"
+
+  callbacks_early_stopping: False
+  es_monitor: "val_loss"
+  es_patience: 25
+
+  callbacks_device_stats_monitor: False
+
+  logger_name: "logs"
+  profiler: "simple"
+  limit_val_batches: 20
+  log_every_n_steps: 20
+  note: ""
+  matmul_precision: "high"
