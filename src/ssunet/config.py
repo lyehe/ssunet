@@ -42,7 +42,7 @@ class PathConfig:
     """Configuration for paths."""
 
     data_dir: PathLike
-    data_file: FileInput
+    data_file: PathLike
     data_begin_slice: int = 0
     data_end_slice: int = -1
 
@@ -63,7 +63,7 @@ class PathConfig:
         self.ground_truth_dir = Path(self.ground_truth_dir) if self.ground_truth_dir else None
 
         # Verify the data directory exists
-        if not self.data_dir.exists():
+        if self.data_dir and not self.data_dir.exists():
             raise DirectoryNotFoundError(self.data_dir)
         self.data_file = self._resolve_file(self.data_file, self.data_dir, FileType.DATA)
 
@@ -261,9 +261,7 @@ def load_yaml(config_path: Path | str = Path("./config.yml")) -> dict:
     return yaml.safe_load(config_path.read_text())
 
 
-def load_config(
-    config_path: Path | str = Path("./config.yml"),
-) -> MasterConfig:
+def load_config(config_path: str, data_dir: str | None = None) -> MasterConfig:
     """Convert the configuration dictionary to dataclasses."""
     config = load_yaml(config_path)
     master_config = MasterConfig(

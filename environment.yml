@@ -7,9 +7,9 @@ dependencies:
   - python=3.11
   - pip
   - pip:
-    - torch
-    - torchvision
-    - torchaudio
+    - torch --index-url https://download.pytorch.org/whl/cu124
+    - torchvision --index-url https://download.pytorch.org/whl/cu124
+    - torchaudio --index-url https://download.pytorch.org/whl/cu124
     - numpy==1.26.4
     - h5py
     - pyyaml

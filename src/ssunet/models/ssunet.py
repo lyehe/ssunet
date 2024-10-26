@@ -5,8 +5,9 @@ from dataclasses import dataclass, field
 import pyiqa
 import pytorch_lightning as pl
 import torch
-from torch import nn, optim
+from torch import nn
 from torch.nn import init
+from torch.optim import SGD, Adam, AdamW
 from torch.utils.checkpoint import checkpoint
 
 from ..constants import DEFAULT_OPTIMIZER_CONFIG, EPSILON, LOGGER
@@ -15,9 +16,9 @@ from ..losses import loss_functions
 from ..modules import BLOCK, conv111
 
 OPTIMIZER = {
-    "adam": optim.Adam,
-    "sgd": optim.SGD,
-    "adamw": optim.AdamW,
+    "adam": Adam,
+    "sgd": SGD,
+    "adamw": AdamW,
 }
 
 psnr_metric = pyiqa.create_metric("psnr")
@@ -309,6 +310,10 @@ class SSUnet(pl.LightningModule):
         ground_truth_mean = torch.mean(ground_truth) + EPSILON
         normalized_output = normalized_output / output_mean * ground_truth_mean
 
+        # Ensure input is in range [0, 1] for metric calculations
+        normalized_output = torch.clamp(normalized_output, 0, 1)
+        ground_truth = torch.clamp(ground_truth, 0, 1)
+
         psnr = psnr_metric(normalized_output, ground_truth)
         ssim = ssim_metric(normalized_output, ground_truth)
         self.log("val_psnr", psnr.mean())
@@ -350,6 +355,6 @@ class SSUnet(pl.LightningModule):
         if (
             self.config.up_mode == "upsample"
             and self.config.merge_mode == "add"
-            or self.config.up_mode not in ["upsample", "transpose"]
+            or self.config.up_mode not in ["upsample", "transpose", "pixelshuffle"]
         ):
             raise InvalidUpModeError(self.config.up_mode)

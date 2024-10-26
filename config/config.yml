@@ -1,30 +1,36 @@
+# Path configurations
 PATH:
-  data_dir: "../tempdata/Simulated_data"
+  # Path to the data directory
+  data_dir: "../tempdata/"
   data_file: "RES_4341_p=0.00781_m=0.00776.tif"
   data_begin_slice: 0
   data_end_slice: 3600
 
-  reference_dir: "../tempdata/Simulated_data"
+  # Path to the reference directory
+  reference_dir: "../tempdata/"
   reference_file: "RES_4341_p=0.00781_m=0.00776.tif"
   reference_begin_slice: 0
   reference_end_slice: 3600
 
-  ground_truth_dir: "../tempdata/Simulated_data"
+  # Path to the ground truth directory
+  ground_truth_dir: "../tempdata/"
   ground_truth_file: "ref.tif"
   ground_truth_begin_slice: 3601
   ground_truth_end_slice: 3856
 
+# Data configurations
 DATA:
-  xy_size: 128
-  z_size: 32
-  virtual_size: 600
-  augments: False
-  rotation: 0
-  random_crop: True
-  skip_frames: 1
-  normalize_target: True
-  note: "test"
+  xy_size: 128 # Size of the sampled image in the xy plane, 128 is a good choice
+  z_size: 32 # Size of the sampled image in the z direction, 32 is a good choice
+  virtual_size: 1000 # Size/length of the virtual image in each batch, use 0 for the entire dataset
+  augments: False # Whether to apply data augmentation, False is a good choice for natural images
+  rotation: 0 # Rotation of the sampled image, can cause artifacts if not 0
+  random_crop: True # Whether to apply random cropping, True is a good choice
+  skip_frames: 1 # Number of frames to skip between each sampled data stack
+  normalize_target: True # Whether to normalize the target, True is a good choice
+  note: "test" # Note for the data
 
+# Split configurations
 SPLIT:
   method: "signal"
   min_p: 0.000001
@@ -33,13 +39,14 @@ SPLIT:
   normalize_target: True
   seed: Null
 
+# Model configurations
 MODEL:
   channels: 1
   depth: 5
   start_filts: 32
   depth_scale: 2
   depth_scale_stop: 10
-  z_conv_stage: 5
+  z_conv_stage: 3
   group_norm: 8
   skip_depth: 0
   dropout_p: 0.0
@@ -63,14 +70,16 @@ MODEL:
     factor: 0.5
     patience: 5
 
+# Loader configurations
 LOADER:
-  batch_size: 15
+  batch_size: 12
   shuffle: False
   pin_memory: False
   drop_last: True
   num_workers: 6
   persistent_workers: True
 
+# Trainer configurations
 TRAIN:
   default_root_dir: "../models"
   accelerator: "cuda"
