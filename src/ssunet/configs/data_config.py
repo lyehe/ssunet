@@ -40,20 +40,24 @@ class DataConfig:
 class SSUnetData:
     """Dataclass for the input data of a single volume dataset."""
 
-    data: np.ndarray | torch.Tensor
-    reference: np.ndarray | torch.Tensor | None = None
+    primary_data: np.ndarray | torch.Tensor
+    secondary_data: np.ndarray | torch.Tensor | None = None
 
     def __post_init__(self):
         """Post initialization function."""
-        # Check if the data and reference shapes match
-        if self.reference is not None:
-            data_shape = self.data.shape if isinstance(self.data, np.ndarray) else self.data.size()
-            reference_shape = (
-                self.reference.shape
-                if isinstance(self.reference, np.ndarray)
-                else self.reference.size()
+        # Check if the primary and secondary data shapes match
+        if self.secondary_data is not None:
+            data_shape = (
+                self.primary_data.shape
+                if isinstance(self.primary_data, np.ndarray)
+                else self.primary_data.size()
             )
-            if data_shape != reference_shape:
+            secondary_data_shape = (
+                self.secondary_data.shape
+                if isinstance(self.secondary_data, np.ndarray)
+                else self.secondary_data.size()
+            )
+            if data_shape != secondary_data_shape:
                 raise ShapeMismatchError()
 
     @staticmethod

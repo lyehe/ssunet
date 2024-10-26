@@ -9,8 +9,8 @@ PATH:
   # Path to the reference directory
   reference_dir: "../tempdata/"
   reference_file: "RES_4341_p=0.00781_m=0.00776.tif"
-  reference_begin_slice: 0
-  reference_end_slice: 3600
+  reference_begin_slice: 3601
+  reference_end_slice: 3856
 
   # Path to the ground truth directory
   ground_truth_dir: "../tempdata/"

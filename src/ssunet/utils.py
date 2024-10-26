@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import yaml
 
-from .constants import LOGGER
+from .constants import EPSILON, LOGGER
 from .exceptions import ConfigFileNotFoundError, UnsupportedDataTypeError
 
 
@@ -29,9 +29,14 @@ def _lucky(factor: float = 0.5) -> bool:
     return np.random.rand() < factor
 
 
-def load_yaml(config_path: Path | str) -> dict:
+def _load_yaml(config_path: Path | str) -> dict:
     """Load the yaml configuration file."""
     config_path = Path(config_path)
     if not config_path.exists():
         raise ConfigFileNotFoundError(config_path)
     return yaml.safe_load(config_path.read_text())
+
+
+def _normalize_by_mean(input: torch.Tensor) -> torch.Tensor:
+    """Normalize the input data by the mean."""
+    return input / (input.mean() + EPSILON)

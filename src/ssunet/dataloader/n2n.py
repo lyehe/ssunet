@@ -18,12 +18,12 @@ class N2NDatasetSkipFrame(SingleVolumeDataset):
         output = self.data[start_index:end_index]
         out_even = output[::2].float()
         out_odd = output[1::2].float()
-        if self.reference is not None:
-            ground_truth = self.reference[start_index:end_index:2].float()
+        if self.secondary_data is not None:
+            ground_truth = self.secondary_data[start_index:end_index:2].float()
             output = [out_odd, out_even, ground_truth]
         else:
             output = [out_odd, out_even]
-        output = self._crop_list(self._rotate_list(output))
+        output = self._crop_list_items(self._rotate_list(output))
         return self._add_channel_dim(self._augment_list(output))
 
     @property
@@ -43,7 +43,7 @@ class N2NDatasetDualVolume(SingleVolumeDataset):
             self.data[start_index:end_index],
             self.reference[start_index:end_index],
         ]
-        output = self._crop_list(self._rotate_list(output))
+        output = self._crop_list_items(self._rotate_list(output))
         return self._add_channel_dim(self._augment_list(output))
 
     @property

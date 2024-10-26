@@ -9,7 +9,6 @@ from numpy.random import rand, randint
 from torch.utils.data import Dataset
 
 from ..configs import DataConfig, SSUnetData
-from ..constants import EPSILON
 from ..utils import _lucky, _to_tensor
 
 
@@ -46,16 +45,16 @@ class SingleVolumeDataset(Dataset, ABC):
     @property
     def data(self) -> torch.Tensor:
         """Get the data tensor."""
-        if isinstance(self.input.data, np.ndarray):
-            self.input.data = _to_tensor(self.input.data)
-        return self.input.data
+        if isinstance(self.input.primary_data, np.ndarray):
+            self.input.primary_data = _to_tensor(self.input.primary_data)
+        return self.input.primary_data
 
     @property
-    def reference(self) -> torch.Tensor | None:
+    def secondary_data(self) -> torch.Tensor | None:
         """Get the reference tensor."""
-        if isinstance(self.input.reference, np.ndarray):
-            self.input.reference = _to_tensor(self.input.reference)
-        return self.input.reference
+        if isinstance(self.input.secondary_data, np.ndarray):
+            self.input.secondary_data = _to_tensor(self.input.secondary_data)
+        return self.input.secondary_data
 
     @property
     def x_size(self) -> int:
@@ -79,11 +78,6 @@ class SingleVolumeDataset(Dataset, ABC):
             self.data_size if self.config.virtual_size == 0 else self.config.virtual_size
         ) // self.config.skip_frames
 
-    @staticmethod
-    def normalize_by_mean(input: torch.Tensor) -> torch.Tensor:
-        """Normalize the input data by the mean."""
-        return input / (input.mean() + EPSILON)
-
     def _new_crop_params(self) -> tuple[int, int, int, int]:
         """Compute the coordinates for the new crop window."""
         if self.config.random_crop:  # Random crop
@@ -98,7 +92,7 @@ class SingleVolumeDataset(Dataset, ABC):
             ye = yi + self.y_size
         return xi, yi, xe, ye
 
-    def _crop_list(self, input: list[torch.Tensor]) -> list[torch.Tensor]:
+    def _crop_list_items(self, input: list[torch.Tensor]) -> list[torch.Tensor]:
         """Crop the input data to the window size."""
         self.crop_idx = self._new_crop_params()
         return [

@@ -9,6 +9,7 @@ from torch.distributions.binomial import Binomial
 from ..configs import DataConfig, SplitParams, SSUnetData
 from ..constants import EPSILON, LOGGER
 from ..exceptions import InvalidPValueError, MissingPListError
+from ..utils import _normalize_by_mean
 from .singlevolume import SingleVolumeDataset
 
 
@@ -30,12 +31,12 @@ class BinomDataset(SingleVolumeDataset):
         index = self._index(index)
         input = self.data[index : index + self.z_size]
         # Combine the input and ground truth data for cropping
-        if self.reference is None:
-            output = self._crop_list(self._rotate_list([input]))
+        if self.secondary_data is None:
+            output = self._crop_list_items(self._rotate_list([input]))
             output = self._split(output[0])
         else:
-            reference = self.reference[index : index + self.z_size]
-            output = self._crop_list(self._rotate_list([input, reference]))
+            reference = self.secondary_data[index : index + self.z_size]
+            output = self._crop_list_items(self._rotate_list([input, reference]))
             image, noise = self._split(output[0])
             output = [image, noise, output[1]]
 
@@ -65,7 +66,7 @@ class BinomDataset(SingleVolumeDataset):
         noise = self._sample_noise(input, p_value)
         target = (input - noise).float()
         if self.split_params.normalize_target:
-            target = self.normalize_by_mean(target)
+            target = _normalize_by_mean(target)
         return [target, noise.float()]
 
     def _sample_p(self, input: torch.Tensor) -> float:

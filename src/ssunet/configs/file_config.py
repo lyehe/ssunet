@@ -208,15 +208,27 @@ class PathConfig:
         else:
             return self.load_reference(method)
 
-    def load_ssunet_data(self, method: Callable | None = None) -> SSUnetData:
+    def load_data_only(self, method: Callable | None = None) -> SSUnetData:
+        """Load the data file only."""
+        data = self.load_data(method)
+        return SSUnetData(primary_data=data)
+
+    def load_reference_only(self, method: Callable | None = None) -> SSUnetData:
+        """Load the reference file only."""
+        reference = self.load_reference(method)
+        return SSUnetData(primary_data=reference)
+
+    def load_data_and_ground_truth(self, method: Callable | None = None) -> SSUnetData:
         """Load SSUnetData and return a SSUnetData object."""
         data = self.load_data(method)
-        reference = self.load_reference(method)
-        return SSUnetData(data=data, reference=reference)
+        reference = self.load_ground_truth(method)
+        return SSUnetData(primary_data=data, secondary_data=reference)
 
-    def load_all_data(self, method: Callable | None = None) -> tuple[SSUnetData, np.ndarray]:
-        """Load all data files and return a tuple of SSUnetData and ground truth np array."""
-        return self.load_ssunet_data(method), self.load_ground_truth(method)
+    def load_reference_and_ground_truth(self, method: Callable | None = None) -> SSUnetData:
+        """Load SSUnetData and return a SSUnetData object."""
+        reference = self.load_reference(method)
+        ground_truth = self.load_ground_truth(method)
+        return SSUnetData(primary_data=reference, secondary_data=ground_truth)
 
 
 @dataclass

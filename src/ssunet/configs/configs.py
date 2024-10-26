@@ -6,7 +6,7 @@ from shutil import copy
 
 import yaml
 
-from ..utils import load_yaml
+from ..utils import _load_yaml
 from .data_config import DataConfig
 from .file_config import PathConfig, SplitParams
 from .model_config import ModelConfig
@@ -53,7 +53,7 @@ class MasterConfig:
 
 def load_config(config_path: str | Path = example_config_path) -> MasterConfig:
     """Convert the configuration dictionary to dataclasses."""
-    config = load_yaml(config_path)
+    config = _load_yaml(config_path)
     master_config = MasterConfig(
         path_config=PathConfig(**config["PATH"]),
         data_config=DataConfig(**config["DATA"]),

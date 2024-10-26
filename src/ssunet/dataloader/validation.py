@@ -3,6 +3,7 @@
 import torch
 
 from ..constants import EPSILON
+from ..utils import _normalize_by_mean
 from .singlevolume import SingleVolumeDataset
 
 
@@ -14,13 +15,18 @@ class ValidationDataset(SingleVolumeDataset):
         index = self._index(index)
         input = self.data[index : index + self.z_size]
         # Combine the input and ground truth data for cropping
-        if self.reference is not None:
-            reference = self.reference[index : index + self.z_size]
-            target = self.normalize_by_mean(input) if self.config.normalize_target else input
-            output = self._crop_list([input / (input.mean() + EPSILON), input, reference])
+        if self.secondary_data is not None:
+            reference = self.secondary_data[index : index + self.z_size]
+            target = _normalize_by_mean(input) if self.config.normalize_target else input
+            output = self._crop_list_items([input / (input.mean() + EPSILON), input, reference])
         else:
-            [input] = self._crop_list([input])
-            target = self.normalize_by_mean(input) if self.config.normalize_target else input
+            [input] = self._crop_list_items([input])
+            target = _normalize_by_mean(input) if self.config.normalize_target else input
             output = [target, input]
 
         return self._add_channel_dim(self._augment_list(output))
+
+    @property
+    def data_size(self) -> int:
+        """Get the data size."""
+        return self.data.shape[0] - self.z_size + 1
