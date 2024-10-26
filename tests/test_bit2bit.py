@@ -2,20 +2,21 @@ import pytest
 import torch
 
 from src.ssunet.exceptions import InvalidUpModeError
-from src.ssunet.models import ModelConfig, SSUnet
+from src.ssunet.models import Bit2Bit
+from ssunet.configs.configs import ModelConfig
 
 
 def test_ssunet_initialization():
     """Test the initialization of SSUnet model."""
     model_config = ModelConfig(channels=1, depth=5, start_filts=32, up_mode="transpose")
-    model = SSUnet(model_config)
-    assert isinstance(model, SSUnet)
+    model = Bit2Bit(model_config)
+    assert isinstance(model, Bit2Bit)
 
 
 def test_ssunet_forward_pass():
     """Test the forward pass of SSUnet model."""
     model_config = ModelConfig(channels=1, depth=5, start_filts=32, up_mode="transpose")
-    model = SSUnet(model_config)
+    model = Bit2Bit(model_config)
 
     input_tensor = torch.randn(1, 1, 32, 128, 128)
 
@@ -27,13 +28,13 @@ def test_ssunet_invalid_up_mode():
     """Test SSUnet initialization with invalid up_mode."""
     model_config = ModelConfig(channels=1, depth=5, start_filts=32, up_mode="invalid_mode")
     with pytest.raises(InvalidUpModeError):
-        SSUnet(model_config)
+        Bit2Bit(model_config)
 
 
 def test_ssunet_different_input_sizes():
     """Test SSUnet forward pass with different input sizes."""
     model_config = ModelConfig(channels=1, depth=5, start_filts=32, up_mode="transpose")
-    model = SSUnet(model_config)
+    model = Bit2Bit(model_config)
 
     input_sizes = [(1, 1, 32, 128, 128), (1, 1, 16, 64, 64), (2, 1, 32, 256, 256)]
 

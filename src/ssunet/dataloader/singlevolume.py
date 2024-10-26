@@ -1,104 +1,16 @@
 """Single volume dataset."""
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 
 import numpy as np
 import torch
-import torch.nn.functional as tnf
 import torchvision.transforms.v2.functional as tf
 from numpy.random import rand, randint
 from torch.utils.data import Dataset
 
-from ..constants import EPSILON, LOGGER
-from ..exceptions import (
-    ShapeMismatchError,
-    UnsupportedDataTypeError,
-    UnsupportedInputModeError,
-)
-
-
-def _lucky(factor: float = 0.5) -> bool:
-    """Check if you are lucky."""
-    return rand() < factor
-
-
-@dataclass
-class SSUnetData:
-    """Data class for the input data of a single volume dataset."""
-
-    data: np.ndarray | torch.Tensor
-    reference: np.ndarray | torch.Tensor | None = None
-
-    def __post_init__(self):
-        """Post initialization function."""
-        # Check if the data and reference shapes match
-        if self.reference is not None:
-            data_shape = self.data.shape if isinstance(self.data, np.ndarray) else self.data.size()
-            reference_shape = (
-                self.reference.shape
-                if isinstance(self.reference, np.ndarray)
-                else self.reference.size()
-            )
-            if data_shape != reference_shape:
-                raise ShapeMismatchError()
-
-    @staticmethod
-    def _to_tensor(input: np.ndarray) -> torch.Tensor:
-        """Convert the input data to a tensor."""
-        try:
-            return torch.from_numpy(input)
-        except TypeError:
-            LOGGER.warning("Data type not supported")
-            try:
-                LOGGER.info("Trying to convert to int64")
-                return torch.from_numpy(input.astype(np.int64))
-            except TypeError as err:
-                LOGGER.error("Data type not supported")
-                raise UnsupportedDataTypeError() from err
-
-    def _apply_binning(self, data: np.ndarray | torch.Tensor, bin: int, mode: str) -> torch.Tensor:
-        """Apply binning to the input data."""
-        if isinstance(data, np.ndarray):
-            data = self._to_tensor(data)
-
-        if isinstance(data, torch.Tensor):
-            if mode == "sum":
-                weight = torch.ones(1, 1, bin, bin, device=data.device)
-                return tnf.conv2d(data, weight, stride=bin, groups=data.size(1))
-            elif mode == "max":
-                return tnf.max_pool2d(data, kernel_size=bin, stride=bin)
-            else:
-                raise UnsupportedInputModeError()
-
-    def binxy(self, bin: int = 2, mode: str = "sum") -> None:
-        """Apply binning to the input data."""
-        self.data = self._apply_binning(self.data, bin, mode=mode)
-        if self.reference is not None:
-            self.reference = self._apply_binning(self.reference, bin, mode=mode)
-
-
-@dataclass
-class DataConfig:
-    """Data class for the input data of a single volume dataset."""
-
-    xy_size: int = 256
-    z_size: int = 32
-    virtual_size: int = 0
-    augments: bool = False
-    rotation: float = 0
-    random_crop: bool = True
-    skip_frames: int = 1
-    normalize_target: bool = True
-    note: str = ""
-
-    @property
-    def name(self) -> str:
-        """Get the name of the dataset."""
-        return (
-            f"{self.note}_{self.virtual_size}x{self.z_size}x{self.xy_size}x{self.xy_size}_skip"
-            f"={self.skip_frames}"
-        )
+from ..configs import DataConfig, SSUnetData
+from ..constants import EPSILON
+from ..utils import _lucky, _to_tensor
 
 
 class SingleVolumeDataset(Dataset, ABC):
@@ -135,14 +47,14 @@ class SingleVolumeDataset(Dataset, ABC):
     def data(self) -> torch.Tensor:
         """Get the data tensor."""
         if isinstance(self.input.data, np.ndarray):
-            self.input.data = self.input._to_tensor(self.input.data)
+            self.input.data = _to_tensor(self.input.data)
         return self.input.data
 
     @property
     def reference(self) -> torch.Tensor | None:
         """Get the reference tensor."""
         if isinstance(self.input.reference, np.ndarray):
-            self.input.reference = self.input._to_tensor(self.input.reference)
+            self.input.reference = _to_tensor(self.input.reference)
         return self.input.reference
 
     @property

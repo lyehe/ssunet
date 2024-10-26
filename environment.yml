@@ -1,15 +1,18 @@
 name: ssunet
 channels:
   - pytorch
+  - nvidia
   - conda-forge
   - defaults
 dependencies:
-  - python=3.11
+  - python=3.10
+  - jupyter
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=12.4
   - pip
   - pip:
-    - torch --index-url https://download.pytorch.org/whl/cu124
-    - torchvision --index-url https://download.pytorch.org/whl/cu124
-    - torchaudio --index-url https://download.pytorch.org/whl/cu124
     - numpy==1.26.4
     - h5py
     - pyyaml

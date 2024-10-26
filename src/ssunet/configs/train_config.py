@@ -16,8 +16,6 @@ from pytorch_lightning.callbacks import (
     ModelCheckpoint,
 )
 
-from .dataloader import SingleVolumeDataset
-
 
 @dataclass
 class LoaderConfig:
@@ -48,7 +46,7 @@ class LoaderConfig:
         ]
         return "_".join(name for name in name_str if name is not None and name != "")
 
-    def loader(self, data: SingleVolumeDataset) -> dt.DataLoader:
+    def loader(self, data: dt.Dataset) -> dt.DataLoader:
         """Create a data loader."""
         return dt.DataLoader(data, **self.to_dict)
 
@@ -96,7 +94,7 @@ class TrainConfig:
     )
 
     def __post_init__(self):
-        """Setting the default root directory and matmul precision."""
+        """Setting the model root directory and matmul precision."""
         self.default_root_dir = Path(self.default_root_dir)
         self.default_root_dir.mkdir(parents=True, exist_ok=True)
         torch.set_float32_matmul_precision(self.matmul_precision)
@@ -186,7 +184,7 @@ class TrainConfig:
         return pl.Trainer(**self.to_dict)
 
     def set_new_root(self, new_root: Path | str) -> None:
-        """Set a new default root directory.
+        """Set a new model root directory.
 
         :param new_root: New root directory path. If a string, will be joined to existing root dir
         :type new_root: Path | str

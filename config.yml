@@ -81,7 +81,7 @@ LOADER:
 
 # Trainer configurations
 TRAIN:
-  default_root_dir: "../models"
+  default_root_dir: "./models"
   accelerator: "cuda"
   gradient_clip_val: 1
   precision: "32"

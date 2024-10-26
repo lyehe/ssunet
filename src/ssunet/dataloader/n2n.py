@@ -4,6 +4,7 @@ import numpy as np
 import torch
 
 from ..exceptions import MissingReferenceError
+from ..utils import _to_tensor
 from .singlevolume import SingleVolumeDataset
 
 
@@ -56,5 +57,5 @@ class N2NDatasetDualVolume(SingleVolumeDataset):
         if self.input.reference is None:
             raise MissingReferenceError()
         if isinstance(self.input.reference, np.ndarray):
-            self.input.reference = self.input._to_tensor(self.input.reference)
+            self.input.reference = _to_tensor(self.input.reference)
         return self.input.reference

@@ -1,35 +1,15 @@
 """GAP dataset that splits the data into target and noise components."""
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
 
 import torch
 from numpy.random import choice, rand, seed
 from torch.distributions.binomial import Binomial
 
+from ..configs import DataConfig, SplitParams, SSUnetData
 from ..constants import EPSILON, LOGGER
 from ..exceptions import InvalidPValueError, MissingPListError
-from .singlevolume import DataConfig, SingleVolumeDataset, SSUnetData
-
-
-@dataclass
-class SplitParams:
-    """Configuration for splitting the data into target and noise components."""
-
-    method: str = "signal"
-    min_p: float = EPSILON
-    max_p: float = 1 - EPSILON
-    p_list: list[float] | None = field(default_factory=list)
-    normalize_target: bool = True
-    seed: int | None = None
-
-    def __post_init__(self):
-        """Validate and initialize the split parameters."""
-        if self.min_p > self.max_p:
-            LOGGER.warning("min_p should be less than max_p, swapping values")
-            self.min_p, self.max_p = self.max_p, self.min_p
-        if self.seed is not None:
-            seed(self.seed)
+from .singlevolume import SingleVolumeDataset
 
 
 class BinomDataset(SingleVolumeDataset):

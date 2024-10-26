@@ -1,5 +1,5 @@
 """Model module."""
 
-from .ssunet import ModelConfig, SSUnet
+from .bit2bit import Bit2Bit
 
-__all__ = ["SSUnet", "ModelConfig"]
+__all__ = ["Bit2Bit"]

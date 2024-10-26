@@ -1,19 +1,18 @@
-"""Configuration for the project."""
+"""Configuration for the file import."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
 from itertools import islice
 from pathlib import Path
 
 import h5py
 import numpy as np
-import yaml
+from numpy.random import seed
 from tifffile import TiffFile, imread
 
-from .dataloader import DataConfig, SplitParams, SSUnetData
-from .exceptions import (
-    ConfigFileNotFoundError,
+from ..constants import EPSILON, LOGGER
+from ..exceptions import (
     DirectoryNotFoundError,
     FileIndexOutOfRangeError,
     FileNotFoundError,
@@ -22,8 +21,7 @@ from .exceptions import (
     NoDataFileAvailableError,
     UnknownFileTypeError,
 )
-from .models import ModelConfig
-from .train import LoaderConfig, TrainConfig
+from .data_config import SSUnetData
 
 PathLike = str | Path
 FileInput = int | str | Path
@@ -173,8 +171,8 @@ class PathConfig:
         method: Callable | None = None,
         begin: int | None = None,
         end: int | None = None,
-    ) -> np.ndarray | None:
-        """Load the reference file."""
+    ) -> np.ndarray:
+        """Load the reference file. If no reference is available, return the data."""
         if begin is None:
             begin = self.reference_begin_slice
         if end is None:
@@ -194,8 +192,8 @@ class PathConfig:
         method: Callable | None = None,
         begin: int | None = None,
         end: int | None = None,
-    ) -> np.ndarray | None:
-        """Load the ground truth file."""
+    ) -> np.ndarray:
+        """Load the ground truth file. If no ground truth is available, return the reference."""
         if begin is None:
             begin = self.ground_truth_begin_slice
         if end is None:
@@ -211,75 +209,31 @@ class PathConfig:
             return self.load_reference(method)
 
     def load_ssunet_data(self, method: Callable | None = None) -> SSUnetData:
-        """Load SSUnetData."""
+        """Load SSUnetData and return a SSUnetData object."""
         data = self.load_data(method)
         reference = self.load_reference(method)
         return SSUnetData(data=data, reference=reference)
 
+    def load_all_data(self, method: Callable | None = None) -> tuple[SSUnetData, np.ndarray]:
+        """Load all data files and return a tuple of SSUnetData and ground truth np array."""
+        return self.load_ssunet_data(method), self.load_ground_truth(method)
+
 
 @dataclass
-class MasterConfig:
-    """Configuration class containing all configurations."""
+class SplitParams:
+    """Configuration for splitting the data into target and noise components."""
 
-    data_config: DataConfig
-    path_config: PathConfig
-    split_params: SplitParams
-    model_config: ModelConfig
-    loader_config: LoaderConfig
-    train_config: TrainConfig
+    method: str = "signal"
+    min_p: float = EPSILON
+    max_p: float = 1 - EPSILON
+    p_list: list[float] | None = field(default_factory=list)
+    normalize_target: bool = True
+    seed: int | None = None
 
-    def _as_dict(self) -> dict:
-        """Convert the configuration to a dictionary."""
-        return {
-            "path_config": self.path_config,
-            "data_config": self.data_config,
-            "split_params": self.split_params,
-            "model_config": self.model_config,
-            "loader_config": self.loader_config,
-            "train_config": self.train_config,
-        }
-
-    @property
-    def name(self) -> str:
-        """Generate a name for the experiment."""
-        name = "_".join(
-            [
-                self.data_config.name,
-                self.model_config.name,
-                # self.loader_config.name,
-                # self.train_config.name,
-            ]
-        )
-        return name
-
-
-def load_yaml(config_path: Path | str = Path("./config.yml")) -> dict:
-    """Load yaml configuration file."""
-    config_path = Path(config_path)
-    if not config_path.exists():
-        raise ConfigFileNotFoundError(config_path)
-    return yaml.safe_load(config_path.read_text())
-
-
-def load_config(config_path: str, data_dir: str | None = None) -> MasterConfig:
-    """Convert the configuration dictionary to dataclasses."""
-    config = load_yaml(config_path)
-    master_config = MasterConfig(
-        path_config=PathConfig(**config["PATH"]),
-        data_config=DataConfig(**config["DATA"]),
-        split_params=SplitParams(**config["SPLIT"]),
-        model_config=ModelConfig(**config["MODEL"]),
-        loader_config=LoaderConfig(**config["LOADER"]),
-        train_config=TrainConfig(**config["TRAIN"]),
-    )
-    master_config.train_config.set_new_root(new_root=master_config.name)
-    save_config(config, master_config.train_config.default_root_dir)
-    return master_config
-
-
-def save_config(config: dict, path: Path | str) -> None:
-    """Save the configuration to a yaml file."""
-    path = Path(path) / "config.yml"
-    if not path.parent.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-    yaml.safe_dump(config, path.open("w"))
+    def __post_init__(self):
+        """Validate and initialize the split parameters."""
+        if self.min_p > self.max_p:
+            LOGGER.warning("min_p should be less than max_p, swapping values")
+            self.min_p, self.max_p = self.max_p, self.min_p
+        if self.seed is not None:
+            seed(self.seed)

@@ -1,7 +1,5 @@
 """SSUnet model."""
 
-from dataclasses import dataclass, field
-
 import pyiqa
 import pytorch_lightning as pl
 import torch
@@ -10,7 +8,8 @@ from torch.nn import init
 from torch.optim import SGD, Adam, AdamW
 from torch.utils.checkpoint import checkpoint
 
-from ..constants import DEFAULT_OPTIMIZER_CONFIG, EPSILON, LOGGER
+from ..configs.configs import ModelConfig
+from ..constants import EPSILON, LOGGER
 from ..exceptions import InvalidUpModeError
 from ..losses import loss_functions
 from ..modules import BLOCK, conv111
@@ -25,61 +24,15 @@ psnr_metric = pyiqa.create_metric("psnr")
 ssim_metric = pyiqa.create_metric("ssim")
 
 
-@dataclass
-class ModelConfig:
-    """Configuration for the SSUnet model."""
-
-    channels: int = 1
-    depth: int = 4
-    start_filts: int = 24
-    depth_scale: int = 2
-    depth_scale_stop: int = 10
-    z_conv_stage: int = 5
-    group_norm: int = 4
-    skip_depth: int = 0
-    dropout_p: float = 0.0
-    scale_factor: float = 10.0
-    sin_encoding: bool = True
-    signal_levels: int = 10
-    masked: bool = True
-    down_checkpointing: bool = False
-    up_checkpointing: bool = False
-    loss_function: str = "photon"
-    up_mode: str = "transpose"
-    merge_mode: str = "concat"
-    down_mode: str = "maxpool"
-    activation: str = "relu"
-    block_type: str = "tri"
-    note: str = ""
-    optimizer_config: dict = field(default_factory=lambda: DEFAULT_OPTIMIZER_CONFIG)
-
-    @property
-    def name(self) -> str:
-        """Generate the name of the model."""
-        name_str = [
-            f"l={self.signal_levels}",
-            f"d={self.depth}",
-            f"sf={self.start_filts}",
-            f"ds={self.depth_scale}at{self.depth_scale_stop}",
-            f"f={self.scale_factor}",
-            f"z={self.z_conv_stage}",
-            f"g={self.group_norm}",
-            f"sd={self.skip_depth}",
-            f"b={self.block_type}",
-            f"a={self.activation}",
-        ]
-        return "_".join(name_str)
-
-
-class SSUnet(pl.LightningModule):
-    """SSUnet model."""
+class Bit2Bit(pl.LightningModule):
+    """Bit2Bit model."""
 
     def __init__(
         self,
         config: ModelConfig,
         **kwargs,
     ) -> None:
-        """Initialize the SSUnet model.
+        """Initialize the Bit2Bit model.
 
         :param config: configuration for the model
         :param loss_function: loss function
