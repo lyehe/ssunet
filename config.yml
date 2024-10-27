@@ -20,13 +20,13 @@ PATH:
 
 # Data configurations
 DATA:
-  xy_size: 128 # Size of the sampled image in the xy plane, 128 is a good choice
+  xy_size: 256 # Size of the sampled image in the xy plane, 128 is a good choice
   z_size: 32 # Size of the sampled image in the z direction, 32 is a good choice
   virtual_size: 1000 # Size/length of the virtual image in each batch, use 0 for the entire dataset
   augments: False # Whether to apply data augmentation, False is a good choice for natural images
   rotation: 0 # Rotation of the sampled image, can cause artifacts if not 0
   random_crop: True # Whether to apply random cropping, True is a good choice
-  skip_frames: 1 # Number of frames to skip between each sampled data stack
+  skip_frames: 0 # Number of frames to skip between each sampled data stack
   normalize_target: True # Whether to normalize the target, True is a good choice
   note: "test" # Note for the data
 
@@ -65,14 +65,14 @@ MODEL:
   note: "" # Additional note for the model configuration
   optimizer_config: # Optimizer configuration
     name: "adamw" # "adam" | "sgd" | "adamw"
-    lr: 0.0002
+    lr: 0.00032
     mode: "min" # "min" | "max"
     factor: 0.5
-    patience: 5
+    patience: 10
 
 # Loader configurations
 LOADER:
-  batch_size: 12 # Number of samples in each batch
+  batch_size: 4 # Number of samples in each batch
   shuffle: False # Whether to shuffle the data
   pin_memory: False # True can lead to errors
   drop_last: True # Drop the last batch if it is not full
