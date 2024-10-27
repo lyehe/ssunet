@@ -6,13 +6,12 @@ from shutil import copy
 
 import yaml
 
+from ..constants import DEFAULT_CONFIG_PATH
 from ..utils import _load_yaml
 from .data_config import DataConfig
 from .file_config import PathConfig, SplitParams
 from .model_config import ModelConfig
 from .train_config import LoaderConfig, TrainConfig
-
-example_config_path = Path("./config.yml")
 
 
 @dataclass
@@ -50,8 +49,28 @@ class MasterConfig:
         )
         return name
 
+    @property
+    def model_path(self) -> Path:
+        """Get the path to the model."""
+        return self.train_config.default_root_dir
 
-def load_config(config_path: str | Path = example_config_path) -> MasterConfig:
+    @property
+    def log_path(self) -> Path:
+        """Get the path to the log."""
+        return self.train_config.default_root_dir / "logs"
+
+    @property
+    def checkpoint_path(self) -> Path:
+        """Get the path to the checkpoint."""
+        return self.train_config.default_root_dir / "model.ckpt"
+
+    @property
+    def config_path(self) -> Path:
+        """Get the path to the config."""
+        return self.train_config.default_root_dir / "config.yml"
+
+
+def load_config(config_path: str | Path = DEFAULT_CONFIG_PATH) -> MasterConfig:
     """Convert the configuration dictionary to dataclasses."""
     config = _load_yaml(config_path)
     master_config = MasterConfig(

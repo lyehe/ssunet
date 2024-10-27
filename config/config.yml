@@ -22,7 +22,7 @@ PATH:
 DATA:
   xy_size: 256 # Size of the sampled image in the xy plane, 128 is a good choice
   z_size: 32 # Size of the sampled image in the z direction, 32 is a good choice
-  virtual_size: 1000 # Size/length of the virtual image in each batch, use 0 for the entire dataset
+  virtual_size: 1200 # Size/length of the virtual image in each batch, use 0 for the entire dataset
   augments: False # Whether to apply data augmentation, False is a good choice for natural images
   rotation: 0 # Rotation of the sampled image, can cause artifacts if not 0
   random_crop: True # Whether to apply random cropping, True is a good choice
@@ -85,7 +85,7 @@ TRAIN:
   accelerator: "cuda" # Options: "cpu" | "cuda", good luck on cpu
   gradient_clip_val: 1 # Gradient clipping value
   precision: "32" # Options: "64" | "32" | "16" | "bf16" | "mixed"
-  max_epochs: 150 # Maximum number of epochs
+  max_epochs: 120 # Maximum number of epochs
   device_numbers: 0 # Device numbers, 0 is the first GPU
 
   callbacks_model_checkpoint: True

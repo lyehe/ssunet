@@ -1,5 +1,6 @@
 """Centralized error and exception definitions for the SSUnet project."""
 
+import traceback
 from enum import Enum
 from pathlib import Path
 
@@ -7,11 +8,18 @@ from .constants import LOGGER
 
 
 class SSUnetError(Exception):
-    """Base class for all SSUnet errors."""
+    """Base class for all SSUnet errors.
 
-    def __init__(self, message: str):
+    :param message: The error message
+    :param include_traceback: Whether to include the traceback in the log message
+    """
+
+    def __init__(self, message: str, include_traceback: bool = False) -> None:
         super().__init__(message)
-        LOGGER.error(f"{self.__class__.__name__}: {message}")
+        log_message = f"{self.__class__.__name__}: {message}"
+        if include_traceback:
+            log_message += f"\n{traceback.format_exc()}"
+        LOGGER.error(log_message)
 
 
 class ConfigError(SSUnetError):

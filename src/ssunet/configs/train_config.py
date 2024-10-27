@@ -27,6 +27,7 @@ class LoaderConfig:
     drop_last: bool = True
     num_workers: int = 6
     persistent_workers: bool = True
+    prefetch_factor: int | None = None
 
     @property
     def to_dict(self) -> dict:
@@ -47,7 +48,13 @@ class LoaderConfig:
         return "_".join(name for name in name_str if name is not None and name != "")
 
     def loader(self, data: dt.Dataset) -> dt.DataLoader:
-        """Create a data loader."""
+        """Create a data loader with CUDA stream support.
+
+        :param data: Dataset to load
+        :type data: dt.Dataset
+        :return: DataLoader configured with CUDA streaming
+        :rtype: dt.DataLoader
+        """
         return dt.DataLoader(data, **self.to_dict)
 
 
@@ -96,9 +103,9 @@ class TrainConfig:
     def __post_init__(self):
         """Setting the model root directory and matmul precision."""
         self.default_root_dir = Path(self.default_root_dir)
-        self.default_root_dir.mkdir(parents=True, exist_ok=True)
         torch.set_float32_matmul_precision(self.matmul_precision)
         self.set_new_root(self.name)
+        self.default_root_dir.mkdir(parents=True, exist_ok=True)
 
     @property
     def name(self) -> str:

@@ -2,13 +2,13 @@
 PATH:
   # Path to the data directory
   data_dir: "../tempdata/"
-  data_file: "RES_4341_p=0.00781_m=0.00776.tif"
+  data_file: "RES_4341_p=0.06250_m=0.05898.tif"
   data_begin_slice: 0
   data_end_slice: 3600
 
   # Path to the reference directory
   reference_dir: "../tempdata/"
-  reference_file: "RES_4341_p=0.00781_m=0.00776.tif"
+  reference_file: "RES_4341_p=0.06250_m=0.05898.tif"
   reference_begin_slice: 3601
   reference_end_slice: 3856
 
@@ -22,7 +22,7 @@ PATH:
 DATA:
   xy_size: 256 # Size of the sampled image in the xy plane, 128 is a good choice
   z_size: 32 # Size of the sampled image in the z direction, 32 is a good choice
-  virtual_size: 1000 # Size/length of the virtual image in each batch, use 0 for the entire dataset
+  virtual_size: 600 # Size/length of the virtual image in each batch, use 0 for the entire dataset
   augments: False # Whether to apply data augmentation, False is a good choice for natural images
   rotation: 0 # Rotation of the sampled image, can cause artifacts if not 0
   random_crop: True # Whether to apply random cropping, True is a good choice
@@ -33,11 +33,11 @@ DATA:
 # Split configurations
 SPLIT:
   method: "signal" # Options: "signal" | "db" | "fixed" | "list"
-  min_p: 0.000001 # Minimum p level, db or the fixed p
-  max_p: 0.999999 # Maximum p level
+  min_p: 0.00001 # Minimum p level, db or the fixed p
+  max_p: 0.99999 # Maximum p level
   p_list: Null # List of p levels if method is "list"
   normalize_target: True # Whether to normalize the target
-  seed: Null # Seed for the random number generator
+  seed: 1 # Seed for the random number generator
 
 # Model configurations
 MODEL:
@@ -72,12 +72,13 @@ MODEL:
 
 # Loader configurations
 LOADER:
-  batch_size: 4 # Number of samples in each batch
+  batch_size: 3 # Number of samples in each batch
   shuffle: False # Whether to shuffle the data
-  pin_memory: False # True can lead to errors
+  pin_memory: False # True is faster but can lead to errors
   drop_last: True # Drop the last batch if it is not full
   num_workers: 6 # Number of workers for the dataloader, set to 0 for no parallel processing to prevent errors
   persistent_workers: True # Whether to keep the workers alive between epochs, set to false to prevent errors
+  prefetch_factor: 3 # Number of batches to prefetch, set to None for no prefetching
 
 # Trainer configurations
 TRAIN:

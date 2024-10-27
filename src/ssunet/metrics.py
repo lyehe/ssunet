@@ -12,14 +12,13 @@ import seaborn as sns
 import torch
 import yaml
 
+from .constants import DEFAULT_DEVICE
 from .exceptions import (
     ConfigFileNotFoundError,
     ImageShapeMismatchError,
     InvalidImageDimensionError,
     InvalidStackDimensionError,
 )
-
-_default_device = torch.device("cpu")
 
 
 class Metric(ABC):
@@ -52,7 +51,7 @@ class ImageMetrics:
         self,
         image: np.ndarray | torch.Tensor,
         target: np.ndarray | torch.Tensor,
-        device: torch.device = _default_device,
+        device: torch.device = DEFAULT_DEVICE,
         **kwargs,
     ) -> None:
         """Class constructor."""
@@ -194,7 +193,7 @@ class ImageMetrics:
 
 @dataclass
 class MetricStats:
-    """A data class to handle and store metric statistics of image stack."""
+    """A data class to handle and store metric statistics of a single image stack."""
 
     data: list[float] = field(repr=False, default_factory=list)
     mean: float = field(init=False)
@@ -225,7 +224,7 @@ class StackMetrics:
         self,
         image: np.ndarray | torch.Tensor,
         target: np.ndarray | torch.Tensor,
-        device: torch.device = _default_device,
+        device: torch.device = DEFAULT_DEVICE,
         metric_list: list[str] | None = None,
         **kwargs,
     ) -> None:
@@ -370,7 +369,7 @@ class StackMetricsGroups:
         cls,
         image_list: list[np.ndarray],
         target_list: list[np.ndarray],
-        device: torch.device = _default_device,
+        device: torch.device = DEFAULT_DEVICE,
         metric_list: list[str] | None = None,
         group_names: list[str] | None = None,
         **kwargs,
@@ -385,7 +384,7 @@ class StackMetricsGroups:
     def from_dict(
         cls,
         data_dict: dict[str, list[np.ndarray]],
-        device: torch.device = _default_device,
+        device: torch.device = DEFAULT_DEVICE,
         metric_list: list[str] | None = None,
         **kwargs,
     ):

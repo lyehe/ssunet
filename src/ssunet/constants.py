@@ -2,6 +2,8 @@
 
 from logging import getLogger
 
+import torch
+
 EPSILON = 1e-8
 LOGGER = getLogger(__name__)
 DEFAULT_OPTIMIZER_CONFIG = {
@@ -22,3 +24,7 @@ DEFAULT_METRICS = [
     "niqe",
     "brisque",
 ]
+
+DEFAULT_CONFIG_PATH = "config.yml"
+
+DEFAULT_DEVICE = torch.device("cpu")

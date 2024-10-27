@@ -1,16 +1,18 @@
 """SSUnet model."""
 
-import pyiqa
+from pathlib import Path
+
 import pytorch_lightning as pl
 import torch
+import torchmetrics.image as tmi
 from torch import nn
 from torch.nn import init
 from torch.optim import SGD, Adam, AdamW
 from torch.utils.checkpoint import checkpoint
 
-from ..configs.configs import ModelConfig
+from ..configs.configs import ModelConfig, load_config
 from ..constants import EPSILON, LOGGER
-from ..exceptions import InvalidUpModeError
+from ..exceptions import FileNotFoundError, InvalidUpModeError
 from ..losses import loss_functions
 from ..modules import BLOCK, conv111
 
@@ -19,9 +21,6 @@ OPTIMIZER = {
     "sgd": SGD,
     "adamw": AdamW,
 }
-
-psnr_metric = pyiqa.create_metric("psnr")
-ssim_metric = pyiqa.create_metric("ssim")
 
 
 class Bit2Bit(pl.LightningModule):
@@ -41,6 +40,11 @@ class Bit2Bit(pl.LightningModule):
         :param kwargs: additional arguments
         """
         super().__init__()
+
+        # Replace pyiqa metrics with torchmetrics
+        self.psnr_metric = tmi.PeakSignalNoiseRatio()
+        self.ssim_metric = tmi.StructuralSimilarityIndexMeasure()
+
         self.config = config
         self.loss_function = loss_functions[config.loss_function]
         self.kwargs = kwargs
@@ -176,18 +180,18 @@ class Bit2Bit(pl.LightningModule):
         batch_idx,
     ) -> torch.Tensor:
         """Training step of the model."""
-        input = batch[1]
         target = batch[0]
+        input = batch[1]
         output = self(input)
         loss = (
             self.loss_function(output, target, (input < 1).float())
             if self.config.masked
             else self.loss_function(output, target)
         )
-        self.tb_train_log(loss, output, target, batch_idx)
+        self._tb_train_log(loss, output, target, batch_idx)
         return loss
 
-    def tb_train_log(
+    def _tb_train_log(
         self,
         loss: torch.Tensor,
         output: torch.Tensor,
@@ -225,52 +229,35 @@ class Bit2Bit(pl.LightningModule):
         self.log("val_loss", loss)
         self._log_image(output[0], "val_image", batch_idx, frequency=10)
 
-    def test_step(
-        self,
-        batch: list[torch.Tensor],  # batch of test data
-        batch_idx: int,
-    ) -> None:
-        """Test step of the model."""
-        input = batch[1]
-        target = batch[0]
-        output = self(input)
-        loss = self.loss_function(output, target)
-        self._tb_test_log(loss, output, target, batch_idx)
-
-    def _tb_test_log(
-        self,
-        loss: torch.Tensor,
-        output: torch.Tensor,
-        target: torch.Tensor,
-        batch_idx: int,
-    ) -> None:
-        """Log the test step. Can be extended for logging metrics."""
-        self.log("test_loss", loss)
-
     def _log_metrics(
         self,
         output: torch.Tensor,
         ground_truth: torch.Tensor,
         batch_idx: int,
     ) -> None:
-        """Log the metrics."""
+        """Log the metrics.
+
+        :param output: Model output tensor
+        :param ground_truth: Ground truth tensor
+        :param batch_idx: Current batch index
+        """
         size_z = ground_truth.shape[2]
         index_z = size_z // 2
 
-        normalized_output = output[:, :, index_z, ...]
-        ground_truth = ground_truth[:, :, index_z, ...]
-        output_mean = torch.mean(normalized_output) + EPSILON
-        ground_truth_mean = torch.mean(ground_truth) + EPSILON
-        normalized_output = normalized_output / output_mean * ground_truth_mean
+        # Extract middle slice
+        output_slice = output[:, :, index_z, ...]
+        ground_truth_slice = ground_truth[:, :, index_z, ...]
 
-        # Ensure input is in range [0, 1] for metric calculations
-        normalized_output = torch.clamp(normalized_output, 0, 1)
-        ground_truth = torch.clamp(ground_truth, 0, 1)
+        # Scale output to match ground truth mean intensity
+        output_mean = torch.mean(output_slice) + EPSILON
+        ground_truth_mean = torch.mean(ground_truth_slice) + EPSILON
+        output_normalized = output_slice / output_mean * ground_truth_mean
 
-        psnr = psnr_metric(normalized_output, ground_truth)
-        ssim = ssim_metric(normalized_output, ground_truth)
-        self.log("val_psnr", psnr.mean())
-        self.log("val_ssim", ssim.mean())
+        psnr = self.psnr_metric(output_normalized, ground_truth_slice)
+        ssim = self.ssim_metric(output_normalized, ground_truth_slice)
+
+        self.log("val_psnr", psnr)
+        self.log("val_ssim", ssim)
 
     def _normalize_log_image(
         self,
@@ -311,3 +298,70 @@ class Bit2Bit(pl.LightningModule):
             or self.config.up_mode not in ["upsample", "transpose", "pixelshuffle"]
         ):
             raise InvalidUpModeError(self.config.up_mode)
+
+    def test_step(
+        self,
+        batch: list[torch.Tensor],  # batch of test data
+        batch_idx: int,
+    ) -> None:
+        """Test step of the model."""
+        target = batch[0]
+        input = batch[1]
+        output = self(input)
+        loss = self.loss_function(output, target)
+        self._tb_test_log(loss, output, target, batch_idx)
+
+    def _tb_test_log(
+        self,
+        loss: torch.Tensor,
+        output: torch.Tensor,
+        target: torch.Tensor,
+        batch_idx: int,
+    ) -> None:
+        """Log the test step. Can be extended for logging metrics."""
+        self.log("test_loss", loss)
+
+    @classmethod
+    def load_from_checkpoint(
+        cls,
+        checkpoint_path: str | Path,
+        config: str | Path | ModelConfig,
+        strict: bool = True,
+        **kwargs,
+    ) -> "Bit2Bit":
+        """Load model from checkpoint.
+
+        :param checkpoint_path: path to the checkpoint file
+        :param config: model configuration
+        :param strict: whether to strictly enforce that the keys in state_dict match
+        :param kwargs: additional arguments passed to the model
+        :return: loaded model
+        """
+        if not Path(checkpoint_path).exists():
+            raise FileNotFoundError(checkpoint_path)
+        checkpoint = torch.load(checkpoint_path)
+
+        if isinstance(config, str):
+            config = Path(config)
+        if not config.exists():
+            raise FileNotFoundError(config)
+        if isinstance(config, Path):
+            config = load_config(config).model_config
+
+        model = cls(config=config, **kwargs)
+        model.load_state_dict(checkpoint["state_dict"], strict=strict)
+        return model
+
+    def reset_lr(self) -> None:
+        """Reset the learning rate."""
+        self.optimizers().param_groups[0]["lr"] = self.config.optimizer_config["lr"]  # type: ignore
+
+    def freeze_encoder(self) -> None:
+        """Freeze encoder layers for transfer learning."""
+        for param in self.down_convs.parameters():
+            param.requires_grad = False
+
+    def unfreeze_encoder(self) -> None:
+        """Unfreeze encoder layers."""
+        for param in self.down_convs.parameters():
+            param.requires_grad = True
