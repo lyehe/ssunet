@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-from . import constants, dataloader, exceptions, losses, models, modules
+from . import constants, datasets, exceptions, losses, models, modules
 from .configs import configs, load_config
-from .dataloader import BinomDataset, ValidationDataset
+from .datasets import BinomDataset, ValidationDataset
 from .models import Bit2Bit
 
 
@@ -25,7 +25,7 @@ def train_from_config(path: Path):
 __all__ = [
     "configs",
     "constants",
-    "dataloader",
+    "datasets",
     "exceptions",
     "losses",
     "models",

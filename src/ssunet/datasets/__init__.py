@@ -1,16 +1,17 @@
 """Dataloader module."""
 
-from .gap import BernoulliDataset, BinomDataset, SplitParams
-from .paired import N2NDatasetDualVolume, N2NDatasetSkipFrame
+from .bernoulli import BernoulliDataset
+from .binomial import BinomDataset
+from .n2n import N2NSkipFrameDataset
+from .paired import PairedDataset
 from .singlevolume import SingleVolumeDataset
 from .validation import ValidationDataset
 
 __all__ = [
     "BernoulliDataset",
     "BinomDataset",
-    "SplitParams",
-    "N2NDatasetDualVolume",
-    "N2NDatasetSkipFrame",
+    "PairedDataset",
+    "N2NSkipFrameDataset",
     "SingleVolumeDataset",
     "ValidationDataset",
 ]

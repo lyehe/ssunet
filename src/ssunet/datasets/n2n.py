@@ -1,11 +1,11 @@
-"""N2N dataset."""
+"""N2N dataset using even and odd frames as input/target."""
 
 import torch
 
 from .singlevolume import SingleVolumeDataset
 
 
-class N2NDatasetSkipFrame(SingleVolumeDataset):
+class N2NSkipFrameDataset(SingleVolumeDataset):
     """N2N using even and odd frames as input/target."""
 
     def __getitem__(self, index: int) -> list[torch.Tensor]:

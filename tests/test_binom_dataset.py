@@ -4,13 +4,8 @@ import numpy as np
 import pytest
 import torch
 
-from src.ssunet.dataloader import (
-    BernoulliDataset,
-    BinomDataset,
-    DataConfig,
-    SplitParams,
-    SSUnetData,
-)
+from src.ssunet.configs import DataConfig, SplitParams, SSUnetData
+from src.ssunet.datasets import BernoulliDataset, BinomDataset
 from src.ssunet.exceptions import InvalidPValueError, ShapeMismatchError
 
 

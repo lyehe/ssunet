@@ -3,18 +3,19 @@
 import pytest
 import torch
 
-from src.ssunet.dataloader import DataConfig, N2NDatasetDualVolume, N2NDatasetSkipFrame, SSUnetData
+from src.ssunet.configs import DataConfig, SSUnetData
+from src.ssunet.datasets import N2NSkipFrameDataset, PairedDataset
 from src.ssunet.exceptions import MissingReferenceError
 
 
 def test_n2n_dataset_skip_frame():
-    """Test N2NDatasetSkipFrame."""
+    """Test N2NSkipFrameDataset."""
     data_config = DataConfig(xy_size=64, z_size=32)
 
     data = torch.randn(100, 128, 128)
     input_data = SSUnetData(data)
 
-    dataset = N2NDatasetSkipFrame(input_data, data_config)
+    dataset = N2NSkipFrameDataset(input_data, data_config)
     item = dataset[0]
 
     assert len(item) == 2  # [odd_frames, even_frames]
@@ -23,14 +24,14 @@ def test_n2n_dataset_skip_frame():
 
 
 def test_n2n_dataset_skip_frame_with_reference():
-    """Test N2NDatasetSkipFrame with reference data."""
+    """Test N2NSkipFrameDataset with reference data."""
     data_config = DataConfig(xy_size=64, z_size=32)
 
     data = torch.randn(100, 128, 128)
     reference = torch.randn(100, 128, 128)
     input_data = SSUnetData(data, reference)
 
-    dataset = N2NDatasetSkipFrame(input_data, data_config)
+    dataset = N2NSkipFrameDataset(input_data, data_config)
     item = dataset[0]
 
     assert len(item) == 3  # [odd_frames, even_frames, ground_truth]
@@ -40,14 +41,14 @@ def test_n2n_dataset_skip_frame_with_reference():
 
 
 def test_n2n_dataset_dual_volume():
-    """Test N2NDatasetDualVolume."""
+    """Test PairedDataset."""
     data_config = DataConfig(xy_size=64, z_size=32)
 
     data = torch.randn(100, 128, 128)
     reference = torch.randn(100, 128, 128)
     input_data = SSUnetData(data, reference)
 
-    dataset = N2NDatasetDualVolume(input_data, data_config)
+    dataset = PairedDataset(input_data, data_config)
     item = dataset[0]
 
     assert len(item) == 2  # [input, target]
@@ -56,12 +57,12 @@ def test_n2n_dataset_dual_volume():
 
 
 def test_n2n_dataset_dual_volume_missing_reference():
-    """Test N2NDatasetDualVolume with missing reference data."""
+    """Test PairedDataset with missing reference data."""
     data_config = DataConfig(xy_size=64, z_size=32)
 
     data = torch.randn(100, 128, 128)
     input_data = SSUnetData(data)
-    dataset = N2NDatasetDualVolume(input_data, data_config)
+    dataset = PairedDataset(input_data, data_config)
 
     with pytest.raises(MissingReferenceError):
         _ = dataset.reference
@@ -74,17 +75,17 @@ def test_n2n_dataset_skip_frame_data_size():
     data = torch.randn(100, 128, 128)
     input_data = SSUnetData(data)
 
-    dataset = N2NDatasetSkipFrame(input_data, data_config)
+    dataset = N2NSkipFrameDataset(input_data, data_config)
     assert dataset.data_size == 36  # 100 - 32 * 2 + 1
 
 
 def test_n2n_dataset_dual_volume_data_size():
-    """Test N2NDatasetDualVolume data_size property."""
+    """Test PairedDataset data_size property."""
     data_config = DataConfig(xy_size=64, z_size=32)
 
     data = torch.randn(100, 128, 128)
     reference = torch.randn(100, 128, 128)
     input_data = SSUnetData(data, reference)
 
-    dataset = N2NDatasetDualVolume(input_data, data_config)
+    dataset = PairedDataset(input_data, data_config)
     assert dataset.data_size == 69  # 100 - 32 + 1

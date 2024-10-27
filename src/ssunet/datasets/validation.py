@@ -14,11 +14,13 @@ class ValidationDataset(SingleVolumeDataset):
         """Get a validation sample."""
         index = self._index(index)
         input = self.data[index : index + self.z_size]
-        # Combine the input and ground truth data for cropping
+
+        # If secondary data is provided, use it as reference
         if self.secondary_data is not None:
             reference = self.secondary_data[index : index + self.z_size]
             target = _normalize_by_mean(input) if self.config.normalize_target else input
             output = self._crop_list_items([input / (input.mean() + EPSILON), input, reference])
+        # If no secondary data is provided, use the normalized input as target
         else:
             [input] = self._crop_list_items([input])
             target = _normalize_by_mean(input) if self.config.normalize_target else input

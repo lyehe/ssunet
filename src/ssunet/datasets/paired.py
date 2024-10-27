@@ -1,4 +1,4 @@
-"""N2N dataset."""
+"""Paired dataset."""
 
 import numpy as np
 import torch
