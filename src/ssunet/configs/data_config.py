@@ -35,6 +35,21 @@ class DataConfig:
             f"={self.skip_frames}"
         )
 
+    @property
+    def validation_config(self) -> "DataConfig":
+        """Get the validation configuration."""
+        return DataConfig(
+            xy_size=self.xy_size,
+            z_size=self.z_size,
+            virtual_size=0,
+            augments=False,
+            rotation=0,
+            random_crop=False,
+            skip_frames=1,
+            normalize_target=False,
+            note=self.note + "_validation",
+        )
+
 
 @dataclass
 class SSUnetData:

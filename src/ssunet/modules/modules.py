@@ -213,18 +213,68 @@ class LKDownConv3D(UnetBlockConv3D):
 
 
 class PartialDownConv3D(UnetBlockConv3D):
-    """A helper Module that performs 1 convolution and 1 MaxPool.
+    """A helper Module that performs partial convolutions and MaxPool.
 
-    A ReLU activation follows each convolution.
+    Handles mask propagation through the network.
     """
+
+    def __init__(self, *args, **kwargs) -> None:
+        """Initialize PartialDownConv3D."""
+        super().__init__(*args, **kwargs)
+        self.partial = True
 
     def __other__(self):
         """Define other modules."""
-        self.conv = partial333(self.in_channels, self.in_channels, z_conv=self.z_conv)
-        self.MaxPool = nn.MaxPool3d(2)
+        self.conv1 = partial333(self.in_channels, self.out_channels, self.z_conv)
+        self.conv2 = partial333(self.out_channels, self.out_channels, self.z_conv)
+        self.pool = self.down_sample(self.out_channels, self.out_channels)
 
-    def forward(self, input: torch.Tensor, mask_in: torch.Tensor | None) -> _EncoderOut:
+    def forward(self, input: torch.Tensor, mask_in: torch.Tensor | None = None) -> _EncoderOut:
         """Forward pass."""
-        input, mask_out = self.conv(input, mask_in=mask_in)
-        input = self.activation(input)
-        return (self.MaxPool(input), self.MaxPool(mask_out)) if not self.last else (input, mask_out)
+        input, mask = self.conv1(input, mask_in)
+        input = self.activation(self.group_norm(input))
+        input, mask = self.conv2(input, mask)
+        input = self.activation(self.group_norm(input))
+        input = self.dropout(input)
+        before_pool = input
+        before_pool_mask = mask
+        output = self.pool(before_pool)
+        output_mask = self.pool(before_pool_mask)
+        return (output, output_mask) if self.skip_out else (output, None)
+
+
+class PartialUpConv3D(UnetBlockConv3D):
+    """A helper Module that performs partial convolutions and upsampling.
+
+    Handles mask propagation through the network.
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        """Initialize PartialUpConv3D."""
+        super().__init__(*args, **kwargs)
+        self.partial = True
+
+    def __other__(self):
+        """Define other modules."""
+        merge_channels = self.in_channels if self.merge_mode == "concat" else self.out_channels
+        self.conv1 = partial333(merge_channels, self.out_channels, self.z_conv)
+        self.conv2 = partial333(self.out_channels, self.out_channels, self.z_conv)
+
+    def forward(
+        self, input: torch.Tensor, skip: tuple[torch.Tensor, torch.Tensor] | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Forward pass."""
+        input = self.up_sample(input)
+        if skip is not None:
+            skip_feature, skip_mask = skip
+            input = self.merge(input, skip_feature)
+            input_mask = self.merge(torch.ones_like(input), skip_mask)
+        else:
+            input_mask = torch.ones_like(input)
+
+        input, mask = self.conv1(input, input_mask)
+        input = self.activation(self.group_norm(input))
+        input, mask = self.conv2(input, mask)
+        input = self.activation(self.group_norm(input))
+        input = self.dropout(input)
+        return input, mask
