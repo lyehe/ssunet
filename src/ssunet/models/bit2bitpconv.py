@@ -1,6 +1,7 @@
 """SSUnet model with partial convolution."""
 
 import torch
+from torch.utils.checkpoint import checkpoint
 
 from ..constants import EPSILON
 from .bit2bit import Bit2Bit
@@ -54,10 +55,8 @@ class Bit2BitPConv(Bit2Bit):
         for layer_index, down_conv in enumerate(self.down_convs):
             if hasattr(down_conv, "partial"):
                 if self.config.down_checkpointing:
-                    (input_tensor, current_mask), skip_connection = (
-                        torch.utils.checkpoint.checkpoint(
-                            down_conv, input_tensor, current_mask, use_reentrant=False
-                        )
+                    (input_tensor, current_mask), skip_connection = checkpoint(
+                        down_conv, input_tensor, current_mask, use_reentrant=False
                     )
                 else:
                     input_tensor, skip_connection = down_conv(input_tensor, current_mask)
@@ -65,7 +64,7 @@ class Bit2BitPConv(Bit2Bit):
                         current_mask = skip_connection[1]
             else:
                 if self.config.down_checkpointing:
-                    input_tensor, skip_connection = torch.utils.checkpoint.checkpoint(
+                    input_tensor, skip_connection = checkpoint(
                         down_conv, input_tensor, use_reentrant=False
                     )
                 else:
@@ -89,14 +88,14 @@ class Bit2BitPConv(Bit2Bit):
             skip_connection = encoder_outputs.pop()
             if hasattr(up_conv, "partial"):
                 if self.config.up_checkpointing:
-                    input_tensor, _ = torch.utils.checkpoint.checkpoint(
+                    input_tensor, _ = checkpoint(
                         up_conv, input_tensor, skip_connection, use_reentrant=False
                     )
                 else:
                     input_tensor, _ = up_conv(input_tensor, skip_connection)
             else:
                 if self.config.up_checkpointing:
-                    input_tensor = torch.utils.checkpoint.checkpoint(
+                    input_tensor = checkpoint(
                         up_conv, input_tensor, skip_connection, use_reentrant=False
                     )
                 else:
