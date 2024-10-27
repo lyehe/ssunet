@@ -11,7 +11,7 @@ def test_ssunet_initialization():
     model_config = ModelConfig(channels=1, depth=5, start_filts=32, up_mode="transpose")
     model = Bit2Bit(model_config)
     assert isinstance(model, Bit2Bit)
-    assert next(model.parameters()).device.type == "cpu"  # Add this line to verify CPU
+    assert next(model.parameters()).device.type == "cpu"
 
 
 def test_ssunet_forward_pass():
@@ -22,7 +22,7 @@ def test_ssunet_forward_pass():
     input_tensor = torch.randn(1, 1, 32, 128, 128, device="cpu")
     output = model(input_tensor)
 
-    assert output.device.type == "cpu"  # Add this line
+    assert output.device.type == "cpu"
     assert output.shape == input_tensor.shape
 
 
@@ -43,5 +43,5 @@ def test_ssunet_different_input_sizes():
     for size in input_sizes:
         input_tensor = torch.randn(*size, device="cpu")
         output = model(input_tensor)
-        assert output.device.type == "cpu"  # Add this line
+        assert output.device.type == "cpu"
         assert output.shape == input_tensor.shape

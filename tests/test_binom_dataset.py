@@ -24,7 +24,7 @@ def test_binom_dataset_initialization():
 
 def test_binom_dataset_getitem():
     """Test the __getitem__ method of BinomDataset."""
-    data_config = DataConfig(xy_size=64, z_size=32)  # Reduced xy_size
+    data_config = DataConfig(xy_size=64, z_size=32)
     split_params = SplitParams(method="signal", min_p=0.1, max_p=0.9)
 
     # Create a dummy data tensor
@@ -35,8 +35,8 @@ def test_binom_dataset_getitem():
     item = dataset[0]
 
     assert len(item) == 2  # [target, noise]
-    assert item[0].shape == (1, 32, 64, 64)  # Updated shape
-    assert item[1].shape == (1, 32, 64, 64)  # Updated shape
+    assert item[0].shape == (1, 32, 64, 64)
+    assert item[1].shape == (1, 32, 64, 64)
 
 
 def test_binom_dataset_invalid_p_value():
@@ -73,7 +73,7 @@ def test_binom_dataset_data_size():
 
 def test_binom_dataset_with_reference():
     """Test BinomDataset with reference data."""
-    data_config = DataConfig(xy_size=64, z_size=32)  # Reduced xy_size
+    data_config = DataConfig(xy_size=64, z_size=32)
     split_params = SplitParams(method="signal", min_p=0.1, max_p=0.9)
 
     # Create dummy data and reference tensors
@@ -85,9 +85,9 @@ def test_binom_dataset_with_reference():
     item = dataset[0]
 
     assert len(item) == 3  # [target, noise, reference]
-    assert item[0].shape == (1, 32, 64, 64)  # Updated shape
-    assert item[1].shape == (1, 32, 64, 64)  # Updated shape
-    assert item[2].shape == (1, 32, 64, 64)  # Updated shape
+    assert item[0].shape == (1, 32, 64, 64)
+    assert item[1].shape == (1, 32, 64, 64)
+    assert item[2].shape == (1, 32, 64, 64)
 
 
 def test_binom_dataset_shape_mismatch():
@@ -97,7 +97,7 @@ def test_binom_dataset_shape_mismatch():
 
     # Create dummy data and reference tensors with mismatched shapes
     data = torch.randn(100, 128, 128)
-    reference = torch.randn(90, 128, 128)  # Different number of slices
+    reference = torch.randn(90, 128, 128)
 
     with pytest.raises(ShapeMismatchError):
         SSUnetData(data, reference)
@@ -105,7 +105,7 @@ def test_binom_dataset_shape_mismatch():
 
 def test_binom_dataset_with_numpy_input():
     """Test BinomDataset with numpy array input."""
-    data_config = DataConfig(xy_size=64, z_size=32)  # Reduced xy_size
+    data_config = DataConfig(xy_size=64, z_size=32)
     split_params = SplitParams(method="signal", min_p=0.1, max_p=0.9)
 
     # Create dummy numpy data
@@ -116,8 +116,8 @@ def test_binom_dataset_with_numpy_input():
     item = dataset[0]
 
     assert len(item) == 2  # [target, noise]
-    assert item[0].shape == (1, 32, 64, 64)  # Updated shape
-    assert item[1].shape == (1, 32, 64, 64)  # Updated shape
+    assert item[0].shape == (1, 32, 64, 64)
+    assert item[1].shape == (1, 32, 64, 64)
     assert isinstance(item[0], torch.Tensor)
     assert isinstance(item[1], torch.Tensor)
 

@@ -21,8 +21,8 @@ def test_n2n_dataset_skip_frame():
     assert len(item) == 2  # [odd_frames, even_frames]
     assert item[0].shape == (1, 32, 64, 64)
     assert item[1].shape == (1, 32, 64, 64)
-    assert item[0].device.type == "cpu"  # Add this line
-    assert item[1].device.type == "cpu"  # Add this line
+    assert item[0].device.type == "cpu"
+    assert item[1].device.type == "cpu"
 
 
 def test_n2n_dataset_skip_frame_with_reference():

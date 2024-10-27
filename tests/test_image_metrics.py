@@ -35,7 +35,7 @@ def test_image_metrics_to_tensor(image_metrics):
     assert tensor.device.type == "cpu"
 
 
-def test_image_metrics_normalize(image_metrics):
+def test_image_metrics_normalize():
     """Test the normalize method of ImageMetrics."""
     tensor = torch.rand(32, 128, 128)
     normalized = ImageMetrics.normalize(tensor)
