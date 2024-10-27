@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "ssunet"
 version = "0.1.0"
-description = "A Self-Supervised U-Net for denoising binary images."
+description = "Parametric self-Supervised U-Net for denoising binary images."
 authors = [{ name = "Yehe Liu", email = "yehe@case.edu" }]
 license = { text = "MIT License" }
 readme = "README.md"
