@@ -20,85 +20,85 @@ PATH:
 
 # Data configurations
 DATA:
-  xy_size: 128 # Size of the sampled image in the xy plane, 128 is a good choice
+  xy_size: 256 # Size of the sampled image in the xy plane, 128 is a good choice
   z_size: 32 # Size of the sampled image in the z direction, 32 is a good choice
   virtual_size: 1000 # Size/length of the virtual image in each batch, use 0 for the entire dataset
   augments: False # Whether to apply data augmentation, False is a good choice for natural images
   rotation: 0 # Rotation of the sampled image, can cause artifacts if not 0
   random_crop: True # Whether to apply random cropping, True is a good choice
-  skip_frames: 1 # Number of frames to skip between each sampled data stack
+  skip_frames: 1 # Number of frames to skip between each sampled data stack, 1 is no skipping
   normalize_target: True # Whether to normalize the target, True is a good choice
   note: "test" # Note for the data
 
 # Split configurations
 SPLIT:
-  method: "signal"
-  min_p: 0.000001
-  max_p: 0.999999
-  p_list: Null
-  normalize_target: True
-  seed: Null
+  method: "signal" # Options: "signal" | "db" | "fixed" | "list"
+  min_p: 0.000001 # Minimum p level, db or the fixed p
+  max_p: 0.999999 # Maximum p level
+  p_list: Null # List of p levels if method is "list"
+  normalize_target: True # Whether to normalize the target
+  seed: Null # Seed for the random number generator
 
 # Model configurations
 MODEL:
-  channels: 1
-  depth: 5
-  start_filts: 32
-  depth_scale: 2
-  depth_scale_stop: 10
-  z_conv_stage: 3
-  group_norm: 8
-  skip_depth: 0
-  dropout_p: 0.0
-  scale_factor: 10.0
-  sin_encoding: False
-  signal_levels: 10
-  masked: True
-  down_checkpointing: true
-  up_checkpointing: False
-  loss_function: "photon"
-  up_mode: "pixelshuffle"
-  merge_mode: "concat"
-  down_mode: "maxpool"
-  activation: "gelu"
-  block_type: "tri"
-  note: ""
-  optimizer_config:
+  channels: 1 # Number of channels in the input data
+  depth: 5 # The depth of the unet (number of down/up blocks)
+  start_filts: 32 # The number of filters at the first layer
+  depth_scale: 2 # The factor by which to scale the number of filters at each depth
+  depth_scale_stop: 10 # The depth at which to stop scaling the number of filters
+  z_conv_stage: 3 # The depth of the z-convolutional layers, the rest are 2D convolutions
+  group_norm: 8 # Number of groups for the group normalization
+  skip_depth: 0 # The start depth of the skip connections
+  dropout_p: 0.0 # Dropout probability
+  scale_factor: 10.0 # Scale factor for the signal levels for sinusoidal encoding
+  sin_encoding: False # Whether to use sinusoidal encoding
+  signal_levels: 10 # Number of signal levels in the sinusoidal encoding
+  masked: True # Whether to use masked convolutions, true for bit2bit, false for other methods
+  down_checkpointing: true # Whether to use checkpointing for the down convolutions, trade-off between memory and speed
+  up_checkpointing: False # Whether to use checkpointing for the up convolutions, trade-off between memory and speed
+  loss_function: "photon" # Options: "mse" (Mean Squared Error), "l1" (L1 Loss), "photon" (Photon Loss), "photon_2d" (2D Photon Loss)
+  up_mode: "pixelshuffle" # Options: "upsample", "transpose", "pixelshuffle"
+  merge_mode: "concat" # Options: "add", "concat"
+  down_mode: "maxpool" # Options: "maxpool", "avgpool", "conv", "unshuffle"
+  activation: "gelu" # Options: "relu", "leakyrelu", "prelu", "gelu", "silu", "tanh", "sigmoid", "softmax", "logsoftmax"
+  block_type: "tri" # Options: "tri" (best quality), "dual", "LK"
+  note: "" # Additional note for the model configuration
+  optimizer_config: # Optimizer configuration
     name: "adamw" # "adam" | "sgd" | "adamw"
-    lr: 0.0002
+    lr: 0.00032
     mode: "min" # "min" | "max"
     factor: 0.5
-    patience: 5
+    patience: 10
 
 # Loader configurations
 LOADER:
-  batch_size: 12
-  shuffle: False
-  pin_memory: False
-  drop_last: True
-  num_workers: 6
-  persistent_workers: True
+  batch_size: 4 # Number of samples in each batch
+  shuffle: False # Whether to shuffle the data
+  pin_memory: False # True can lead to errors
+  drop_last: True # Drop the last batch if it is not full
+  num_workers: 6 # Number of workers for the dataloader, set to 0 for no parallel processing to prevent errors
+  persistent_workers: True # Whether to keep the workers alive between epochs, set to false to prevent errors
 
 # Trainer configurations
 TRAIN:
-  default_root_dir: "./models"
-  accelerator: "cuda"
-  gradient_clip_val: 1
-  precision: "32"
-  max_epochs: 150
-  device_numbers: 0
+  default_root_dir: "./models" # Directory to save the model checkpoints
+  accelerator: "cuda" # Options: "cpu" | "cuda", good luck on cpu
+  gradient_clip_val: 1 # Gradient clipping value
+  precision: "32" # Options: "64" | "32" | "16" | "bf16" | "mixed"
+  max_epochs: 150 # Maximum number of epochs
+  device_numbers: 0 # Device numbers, 0 is the first GPU
 
   callbacks_model_checkpoint: True
-  mc_save_weights_only: True
-  mc_mode: "min"
-  mc_monitor: "val_loss"
-  mc_save_top_k: 2
+  mc_save_weights_only: True # Whether to save only the model weights
+  mc_mode: "min" # Options: "min" | "max", usually min
+  mc_monitor: "val_loss" # Options: "val_loss" | "train_loss"
+  mc_save_top_k: 2 # Number of checkpoints to save
 
   callbacks_learning_rate_monitor: True
-  lrm_logging_interval: "epoch"
+  lrm_logging_interval: "epoch" # Options: "step" | "epoch"
 
   callbacks_early_stopping: False
-  es_monitor: "val_loss"
+  es_monitor: "val_loss" # Options: "val_loss" | "train_loss"
   es_patience: 25
 
   callbacks_device_stats_monitor: False

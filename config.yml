@@ -26,7 +26,7 @@ DATA:
   augments: False # Whether to apply data augmentation, False is a good choice for natural images
   rotation: 0 # Rotation of the sampled image, can cause artifacts if not 0
   random_crop: True # Whether to apply random cropping, True is a good choice
-  skip_frames: 0 # Number of frames to skip between each sampled data stack
+  skip_frames: 1 # Number of frames to skip between each sampled data stack, 1 is no skipping
   normalize_target: True # Whether to normalize the target, True is a good choice
   note: "test" # Note for the data
 
