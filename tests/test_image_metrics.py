@@ -8,8 +8,8 @@ from src.ssunet.metrics import ImageMetrics
 @pytest.fixture
 def image_metrics():
     """Create and return an ImageMetrics instance for testing."""
-    image = torch.rand(128, 128)  # 2D grayscale image
-    target = torch.rand(128, 128)
+    image = torch.rand(128, 128, device="cpu")
+    target = torch.rand(128, 128, device="cpu")
     return ImageMetrics(image, target)
 
 
@@ -25,12 +25,14 @@ def test_image_metrics_to_tensor(image_metrics):
     tensor = image_metrics._to_tensor(np_array)
     assert isinstance(tensor, torch.Tensor)
     assert tensor.shape == (32, 128, 128)
+    assert tensor.device.type == "cpu"
 
     # Test with torch tensor
-    torch_tensor = torch.rand(32, 128, 128)
+    torch_tensor = torch.rand(32, 128, 128, device="cpu")
     tensor = image_metrics._to_tensor(torch_tensor)
     assert isinstance(tensor, torch.Tensor)
     assert tensor.shape == (32, 128, 128)
+    assert tensor.device.type == "cpu"
 
 
 def test_image_metrics_normalize(image_metrics):

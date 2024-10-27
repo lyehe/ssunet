@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest, windows-latest
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: ["3.10"]
@@ -24,6 +24,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install tox tox-gh-actions
       - name: Test with tox
+        env:
+          CUDA_VISIBLE_DEVICES: ""
+          FORCE_CPU: "1"
         run: tox
 
   lint:
