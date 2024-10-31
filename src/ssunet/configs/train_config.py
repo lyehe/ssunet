@@ -1,5 +1,7 @@
 """Training script."""
 
+import signal
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,11 +12,14 @@ import torch
 import torch.utils.data as dt
 from lightning.pytorch.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import (
+    Callback,
     DeviceStatsMonitor,
     EarlyStopping,
     LearningRateMonitor,
     ModelCheckpoint,
 )
+
+from ..constants import LOGGER
 
 
 @dataclass
@@ -84,6 +89,8 @@ class TrainConfig:
     callbacks_early_stopping: bool = False
     es_monitor: str = "val_loss"
     es_patience: int = 25
+    callbacks_save_on_train_end: bool = False
+    callbacks_handle_interrupt: bool = True
 
     # device stats monitor
     callbacks_device_stats_monitor: bool = False
@@ -166,7 +173,50 @@ class TrainConfig:
             callbacks.append(self.early_stopping)
         if self.callbacks_device_stats_monitor:
             callbacks.append(DeviceStatsMonitor())
+        if self.callbacks_save_on_train_end:
+            callbacks.append(self.model_save_on_train_end)
+        if self.callbacks_handle_interrupt:
+            callbacks.append(self.interrupt_callback)
         return callbacks
+
+    @property
+    def model_save_on_train_end(self) -> Callback:
+        """Create a callback to save model on training end."""
+
+        class SaveOnTrainEnd(Callback):
+            def on_train_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
+                trainer.save_checkpoint(Path(trainer.default_root_dir) / "final_model.ckpt")
+                LOGGER.info(
+                    "Model saved as %s.", Path(trainer.default_root_dir) / "final_model.ckpt"
+                )
+
+        return SaveOnTrainEnd()
+
+    @property
+    def interrupt_callback(self) -> Callback:
+        """Create a callback to handle training interruption."""
+
+        class HandleInterrupt(Callback):
+            def setup(
+                self, trainer: pl.Trainer, pl_module: pl.LightningModule, stage: str | None = None
+            ) -> None:
+                """Set up custom interrupt handler."""
+
+                def handle_interrupt(signum, frame):
+                    """Custom interrupt handler."""
+                    save_path = Path(trainer.default_root_dir) / "interrupted_model.ckpt"
+                    try:
+                        trainer.save_checkpoint(save_path)
+                        LOGGER.info("Training interrupted. Model saved to %s", save_path)
+                    except FileNotFoundError as err:
+                        LOGGER.error("Failed to save model on interrupt: %s", str(err))
+                    finally:
+                        sys.exit(0)
+
+                # Register our custom handler
+                signal.signal(signal.SIGINT, handle_interrupt)
+
+        return HandleInterrupt()
 
     @property
     def to_dict(self) -> dict:

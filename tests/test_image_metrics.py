@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import torch
 
-from src.ssunet.metrics import ImageMetrics
+from tools.metrics import ImageMetrics
 
 
 @pytest.fixture

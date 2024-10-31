@@ -22,6 +22,7 @@ class ModelConfig:
     sin_encoding: bool = True
     signal_levels: int = 10
     masked: bool = True
+    partial_conv: bool = True
     down_checkpointing: bool = False
     up_checkpointing: bool = False
     loss_function: str = "photon"

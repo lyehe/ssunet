@@ -1,5 +1,7 @@
 """Utility functions."""
 
+import logging
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -40,3 +42,32 @@ def _load_yaml(config_path: Path | str) -> dict:
 def _normalize_by_mean(input: torch.Tensor) -> torch.Tensor:
     """Normalize the input data by the mean."""
     return input / (input.mean() + EPSILON)
+
+
+def setup_logger(
+    level: int | str = LOGGER.level,
+    log_file: Path | None = None,
+    log_format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    date_format: str = "%Y-%m-%d %H:%M:%S",
+) -> None:
+    """Set up logger with either console or file handler.
+
+    :param level: Logging level
+    :param log_file: Optional path to log file. If None, logs to console
+    :param log_format: Log message format
+    :param date_format: Date format in log messages
+    """
+    LOGGER.setLevel(level)
+    LOGGER.handlers.clear()
+    formatter = logging.Formatter(log_format, date_format)
+
+    if log_file is None:
+        handler = logging.StreamHandler(sys.stdout)
+    else:
+        log_file = Path(log_file)
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        handler = logging.FileHandler(log_file)
+
+    handler.setLevel(level)
+    handler.setFormatter(formatter)
+    LOGGER.addHandler(handler)

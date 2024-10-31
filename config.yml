@@ -50,6 +50,7 @@ MODEL:
   group_norm: 8 # Number of groups for the group normalization
   skip_depth: 0 # The start depth of the skip connections
   dropout_p: 0.0 # Dropout probability
+  partial_conv: False # Whether to use partial convolutions
   scale_factor: 10.0 # Scale factor for the signal levels for sinusoidal encoding
   sin_encoding: False # Whether to use sinusoidal encoding
   signal_levels: 10 # Number of signal levels in the sinusoidal encoding
@@ -65,16 +66,16 @@ MODEL:
   note: "" # Additional note for the model configuration
   optimizer_config: # Optimizer configuration
     name: "adamw" # "adam" | "sgd" | "adamw"
-    lr: 0.00032
+    lr: 0.0002
     mode: "min" # "min" | "max"
     factor: 0.5
-    patience: 10
+    patience: 5
 
 # Loader configurations
 LOADER:
-  batch_size: 3 # Number of samples in each batch
+  batch_size: 4 # Number of samples in each batch
   shuffle: False # Whether to shuffle the data
-  pin_memory: False # True is faster but can lead to errors
+  pin_memory: True # True is faster but can lead to errors
   drop_last: True # Drop the last batch if it is not full
   num_workers: 6 # Number of workers for the dataloader, set to 0 for no parallel processing to prevent errors
   persistent_workers: True # Whether to keep the workers alive between epochs, set to false to prevent errors
@@ -90,6 +91,8 @@ TRAIN:
   device_numbers: 0 # Device numbers, 0 is the first GPU
 
   callbacks_model_checkpoint: True
+  callbacks_save_on_train_end: False
+  callbacks_handle_interrupt: True
   mc_save_weights_only: True # Whether to save only the model weights
   mc_mode: "min" # Options: "min" | "max", usually min
   mc_monitor: "val_loss" # Options: "val_loss" | "train_loss"

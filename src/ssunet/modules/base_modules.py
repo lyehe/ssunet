@@ -5,7 +5,7 @@ from torch import nn
 
 from ..constants import LOGGER
 from ..exceptions import ShapeMismatchError
-from .partialconv import PartialConv3d
+from .partialconv import PartialConv2d, PartialConv3d
 from .pixelshuffle import (
     PixelShuffle2d,
     PixelShuffle3d,
@@ -294,14 +294,14 @@ def partial333(
     in_channels: int,
     out_channels: int,
     z_conv: bool,
-    multi_channel: bool = False,
+    multi_channel: bool = True,  # Changed default to True
 ) -> PartialConv3d:
     """Helper function to create 3x3x3 partial convolutions with padding.
 
     :param in_channels: number of input channels
     :param out_channels: number of output channels
     :param z_conv: True = 3D convolution & False = 2D convolution
-    :param multi_channel: if True, the mask will be applied to all channels, defaults to False
+    :param multi_channel: if True, the mask will be applied to all channels, defaults to True
 
     :return: 3x3x3 partial convolution
     """
@@ -311,6 +311,30 @@ def partial333(
         in_channels,
         out_channels,
         kernel,
+        padding=padding,
+        multi_channel=multi_channel,
+    )
+
+
+def partial33(
+    in_channels: int,
+    out_channels: int,
+    multi_channel: bool = True,  # New helper for 2D with multi_channel=True
+) -> PartialConv2d:
+    """Helper function to create 3x3 partial convolutions with padding.
+
+    :param in_channels: number of input channels
+    :param out_channels: number of output channels
+    :param multi_channel: if True, the mask will be applied to all channels, defaults to True
+
+    :return: 3x3 partial convolution
+    """
+    padding = (1, 1)
+    kernel = (3, 3)
+    return PartialConv2d(
+        in_channels,
+        out_channels,
+        kernel_size=kernel,
         padding=padding,
         multi_channel=multi_channel,
     )

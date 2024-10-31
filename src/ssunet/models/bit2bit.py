@@ -321,6 +321,10 @@ class Bit2Bit(pl.LightningModule):
         """Log the test step. Can be extended for logging metrics."""
         self.log("test_loss", loss)
 
+    def on_train_end(self) -> None:
+        """Save the model at the end of training."""
+        self.trainer.save_checkpoint(self.trainer.default_root_dir)
+
     @classmethod
     def load_from_checkpoint(
         cls,

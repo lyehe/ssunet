@@ -15,7 +15,7 @@ class PartialConv3d(nn.Conv3d):
     """
 
     def __init__(
-        self, *args, multi_channel: bool = False, return_mask: bool = False, **kwargs
+        self, *args, multi_channel: bool = True, return_mask: bool = False, **kwargs
     ) -> None:
         """Initialize PartialConv3d."""
         super().__init__(*args, **kwargs)
@@ -43,15 +43,14 @@ class PartialConv3d(nn.Conv3d):
             with torch.no_grad():
                 self.weight_maskUpdater = self.weight_maskUpdater.to(input)
 
-                # if mask is not provided, create a mask
                 mask = (
-                    (
-                        torch.ones(input.data.shape).to(input)
+                    mask_in
+                    if mask_in is not None
+                    else torch.ones(
+                        input.data.shape
                         if self.multi_channel
-                        else torch.ones(1, 1, *input.data.shape[2:]).to(input)
-                    )
-                    if mask_in is None
-                    else mask_in
+                        else (input.shape[0], 1, *input.shape[2:])
+                    ).to(input)
                 )
 
                 self.update_mask = tnf.conv3d(
@@ -87,13 +86,12 @@ class PartialConv2d(nn.Conv2d):
     """
 
     def __init__(
-        self, *args, multi_channel: bool = False, return_mask: bool = False, **kwargs
+        self, *args, multi_channel: bool = True, return_mask: bool = False, **kwargs
     ) -> None:
         """Initialize PartialConv2d."""
+        super().__init__(*args, **kwargs)
         self.multi_channel = multi_channel
         self.return_mask = return_mask
-
-        super().__init__(*args, **kwargs)
 
         self.weight_maskUpdater = (
             torch.ones(self.out_channels, self.in_channels, *self.kernel_size)
@@ -118,14 +116,15 @@ class PartialConv2d(nn.Conv2d):
                 if self.weight_maskUpdater.type() != input.type():
                     self.weight_maskUpdater = self.weight_maskUpdater.to(input)
 
+                # if mask is not provided, create a mask
                 mask = (
-                    (
+                    mask_in
+                    if mask_in is not None
+                    else (
                         torch.ones(input.data.shape).to(input)
                         if self.multi_channel
-                        else torch.ones(1, 1, *input.data.shape[2:]).to(input)
+                        else torch.ones((input.shape[0], 1, *input.shape[2:])).to(input)
                     )
-                    if mask_in is None
-                    else mask_in
                 )
 
                 self.update_mask = tnf.conv2d(

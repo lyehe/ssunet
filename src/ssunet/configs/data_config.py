@@ -75,6 +75,21 @@ class SSUnetData:
             if data_shape != secondary_data_shape:
                 raise ShapeMismatchError()
 
+    @property
+    def shape(self) -> tuple:
+        """Get the shape of the data."""
+        return self.primary_data.shape
+
+    @property
+    def data(self) -> np.ndarray | torch.Tensor:
+        """Alias for the primary data."""
+        return self.primary_data
+
+    @property
+    def reference(self) -> np.ndarray | torch.Tensor | None:
+        """Alias for the secondary data."""
+        return self.secondary_data
+
     @staticmethod
     def _apply_binning(input: np.ndarray | torch.Tensor, bin: int, mode: str) -> torch.Tensor:
         """Apply binning to the input data."""

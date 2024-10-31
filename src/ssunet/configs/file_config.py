@@ -222,13 +222,23 @@ class PathConfig:
         """Load SSUnetData and return a SSUnetData object."""
         data = self.load_data(method)
         reference = self.load_ground_truth(method)
-        return SSUnetData(primary_data=data, secondary_data=reference)
+        return SSUnetData(primary_data=data, secondary_data=self._normalize_ground_truth(reference))
 
     def load_reference_and_ground_truth(self, method: Callable | None = None) -> SSUnetData:
         """Load SSUnetData and return a SSUnetData object."""
         reference = self.load_reference(method)
         ground_truth = self.load_ground_truth(method)
-        return SSUnetData(primary_data=reference, secondary_data=ground_truth)
+        return SSUnetData(
+            primary_data=reference, secondary_data=self._normalize_ground_truth(ground_truth)
+        )
+
+    def _normalize_ground_truth(self, ground_truth: np.ndarray) -> np.ndarray:
+        """Normalize the ground truth to be between 0 and 1."""
+        gt_max = np.max(ground_truth)
+        if gt_max < 255 and gt_max > 1:
+            return ground_truth.astype(np.float32) / 255
+        elif gt_max > 255:
+            return ground_truth.astype(np.float32) / 65535
 
 
 @dataclass

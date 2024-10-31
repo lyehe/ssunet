@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from shutil import copy
 
+import pytorch_lightning as pl
 import yaml
 
 from ..constants import DEFAULT_CONFIG_PATH
@@ -50,6 +51,11 @@ class MasterConfig:
         return name
 
     @property
+    def data_path(self) -> Path:
+        """Get the path to the data."""
+        return self.path_config.data_file
+
+    @property
     def model_path(self) -> Path:
         """Get the path to the model."""
         return self.train_config.default_root_dir
@@ -68,6 +74,11 @@ class MasterConfig:
     def config_path(self) -> Path:
         """Get the path to the config."""
         return self.train_config.default_root_dir / "config.yml"
+
+    @property
+    def trainer(self) -> pl.Trainer:
+        """Alias for the trainer."""
+        return self.train_config.trainer
 
 
 def load_config(config_path: str | Path = DEFAULT_CONFIG_PATH) -> MasterConfig:

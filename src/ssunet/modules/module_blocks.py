@@ -6,7 +6,7 @@ from functools import partial
 import torch
 from torch import nn
 
-from .modulets import (
+from .base_modules import (
     activation_function,
     conv111,
     conv333,
@@ -33,6 +33,7 @@ class UnetBlockConv3D(nn.Module):
         batch_norm: bool = False,
         group_norm: int = 0,
         dropout_p: float = 0.0,
+        partial_conv: bool = False,
         last: bool = False,
         down_mode: str = "maxpool",
         up_mode: str = "transpose",
@@ -62,10 +63,13 @@ class UnetBlockConv3D(nn.Module):
         self.z_conv = z_conv
         self.skip_out = skip_out
         self.dropout_p = dropout_p
+        self.partial_conv = partial_conv
         self.last = last
         self.up_mode = up_mode
         self.merge_mode = merge_mode
         self.kwargs = kwargs
+
+        self.conv3d = partial333 if partial_conv else conv333
 
         self.batch_norm = nn.BatchNorm3d(out_channels) if batch_norm else nn.Identity()
         n = group_norm > 0 and out_channels % group_norm == 0
@@ -73,7 +77,7 @@ class UnetBlockConv3D(nn.Module):
         self.dropout = nn.Dropout3d(p=dropout_p) if dropout_p > 0.01 else nn.Identity()
         self.merge = partial(merge, merge_mode=merge_mode)
         self.merge_conv = partial(merge_conv, z_conv=z_conv, mode=merge_mode)
-        self.conv333 = partial(conv333, z_conv=z_conv)
+        self.conv333 = partial(self.conv3d, z_conv=z_conv)
         self.down_sample = partial(pool, down_mode=down_mode, z_conv=z_conv, last=last)
         self.up_sample = upconv222(in_channels, out_channels, z_conv, up_mode=up_mode)
         self.activation = activation_function(activation)
@@ -210,71 +214,3 @@ class LKDownConv3D(UnetBlockConv3D):
         before_pool = self.dropout(input)
         output = self.pool(before_pool)
         return (output, before_pool) if self.skip_out else (output, None)
-
-
-class PartialDownConv3D(UnetBlockConv3D):
-    """A helper Module that performs partial convolutions and MaxPool.
-
-    Handles mask propagation through the network.
-    """
-
-    def __init__(self, *args, **kwargs) -> None:
-        """Initialize PartialDownConv3D."""
-        super().__init__(*args, **kwargs)
-        self.partial = True
-
-    def __other__(self):
-        """Define other modules."""
-        self.conv1 = partial333(self.in_channels, self.out_channels, self.z_conv)
-        self.conv2 = partial333(self.out_channels, self.out_channels, self.z_conv)
-        self.pool = self.down_sample(self.out_channels, self.out_channels)
-
-    def forward(self, input: torch.Tensor, mask_in: torch.Tensor | None = None) -> _EncoderOut:
-        """Forward pass."""
-        input, mask = self.conv1(input, mask_in)
-        input = self.activation(self.group_norm(input))
-        input, mask = self.conv2(input, mask)
-        input = self.activation(self.group_norm(input))
-        input = self.dropout(input)
-        before_pool = input
-        before_pool_mask = mask
-        output = self.pool(before_pool)
-        output_mask = self.pool(before_pool_mask)
-        return (output, output_mask) if self.skip_out else (output, None)
-
-
-class PartialUpConv3D(UnetBlockConv3D):
-    """A helper Module that performs partial convolutions and upsampling.
-
-    Handles mask propagation through the network.
-    """
-
-    def __init__(self, *args, **kwargs) -> None:
-        """Initialize PartialUpConv3D."""
-        super().__init__(*args, **kwargs)
-        self.partial = True
-
-    def __other__(self):
-        """Define other modules."""
-        merge_channels = self.in_channels if self.merge_mode == "concat" else self.out_channels
-        self.conv1 = partial333(merge_channels, self.out_channels, self.z_conv)
-        self.conv2 = partial333(self.out_channels, self.out_channels, self.z_conv)
-
-    def forward(
-        self, input: torch.Tensor, skip: tuple[torch.Tensor, torch.Tensor] | None = None
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Forward pass."""
-        input = self.up_sample(input)
-        if skip is not None:
-            skip_feature, skip_mask = skip
-            input = self.merge(input, skip_feature)
-            input_mask = self.merge(torch.ones_like(input), skip_mask)
-        else:
-            input_mask = torch.ones_like(input)
-
-        input, mask = self.conv1(input, input_mask)
-        input = self.activation(self.group_norm(input))
-        input, mask = self.conv2(input, mask)
-        input = self.activation(self.group_norm(input))
-        input = self.dropout(input)
-        return input, mask
