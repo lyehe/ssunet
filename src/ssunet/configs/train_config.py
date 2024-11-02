@@ -219,23 +219,6 @@ class TrainConfig:
         return HandleInterrupt()
 
     @property
-    def to_dict(self) -> dict:
-        """Convert the dataclass to a dictionary."""
-        return {
-            "default_root_dir": self.default_root_dir,
-            "accelerator": self.accelerator,
-            "gradient_clip_val": self.gradient_clip_val,
-            "precision": self.precision,
-            "max_epochs": self.max_epochs,
-            "devices": self.devices,
-            "callbacks": self.callbacks,
-            "logger": self.logger,
-            "profiler": self.profiler,
-            "limit_val_batches": self.limit_val_batches,
-            "log_every_n_steps": self.log_every_n_steps,
-        }
-
-    @property
     def trainer(self) -> pl.Trainer:
         """Create a trainer."""
         return pl.Trainer(**self.to_dict)

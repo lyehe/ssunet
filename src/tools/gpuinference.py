@@ -233,8 +233,8 @@ def grid_inference(
     device: torch.device,
     split: int | tuple = 3,
     patch: int = 512,
-    min_overlap: int = 8,
-    initial_patch_depth: int = 16,
+    min_overlap: int = 16,
+    initial_patch_depth: int = 32,
 ) -> np.ndarray:
     """Run grid inference on GPU."""
     dz, dx, dy = data.shape

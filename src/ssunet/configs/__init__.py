@@ -1,6 +1,6 @@
 """Configurations for the project."""
 
-from .configs import MasterConfig, copy_config, load_config, save_config
+from .configs import MasterConfig, copy_config, load_config
 from .data_config import DataConfig, SSUnetData
 from .file_config import PathConfig, SplitParams
 from .model_config import ModelConfig
@@ -16,6 +16,5 @@ __all__ = [
     "PathConfig",
     "SplitParams",
     "load_config",
-    "save_config",
     "copy_config",
 ]

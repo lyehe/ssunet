@@ -50,6 +50,10 @@ class DataConfig:
             note=self.note + "_validation",
         )
 
+    @property
+    def as_dict(self) -> dict:
+        """Convert the dataclass to a dictionary."""
+        return {k: v for k, v in self.__dict__.items() if not k.startswith("_")}
 
 @dataclass
 class SSUnetData:

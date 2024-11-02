@@ -325,37 +325,6 @@ class Bit2Bit(pl.LightningModule):
         """Save the model at the end of training."""
         self.trainer.save_checkpoint(self.trainer.default_root_dir)
 
-    @classmethod
-    def load_from_checkpoint(
-        cls,
-        checkpoint_path: str | Path,
-        config: str | Path | ModelConfig,
-        strict: bool = True,
-        **kwargs,
-    ) -> "Bit2Bit":
-        """Load model from checkpoint.
-
-        :param checkpoint_path: path to the checkpoint file
-        :param config: model configuration
-        :param strict: whether to strictly enforce that the keys in state_dict match
-        :param kwargs: additional arguments passed to the model
-        :return: loaded model
-        """
-        if not Path(checkpoint_path).exists():
-            raise FileNotFoundError(checkpoint_path)
-        checkpoint = torch.load(checkpoint_path)
-
-        if isinstance(config, str):
-            config = Path(config)
-        if not config.exists():
-            raise FileNotFoundError(config)
-        if isinstance(config, Path):
-            config = load_config(config).model_config
-
-        model = cls(config=config, **kwargs)
-        model.load_state_dict(checkpoint["state_dict"], strict=strict)
-        return model
-
     def reset_lr(self) -> None:
         """Reset the learning rate."""
         self.optimizers().param_groups[0]["lr"] = self.config.optimizer_config["lr"]  # type: ignore
