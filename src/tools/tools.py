@@ -10,15 +10,26 @@ import yaml
 from .metrics import StackMetrics, StackMetricsGroups
 
 
-def show_image(image: np.ndarray | torch.Tensor):
+def show_image_sum(image: np.ndarray | torch.Tensor):
     """Imshow for Tensor."""
     image_sum = image.reshape((-1, image.shape[-2], image.shape[-1]))
     if isinstance(image_sum, torch.Tensor):
         image_sum = torch.sum(image_sum, dim=0).detach().cpu().numpy()
     else:
         image_sum = np.sum(image_sum, axis=0)
+    plt.figure(figsize=(15, 15))
     plt.imshow(image_sum, cmap="gray")
     plt.title(f"Image shape: {image.shape}")
+    plt.axis("off")
+    plt.show()
+
+
+def imshow(image: np.ndarray):
+    """Simple imshow for numpy array."""
+    image = image - np.min(image)
+    image = image / np.max(image)
+    plt.figure(figsize=(15, 15))
+    plt.imshow(image, cmap="gray")
     plt.axis("off")
     plt.show()
 

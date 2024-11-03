@@ -89,7 +89,7 @@ def gpu_patch_inference(
     stream_for_data = torch.cuda.Stream(device=device)
     stream_for_inference = torch.cuda.Stream(device=device)
 
-    data = data.swapaxes(0, 1)
+    data = data.swapaxes(0, 1).astype(np.float32)
 
     with torch.no_grad(), tqdm(total=num_patches, desc="Inference #") as pbar:
         for i in range(num_patches):
@@ -108,6 +108,11 @@ def gpu_patch_inference(
                     patch_output = torch.exp(model(torch_patch))[0]
                 output_cpu = patch_output.detach().cpu().numpy().swapaxes(0, 1)
             stream_for_inference.synchronize()
+
+            pbar.set_postfix(
+                vram_usage=f"{torch.cuda.max_memory_reserved(device) / (1024 ** 3):.1f} GB"
+            )
+
             if i == 0:
                 output[start_depth:end_depth] = output_cpu
             elif i == num_patches - 1:
@@ -118,9 +123,7 @@ def gpu_patch_inference(
                 output[prev_end_depth:end_depth] = output_cpu[overlap // 2 :]
 
             pbar.update(1)
-            pbar.set_postfix(
-                vram_usage=f"{torch.cuda.memory_allocated(device) / (1024 ** 3):.1f} GB"
-            )
+
     return output if num_dims == 4 else output[:, 0]
 
 
@@ -184,7 +187,7 @@ def gpu_skip_inference(
             output[i] = output_cpu[patch_depth // 2]
             pbar.update()
             pbar.set_postfix(
-                vram_usage=f"{torch.cuda.memory_allocated(device) / (1024 ^ 3):.1f} GB"
+                vram_usage=f"{torch.cuda.max_memory_reserved(device) / (1024 ** 3):.1f} GB"
             )
     return (skipped_data, output) if num_dims == 4 else (skipped_data[:, 0], output[:, 0])
 
@@ -238,58 +241,67 @@ def grid_inference(
     initial_patch_depth: int = 32,
 ) -> np.ndarray:
     """Run grid inference on GPU."""
-    dz, dx, dy = data.shape
+    dz, max_x, max_y = data.shape
     split_x, split_y = split if isinstance(split, tuple) else (split, split)
 
     result = np.zeros_like(data, dtype=np.float32)
 
     # Calculate overlaps ensuring they're even numbers
-    overlap_x = (patch_size * split_x - dx + 1) // (split_x - 1)
-    overlap_y = (patch_size * split_y - dy + 1) // (split_y - 1)
+    overlap_x = (patch_size * split_x - max_x + 1) // (split_x - 1)
+    overlap_y = (patch_size * split_y - max_y + 1) // (split_y - 1)
 
     total_patches = split_x * split_y
     for i, j in tqdm(
         product(range(split_x), range(split_y)), total=total_patches, desc="Grid inference"
     ):
-        # Calculate patch boundaries
-        patch_x_left = i * (patch_size - overlap_x)
-        patch_x_right = patch_x_left + patch_size
-        patch_y_left = j * (patch_size - overlap_y)
-        patch_y_right = patch_y_left + patch_size
+        # Calculate patch boundaries from the input data
+        if i < (split_x - 1):
+            patch_x_start = i * (patch_size - overlap_x)
+            patch_x_end = patch_x_start + patch_size
+        else:  # last row
+            patch_x_end = max_x
+            patch_x_start = patch_x_end - patch_size
+
+        if j < (split_y - 1):
+            patch_y_start = j * (patch_size - overlap_y)
+            patch_y_end = patch_y_start + patch_size
+        else:  # last column
+            patch_y_end = max_y
+            patch_y_start = patch_y_end - patch_size
 
         if i == 0:
-            result_x_left = 0
-            result_x_right = patch_x_right - overlap_x // 2
-            output_x_left = 0
-            output_x_right = patch_size - overlap_x // 2
+            result_x_start = 0
+            result_x_end = patch_x_end - overlap_x // 2
+            output_x_start = 0
+            output_x_end = patch_size - overlap_x // 2
         elif i == split_x - 1:
-            result_x_left = patch_x_left + overlap_x // 2
-            result_x_right = dx
-            output_x_left = overlap_x // 2
-            output_x_right = patch_size
+            result_x_start = patch_x_start + overlap_x // 2
+            result_x_end = max_x
+            output_x_start = overlap_x // 2
+            output_x_end = patch_size
         else:
-            result_x_left = patch_x_left + overlap_x // 2
-            result_x_right = patch_x_right - overlap_x // 2
-            output_x_left = overlap_x // 2
-            output_x_right = patch_size - overlap_x // 2
+            result_x_start = patch_x_start + overlap_x // 2
+            result_x_end = patch_x_end - overlap_x // 2
+            output_x_start = overlap_x // 2
+            output_x_end = patch_size - overlap_x // 2
 
         if j == 0:
-            result_y_left = 0
-            result_y_right = patch_y_right - overlap_y // 2
-            output_y_left = 0
-            output_y_right = patch_size - overlap_y // 2
+            result_y_start = 0
+            result_y_end = patch_y_end - overlap_y // 2
+            output_y_start = 0
+            output_y_end = patch_size - overlap_y // 2
         elif j == split_y - 1:
-            result_y_left = patch_y_left + overlap_y // 2
-            result_y_right = dy
-            output_y_left = overlap_y // 2
-            output_y_right = patch_size
+            result_y_start = patch_y_start + overlap_y // 2
+            result_y_end = max_y
+            output_y_start = overlap_y // 2
+            output_y_end = patch_size
         else:
-            result_y_left = patch_y_left + overlap_y // 2
-            result_y_right = patch_y_right - overlap_y // 2
-            output_y_left = overlap_y // 2
-            output_y_right = patch_size - overlap_y // 2
+            result_y_start = patch_y_start + overlap_y // 2
+            result_y_end = patch_y_end - overlap_y // 2
+            output_y_start = overlap_y // 2
+            output_y_end = patch_size - overlap_y // 2
 
-        data_patch = data[:, patch_x_left:patch_x_right, patch_y_left:patch_y_right]
+        data_patch = data[:, patch_x_start:patch_x_end, patch_y_start:patch_y_end]
         output = gpu_patch_inference(
             model,
             data_patch.astype(np.float32),
@@ -297,10 +309,15 @@ def grid_inference(
             initial_patch_depth=initial_patch_depth,
             device=device,
         )
-        output = output / np.mean(output) * np.mean(data_patch)
-        result[:, result_x_left:result_x_right, result_y_left:result_y_right] = output[
-            :, output_x_left:output_x_right, output_y_left:output_y_right
-        ]
+
+        input_patch = data[:, result_x_start:result_x_end, result_y_start:result_y_end]
+        output_patch = output[:, output_x_start:output_x_end, output_y_start:output_y_end]
+        output_patch = (
+            output_patch
+            / np.mean(output_patch, axis=(1, 2), keepdims=True)
+            * np.mean(input_patch, axis=(1, 2), keepdims=True)
+        )
+        result[:, result_x_start:result_x_end, result_y_start:result_y_end] = output_patch
     return result
 
 
