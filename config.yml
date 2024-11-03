@@ -50,7 +50,7 @@ MODEL:
   group_norm: 8 # Number of groups for the group normalization
   skip_depth: 0 # The start depth of the skip connections
   dropout_p: 0.0 # Dropout probability
-  partial_conv: False # Whether to use partial convolutions
+  partial_conv: True # Whether to use partial convolutions
   scale_factor: 10.0 # Scale factor for the signal levels for sinusoidal encoding
   sin_encoding: False # Whether to use sinusoidal encoding
   signal_levels: 10 # Number of signal levels in the sinusoidal encoding
@@ -73,7 +73,7 @@ MODEL:
 
 # Loader configurations
 LOADER:
-  batch_size: 4 # Number of samples in each batch
+  batch_size: 3 # Number of samples in each batch
   shuffle: False # Whether to shuffle the data
   pin_memory: True # True is faster but can lead to errors
   drop_last: True # Drop the last batch if it is not full
@@ -88,7 +88,7 @@ TRAIN:
   gradient_clip_val: 1 # Gradient clipping value
   precision: "32" # Options: "64" | "32" | "16" | "bf16" | "mixed"
   max_epochs: 150 # Maximum number of epochs
-  device_numbers: 0 # Device numbers, 0 is the first GPU
+  devices: [0] # Device numbers, 0 is the first GPU
 
   callbacks_model_checkpoint: True
   callbacks_save_on_train_end: False

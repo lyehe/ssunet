@@ -1,7 +1,5 @@
 """SSUnet model."""
 
-from pathlib import Path
-
 import pytorch_lightning as pl
 import torch
 import torchmetrics.image as tmi
@@ -10,9 +8,9 @@ from torch.nn import init
 from torch.optim import SGD, Adam, AdamW
 from torch.utils.checkpoint import checkpoint
 
-from ..configs.configs import ModelConfig, load_config
+from ..configs.configs import ModelConfig
 from ..constants import EPSILON, LOGGER
-from ..exceptions import FileNotFoundError, InvalidUpModeError
+from ..exceptions import InvalidUpModeError
 from ..losses import loss_functions
 from ..modules import BLOCK, conv111
 

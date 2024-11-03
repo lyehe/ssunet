@@ -86,7 +86,7 @@ TRAIN:
   gradient_clip_val: 1
   precision: "32"
   max_epochs: 150
-  device_numbers: 0
+  devices: 0
 
   callbacks_model_checkpoint: True
   mc_save_weights_only: True

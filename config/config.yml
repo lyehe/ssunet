@@ -86,7 +86,7 @@ TRAIN:
   gradient_clip_val: 1 # Gradient clipping value
   precision: "32" # Options: "64" | "32" | "16" | "bf16" | "mixed"
   max_epochs: 120 # Maximum number of epochs
-  device_numbers: 0 # Device numbers, 0 is the first GPU
+  devices: 0 # Device numbers, 0 is the first GPU
 
   callbacks_model_checkpoint: True
   mc_save_weights_only: True # Whether to save only the model weights

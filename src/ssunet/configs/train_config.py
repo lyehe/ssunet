@@ -2,8 +2,7 @@
 
 import signal
 import sys
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
@@ -72,7 +71,7 @@ class TrainConfig:
     gradient_clip_val: float = 1.0
     precision: str | int | None = 32
     max_epochs: int = 50
-    device_numbers: int | list[int] = 0
+    devices: int | list[int] = 0
 
     # callbacks - model checkpoint
     callbacks_model_checkpoint: bool = True
@@ -103,35 +102,24 @@ class TrainConfig:
     note: str = ""
 
     matmul_precision: Literal["highest", "high", "medium"] = "high"
-    time_stamp: str = field(
-        init=False, default_factory=lambda: datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
-    )
 
     def __post_init__(self):
         """Setting the model root directory and matmul precision."""
         self.default_root_dir = Path(self.default_root_dir)
         torch.set_float32_matmul_precision(self.matmul_precision)
-        self.set_new_root(self.name)
         self.default_root_dir.mkdir(parents=True, exist_ok=True)
 
     @property
     def name(self) -> str:
         """Get the name of the training session."""
         name_parts = [
-            self.time_stamp,
             f"e={self.max_epochs}",
             f"p={self.precision}",
+            f"d={self.devices}",
         ]
         if self.note:
             name_parts.append(f"n={self.note}")
         return "_".join(name_parts)
-
-    @property
-    def devices(self) -> list[int]:
-        """Get the device numbers in a list."""
-        return (
-            [self.device_numbers] if isinstance(self.device_numbers, int) else self.device_numbers
-        )
 
     @property
     def model_checkpoint(self) -> ModelCheckpoint:
@@ -221,7 +209,28 @@ class TrainConfig:
     @property
     def trainer(self) -> pl.Trainer:
         """Create a trainer."""
-        return pl.Trainer(**self.to_dict)
+        return pl.Trainer(
+            accelerator=self.accelerator,
+            devices=self.devices,
+            precision=self.precision,
+            max_epochs=self.max_epochs,
+            logger=self.logger,
+            callbacks=self.callbacks,
+            default_root_dir=self.default_root_dir,
+            gradient_clip_val=self.gradient_clip_val,
+            limit_val_batches=self.limit_val_batches,
+            log_every_n_steps=self.log_every_n_steps,
+            profiler=self.profiler,
+            enable_checkpointing=self.callbacks_model_checkpoint,
+            enable_progress_bar=True,
+            use_distributed_sampler=True,
+            detect_anomaly=False,
+        )
+
+    @property
+    def to_dict(self) -> dict:
+        """Convert the dataclass to a dictionary."""
+        return {k: v for k, v in self.__dict__.items() if not k.startswith("_")}
 
     def set_new_root(self, new_root: Path | str) -> None:
         """Set a new model root directory.

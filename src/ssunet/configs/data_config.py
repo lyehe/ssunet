@@ -55,6 +55,7 @@ class DataConfig:
         """Convert the dataclass to a dictionary."""
         return {k: v for k, v in self.__dict__.items() if not k.startswith("_")}
 
+
 @dataclass
 class SSUnetData:
     """Dataclass for the input data of a single volume dataset."""
