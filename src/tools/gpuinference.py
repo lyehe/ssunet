@@ -118,7 +118,7 @@ def gpu_patch_inference(
 
             pbar.update(1)
             pbar.set_postfix(
-                vram_usage=f"{torch.cuda.memory_allocated(device) / (1024 ^ 3):.1f} GB"
+                vram_usage=f"{torch.cuda.memory_allocated(device) / (1024 ** 3):.1f} GB"
             )
     return output if num_dims == 4 else output[:, 0]
 
@@ -183,7 +183,7 @@ def gpu_skip_inference(
             output[i] = output_cpu[patch_depth // 2]
             pbar.update()
             pbar.set_postfix(
-                vram_usage=f"{torch.cuda.memory_allocated(device) / (1024 ^ 3):.1f} GB"
+                vram_usage=f"{torch.cuda.memory_allocated(device) / (1024 ** 3):.1f} GB"
             )
     return (skipped_data, output) if num_dims == 4 else (skipped_data[:, 0], output[:, 0])
 
