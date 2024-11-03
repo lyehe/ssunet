@@ -240,46 +240,41 @@ def grid_inference(
     dz, dx, dy = data.shape
     split_x, split_y = split if isinstance(split, tuple) else (split, split)
     processed_data = np.zeros((dz, dx, dy))
-    overlap_x = (patch * split_x - dx + 1) // (split_x - 1)
-    overlap_y = (patch * split_y - dy + 1) // (split_y - 1)
+
+    # Calculate actual patch sizes to match data dimensions
+    patch_x = math.ceil(dx / split_x)
+    patch_y = math.ceil(dy / split_y)
+    overlap_x = (patch_x * split_x - dx) // (split_x - 1) if split_x > 1 else 0
+    overlap_y = (patch_y * split_y - dy) // (split_y - 1) if split_y > 1 else 0
+
     for i in range(split_x):
         for j in range(split_y):
-            x0 = i * (patch - overlap_x)
-            x1 = x0 + patch
-            y0 = j * (patch - overlap_y)
-            y1 = y0 + patch
+            # Calculate patch boundaries
+            x0 = i * (patch_x - overlap_x)
+            x1 = min(x0 + patch_x, dx)
+            y0 = j * (patch_y - overlap_y)
+            y1 = min(y0 + patch_y, dy)
 
+            # Calculate non-overlapping regions
             if i == 0:
-                x0b = 0
-                x1b = x1 - overlap_x // 2
-                x0c = 0
-                x1c = patch - overlap_x // 2
+                x0b, x1b = 0, x1 - overlap_x // 2
+                x0c, x1c = 0, x1b - x0
             elif i == split_x - 1:
-                x0b = x0 + overlap_x // 2
-                x1b = dx
-                x0c = overlap_x // 2
-                x1c = patch
+                x0b, x1b = x0 + overlap_x // 2, dx
+                x0c, x1c = x0b - x0, x1 - x0
             else:
-                x0b = x0 + overlap_x // 2
-                x1b = x1 - overlap_x // 2
-                x0c = overlap_x // 2
-                x1c = patch - overlap_x // 2
+                x0b, x1b = x0 + overlap_x // 2, x1 - overlap_x // 2
+                x0c, x1c = overlap_x // 2, patch_x - overlap_x // 2
 
             if j == 0:
-                y0b = 0
-                y1b = y1 - overlap_y // 2
-                y0c = 0
-                y1c = patch - overlap_y // 2
+                y0b, y1b = 0, y1 - overlap_y // 2
+                y0c, y1c = 0, y1b - y0
             elif j == split_y - 1:
-                y0b = y0 + overlap_y // 2
-                y1b = dy
-                y0c = overlap_y // 2
-                y1c = patch
+                y0b, y1b = y0 + overlap_y // 2, dy
+                y0c, y1c = y0b - y0, y1 - y0
             else:
-                y0b = y0 + overlap_y // 2
-                y1b = y1 - overlap_y // 2
-                y0c = overlap_y // 2
-                y1c = patch - overlap_y // 2
+                y0b, y1b = y0 + overlap_y // 2, y1 - overlap_y // 2
+                y0c, y1c = overlap_y // 2, patch_y - overlap_y // 2
 
             data_patch = data[:, x0:x1, y0:y1]
             output = gpu_patch_inference(
@@ -289,7 +284,13 @@ def grid_inference(
                 initial_patch_depth=initial_patch_depth,
                 device=device,
             )
+
+            # Normalize patch
+            output = output / np.mean(output) * np.mean(data_patch)
+
+            # Ensure indices are valid
             processed_data[:, x0b:x1b, y0b:y1b] = output[:, x0c:x1c, y0c:y1c]
+
     return processed_data
 
 
