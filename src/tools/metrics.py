@@ -172,6 +172,14 @@ class ImageMetrics:
             metrics = self.metric_list()
         return {p: getattr(self, p) for p in self.metric_list()}
 
+    def set_image(self, image: torch.Tensor | np.ndarray) -> None:
+        """Set a new image for comparison."""
+        self._image = self._to_tensor(image)
+
+    def set_target(self, target: torch.Tensor | np.ndarray) -> None:
+        """Set a new target for comparison."""
+        self._target = self._to_tensor(target)
+
 
 @dataclass
 class MetricStats:

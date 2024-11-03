@@ -13,12 +13,12 @@ def image_metrics():
     return ImageMetrics(image, target)
 
 
-def test_image_metrics_initialization(image_metrics):
+def test_image_metrics_initialization(image_metrics: ImageMetrics):
     """Test if ImageMetrics is initialized correctly."""
     assert isinstance(image_metrics, ImageMetrics)
 
 
-def test_image_metrics_to_tensor(image_metrics):
+def test_image_metrics_to_tensor(image_metrics: ImageMetrics):
     """Test the _to_tensor method for both numpy arrays and torch tensors."""
     # Test with numpy array
     np_array = np.random.rand(32, 128, 128).astype(np.float32)
@@ -35,15 +35,15 @@ def test_image_metrics_to_tensor(image_metrics):
     assert tensor.device.type == "cpu"
 
 
-def test_image_metrics_normalize():
+def test_image_metrics_normalize(image_metrics: ImageMetrics):
     """Test the normalize method of ImageMetrics."""
     tensor = torch.rand(32, 128, 128)
-    normalized = ImageMetrics.normalize(tensor)
+    normalized = image_metrics.normalize(tensor)
     assert normalized.min() == 0
     assert normalized.max() == 1
 
 
-def test_image_metrics_mse(image_metrics):
+def test_image_metrics_mse(image_metrics: ImageMetrics):
     """Test the mean squared error (MSE) calculation of ImageMetrics."""
     image = torch.rand(32, 128, 128)
     target = torch.rand(32, 128, 128)
