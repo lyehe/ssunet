@@ -244,8 +244,8 @@ def grid_inference(
     result = np.zeros_like(data, dtype=np.float32)
 
     # Calculate overlaps ensuring they're even numbers
-    overlap_x = ((patch_size * split_x - dx + 1) // (split_x - 1) + 1) // 2 * 2
-    overlap_y = ((patch_size * split_y - dy + 1) // (split_y - 1) + 1) // 2 * 2
+    overlap_x = (patch_size * split_x - dx + 1) // (split_x - 1)
+    overlap_y = (patch_size * split_y - dy + 1) // (split_y - 1)
 
     total_patches = split_x * split_y
     for i, j in tqdm(
