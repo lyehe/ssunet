@@ -119,7 +119,7 @@ def gpu_patch_inference(
 
             pbar.update(1)
             pbar.set_postfix(
-                vram_usage=f"{torch.cuda.memory_allocated(device) / (1024 ^ 3):.1f} GB"
+                vram_usage=f"{torch.cuda.memory_allocated(device) / (1024 ** 3):.1f} GB"
             )
     return output if num_dims == 4 else output[:, 0]
 
