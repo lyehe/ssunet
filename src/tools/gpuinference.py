@@ -2,6 +2,7 @@
 
 import math
 from dataclasses import dataclass, field
+from itertools import product
 
 import numpy as np
 import pytorch_lightning as pl
@@ -118,7 +119,7 @@ def gpu_patch_inference(
 
             pbar.update(1)
             pbar.set_postfix(
-                vram_usage=f"{torch.cuda.memory_allocated(device) / (1024 ** 3):.1f} GB"
+                vram_usage=f"{torch.cuda.memory_allocated(device) / (1024 ^ 3):.1f} GB"
             )
     return output if num_dims == 4 else output[:, 0]
 
@@ -183,7 +184,7 @@ def gpu_skip_inference(
             output[i] = output_cpu[patch_depth // 2]
             pbar.update()
             pbar.set_postfix(
-                vram_usage=f"{torch.cuda.memory_allocated(device) / (1024 ** 3):.1f} GB"
+                vram_usage=f"{torch.cuda.memory_allocated(device) / (1024 ^ 3):.1f} GB"
             )
     return (skipped_data, output) if num_dims == 4 else (skipped_data[:, 0], output[:, 0])
 
@@ -232,89 +233,75 @@ def grid_inference(
     model: pl.LightningModule,
     device: torch.device,
     split: int | tuple = 3,
-    patch: int = 512,
+    patch_size: int = 512,
     min_overlap: int = 16,
     initial_patch_depth: int = 32,
 ) -> np.ndarray:
     """Run grid inference on GPU."""
     dz, dx, dy = data.shape
     split_x, split_y = split if isinstance(split, tuple) else (split, split)
-    processed_data = np.zeros((dz, dx, dy))
 
-    # Calculate patch sizes as multiples of 16
-    def round_up_to_multiple(x: int, multiple: int = 16) -> int:
-        return ((x + multiple - 1) // multiple) * multiple
+    result = np.zeros_like(data, dtype=np.float32)
 
-    # Calculate actual patch sizes to match data dimensions
-    patch_x = round_up_to_multiple(math.ceil(dx / split_x))
-    patch_y = round_up_to_multiple(math.ceil(dy / split_y))
-    overlap_x = (patch_x * split_x - dx) // (split_x - 1) if split_x > 1 else 0
-    overlap_y = (patch_y * split_y - dy) // (split_y - 1) if split_y > 1 else 0
+    # Calculate overlaps ensuring they're even numbers
+    overlap_x = ((patch_size * split_x - dx + 1) // (split_x - 1) + 1) // 2 * 2
+    overlap_y = ((patch_size * split_y - dy + 1) // (split_y - 1) + 1) // 2 * 2
 
-    # Ensure overlap is multiple of 16
-    overlap_x = round_up_to_multiple(overlap_x)
-    overlap_y = round_up_to_multiple(overlap_y)
+    total_patches = split_x * split_y
+    for i, j in tqdm(
+        product(range(split_x), range(split_y)), total=total_patches, desc="Grid inference"
+    ):
+        # Calculate patch boundaries
+        patch_x_left = i * (patch_size - overlap_x)
+        patch_x_right = patch_x_left + patch_size
+        patch_y_left = j * (patch_size - overlap_y)
+        patch_y_right = patch_y_left + patch_size
 
-    for i in range(split_x):
-        for j in range(split_y):
-            # Calculate patch boundaries with padding
-            x0 = max(0, i * (patch_x - overlap_x))
-            x1 = min(dx, x0 + patch_x)
-            y0 = max(0, j * (patch_y - overlap_y))
-            y1 = min(dy, y0 + patch_y)
+        if i == 0:
+            result_x_left = 0
+            result_x_right = patch_x_right - overlap_x // 2
+            output_x_left = 0
+            output_x_right = patch_size - overlap_x // 2
+        elif i == split_x - 1:
+            result_x_left = patch_x_left + overlap_x // 2
+            result_x_right = dx
+            output_x_left = overlap_x // 2
+            output_x_right = patch_size
+        else:
+            result_x_left = patch_x_left + overlap_x // 2
+            result_x_right = patch_x_right - overlap_x // 2
+            output_x_left = overlap_x // 2
+            output_x_right = patch_size - overlap_x // 2
 
-            # Add padding if necessary
-            pad_x0 = round_up_to_multiple(x1 - x0) - (x1 - x0)
-            pad_y0 = round_up_to_multiple(y1 - y0) - (y1 - y0)
+        if j == 0:
+            result_y_left = 0
+            result_y_right = patch_y_right - overlap_y // 2
+            output_y_left = 0
+            output_y_right = patch_size - overlap_y // 2
+        elif j == split_y - 1:
+            result_y_left = patch_y_left + overlap_y // 2
+            result_y_right = dy
+            output_y_left = overlap_y // 2
+            output_y_right = patch_size
+        else:
+            result_y_left = patch_y_left + overlap_y // 2
+            result_y_right = patch_y_right - overlap_y // 2
+            output_y_left = overlap_y // 2
+            output_y_right = patch_size - overlap_y // 2
 
-            data_patch = data[:, x0:x1, y0:y1]
-            if pad_x0 > 0 or pad_y0 > 0:
-                data_patch = np.pad(
-                    data_patch,
-                    ((0, 0), (0, pad_x0), (0, pad_y0)),
-                    mode="edge",
-                )
-
-            # Calculate non-overlapping regions
-            if i == 0:
-                x0b, x1b = 0, x1 - overlap_x // 2
-                x0c, x1c = 0, x1b - x0
-            elif i == split_x - 1:
-                x0b, x1b = x0 + overlap_x // 2, dx
-                x0c, x1c = x0b - x0, x1 - x0
-            else:
-                x0b, x1b = x0 + overlap_x // 2, x1 - overlap_x // 2
-                x0c, x1c = overlap_x // 2, patch_x - overlap_x // 2
-
-            if j == 0:
-                y0b, y1b = 0, y1 - overlap_y // 2
-                y0c, y1c = 0, y1b - y0
-            elif j == split_y - 1:
-                y0b, y1b = y0 + overlap_y // 2, dy
-                y0c, y1c = y0b - y0, y1 - y0
-            else:
-                y0b, y1b = y0 + overlap_y // 2, y1 - overlap_y // 2
-                y0c, y1c = overlap_y // 2, patch_y - overlap_y // 2
-
-            output = gpu_patch_inference(
-                model,
-                data_patch.astype(np.float32),
-                min_overlap=min_overlap,
-                initial_patch_depth=initial_patch_depth,
-                device=device,
-            )
-
-            # Remove padding if it was added
-            if pad_x0 > 0 or pad_y0 > 0:
-                output = output[:, : x1 - x0, : y1 - y0]
-
-            # Normalize patch
-            output = output / np.mean(output) * np.mean(data_patch)
-
-            # Ensure indices are valid
-            processed_data[:, x0b:x1b, y0b:y1b] = output[:, x0c:x1c, y0c:y1c]
-
-    return processed_data
+        data_patch = data[:, patch_x_left:patch_x_right, patch_y_left:patch_y_right]
+        output = gpu_patch_inference(
+            model,
+            data_patch.astype(np.float32),
+            min_overlap=min_overlap,
+            initial_patch_depth=initial_patch_depth,
+            device=device,
+        )
+        output = output / np.mean(output) * np.mean(data_patch)
+        result[:, result_x_left:result_x_right, result_y_left:result_y_right] = output[
+            :, output_x_left:output_x_right, output_y_left:output_y_right
+        ]
+    return result
 
 
 @dataclass
