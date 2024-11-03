@@ -241,19 +241,39 @@ def grid_inference(
     split_x, split_y = split if isinstance(split, tuple) else (split, split)
     processed_data = np.zeros((dz, dx, dy))
 
+    # Calculate patch sizes as multiples of 16
+    def round_up_to_multiple(x: int, multiple: int = 16) -> int:
+        return ((x + multiple - 1) // multiple) * multiple
+
     # Calculate actual patch sizes to match data dimensions
-    patch_x = math.ceil(dx / split_x)
-    patch_y = math.ceil(dy / split_y)
+    patch_x = round_up_to_multiple(math.ceil(dx / split_x))
+    patch_y = round_up_to_multiple(math.ceil(dy / split_y))
     overlap_x = (patch_x * split_x - dx) // (split_x - 1) if split_x > 1 else 0
     overlap_y = (patch_y * split_y - dy) // (split_y - 1) if split_y > 1 else 0
 
+    # Ensure overlap is multiple of 16
+    overlap_x = round_up_to_multiple(overlap_x)
+    overlap_y = round_up_to_multiple(overlap_y)
+
     for i in range(split_x):
         for j in range(split_y):
-            # Calculate patch boundaries
-            x0 = i * (patch_x - overlap_x)
-            x1 = min(x0 + patch_x, dx)
-            y0 = j * (patch_y - overlap_y)
-            y1 = min(y0 + patch_y, dy)
+            # Calculate patch boundaries with padding
+            x0 = max(0, i * (patch_x - overlap_x))
+            x1 = min(dx, x0 + patch_x)
+            y0 = max(0, j * (patch_y - overlap_y))
+            y1 = min(dy, y0 + patch_y)
+
+            # Add padding if necessary
+            pad_x0 = round_up_to_multiple(x1 - x0) - (x1 - x0)
+            pad_y0 = round_up_to_multiple(y1 - y0) - (y1 - y0)
+
+            data_patch = data[:, x0:x1, y0:y1]
+            if pad_x0 > 0 or pad_y0 > 0:
+                data_patch = np.pad(
+                    data_patch,
+                    ((0, 0), (0, pad_x0), (0, pad_y0)),
+                    mode="edge",
+                )
 
             # Calculate non-overlapping regions
             if i == 0:
@@ -276,7 +296,6 @@ def grid_inference(
                 y0b, y1b = y0 + overlap_y // 2, y1 - overlap_y // 2
                 y0c, y1c = overlap_y // 2, patch_y - overlap_y // 2
 
-            data_patch = data[:, x0:x1, y0:y1]
             output = gpu_patch_inference(
                 model,
                 data_patch.astype(np.float32),
@@ -284,6 +303,10 @@ def grid_inference(
                 initial_patch_depth=initial_patch_depth,
                 device=device,
             )
+
+            # Remove padding if it was added
+            if pad_x0 > 0 or pad_y0 > 0:
+                output = output[:, : x1 - x0, : y1 - y0]
 
             # Normalize patch
             output = output / np.mean(output) * np.mean(data_patch)
