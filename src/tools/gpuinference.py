@@ -241,7 +241,10 @@ def grid_inference(
     initial_patch_depth: int = 32,
 ) -> np.ndarray:
     """Run grid inference on GPU."""
-    dz, max_x, max_y = data.shape
+    if len(data.shape) == 3:
+        _, max_x, max_y = data.shape
+    else:
+        _, __, max_x, max_y = data.shape
     split_x, split_y = split if isinstance(split, tuple) else (split, split)
 
     result = np.zeros_like(data, dtype=np.float32)
@@ -275,9 +278,9 @@ def grid_inference(
             output_x_start = 0
             output_x_end = patch_size - overlap_x // 2
         elif i == split_x - 1:
-            result_x_start = patch_x_start + overlap_x // 2
+            result_x_start = patch_x_start + overlap_x // 2 - 1
             result_x_end = max_x
-            output_x_start = overlap_x // 2
+            output_x_start = overlap_x // 2 - 1
             output_x_end = patch_size
         else:
             result_x_start = patch_x_start + overlap_x // 2
@@ -291,9 +294,9 @@ def grid_inference(
             output_y_start = 0
             output_y_end = patch_size - overlap_y // 2
         elif j == split_y - 1:
-            result_y_start = patch_y_start + overlap_y // 2
+            result_y_start = patch_y_start + overlap_y // 2 - 1
             result_y_end = max_y
-            output_y_start = overlap_y // 2
+            output_y_start = overlap_y // 2 - 1
             output_y_end = patch_size
         else:
             result_y_start = patch_y_start + overlap_y // 2
@@ -301,7 +304,7 @@ def grid_inference(
             output_y_start = overlap_y // 2
             output_y_end = patch_size - overlap_y // 2
 
-        data_patch = data[:, patch_x_start:patch_x_end, patch_y_start:patch_y_end]
+        data_patch = data[..., patch_x_start:patch_x_end, patch_y_start:patch_y_end]
         output = gpu_patch_inference(
             model,
             data_patch.astype(np.float32),
@@ -310,14 +313,17 @@ def grid_inference(
             device=device,
         )
 
-        input_patch = data[:, result_x_start:result_x_end, result_y_start:result_y_end]
-        output_patch = output[:, output_x_start:output_x_end, output_y_start:output_y_end]
+        input_patch = data[..., result_x_start:result_x_end, result_y_start:result_y_end]
+        output_patch = output[..., output_x_start:output_x_end, output_y_start:output_y_end]
         output_patch = (
             output_patch
             / np.mean(output_patch, axis=(1, 2), keepdims=True)
             * np.mean(input_patch, axis=(1, 2), keepdims=True)
+        ) if len(data.shape) == 3 else (output_patch
+            / np.mean(output_patch, axis=(1, 2, 3), keepdims=True)
+            * np.mean(input_patch, axis=(1, 2, 3), keepdims=True)
         )
-        result[:, result_x_start:result_x_end, result_y_start:result_y_end] = output_patch
+        result[..., result_x_start:result_x_end, result_y_start:result_y_end] = output_patch
     return result
 
 
