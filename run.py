@@ -91,7 +91,7 @@ def main():
 
         # Post-process and save output
         output = output / np.mean(output) * np.mean(data.primary_data)
-        output_path = config.train_config.default_root_dir /"output.tif"
+        output_path = config.train_config.default_root_dir / "output.tif"
         imwrite(output_path, output)
         logger.info(f"Results saved to {output_path}")
 
