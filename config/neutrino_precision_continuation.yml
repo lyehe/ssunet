@@ -1,0 +1,9 @@
+study_id: neutrino_seed43_precision_continuation_v1
+main_config: config/neutrino_study.yml
+fresh_test_config: config/neutrino_ablations.yml
+output: data/neutrino/precision_continuation
+seed: 43
+prefix_epoch: 2
+end_epoch: 5
+reason: matched_failure_regime_after_small_cohort_precision_comparison
+test_methods: [bf16_epoch5, fp32_epoch5, bf16_selected_epoch2, fp32_validation_selected]

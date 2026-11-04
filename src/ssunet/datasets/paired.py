@@ -1,10 +1,8 @@
 """Paired dataset."""
 
-import numpy as np
 import torch
 
 from ..exceptions import MissingReferenceError
-from ..utils import _to_tensor
 from .singlevolume import SingleVolumeDataset
 
 
@@ -30,8 +28,6 @@ class PairedDataset(SingleVolumeDataset):
     @property
     def reference(self) -> torch.Tensor:
         """Get the reference tensor."""
-        if self.input.secondary_data is None:
+        if self.secondary_data is None:
             raise MissingReferenceError()
-        if isinstance(self.input.secondary_data, np.ndarray):
-            self.input.secondary_data = _to_tensor(self.input.secondary_data)
-        return self.input.secondary_data
+        return self.secondary_data

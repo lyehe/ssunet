@@ -1,0 +1,140 @@
+Frozen-feature detector probe: completed first evaluation, 2026-10-26
+
+Decision
+--------
+This probe does not demonstrate added detection value from the selected
+self-splitting encoders over both registered feature controls. The fitted
+head improves on the previous handwritten model statistic, but a head using
+raw observations and the static prior does at least as well at the primary
+operating point. The untrained-feature comparison does not establish a learned
+representation benefit. The gate for a larger objective-comparison study was
+not met. Preserve this experiment and its negative result.
+
+This is a limited linear-head/feature/selection experiment, not proof that
+self-splitting can never help. Validation log loss improves with learned
+features, while primary low-false-alarm test efficiency does not; the selected
+validation objective and the detection objective differ. No real neutrino
+recovery, physical posterior probability or decoded event parameters are shown.
+
+Protocol and evidence
+---------------------
+Protocol: plans/neutrino_detection_probe_protocol.txt
+Config: config/neutrino_detection_probe.yml
+Core: src/ssunet/neutrino_detection_probe.py
+Runner: src/tools/neutrino_detection_probe.py
+Audit: src/tools/neutrino_detection_probe_audit.py
+Outputs: data/neutrino/detection_probe_v1/
+Viewer: http://127.0.0.1:8765/detection_probe_v1/index.html
+
+The analytic-selected encoders (42/43/44) remain frozen. Three untrained copies
+of exactly the same backbone supply the capacity control. Each arm has three
+3,585-parameter encoders where applicable, and an identical 1,562-coefficient
+linear head including intercept. The raw/prior arm zero-pads the extra channels;
+it has fewer varying features, so the random-feature arm is required to control
+for added effective capacity. Base features: 786; encoder extras: 775.
+
+All methods use the same complete recorded photon budget and the same single
+p=.5 A/B split. The encoder receives only observed counts and fixed metadata.
+Only the logistic head receives injected event-presence labels, never clean
+photon targets, latent source parameters or a PSNR reference. This is a labelled
+diagnostic of a self-supervised encoder, not fully self-supervised detection.
+
+Fresh folds, exact independent-Poisson analytic response with background mean
+one photon, fixed 0--6400 ns clock, 256 sensors, 256 time bins:
+Train:       16,384 windows (512 signal source groups; 8,192 background).
+Validation:  10,240 windows (128 signal source groups; 8,192 background).
+Calibration: 20,000 independent background-only windows.
+Test:        66,384 windows (512 signal source groups; 50,000 background).
+Signal levels: .25/.5/1/2/3/5/8/12 expected photons. Test uses four repetitions
+per level/source, all 32 views grouped for uncertainty. All source positions
+are disjoint from earlier analytic/detection studies and every other fold.
+Keep zero-photon outcomes: 19,799 empty test windows remain in evaluation.
+
+Selection and calibration
+-------------------------
+All three heads independently select L2=.1 from the same five-candidate grid
+using balanced validation binary log loss. Selected optimization gradients pass
+the registered 1e-4 development gate. Features are standardized from training
+only, clipped identically, and heads fit in float64. A head lock precedes null
+calibration; the calibration lock precedes test generation/opening. No penalty,
+score, seed or threshold was reselected using calibration outcomes or test.
+
+Primary outcome
+---------------
+Nominal false-positive rate 1% per window, expected signal two photons plus
+expected background one photon. Each efficiency uses 2,048 signal windows.
+
+Method                          Efficiency    Measured test false positives
+Raw/prior head                    50.24%          495/50000 = 0.990%
+Raw/prior + self-split head        49.12%          472/50000 = 0.944%
+Raw/prior + untrained head         48.49%          485/50000 = 0.970%
+Physics-template search            52.83%          474/50000 = 0.948%
+Static prior statistic             52.29%          456/50000 = 0.912%
+Previous frozen-model statistic    44.24%          480/50000 = 0.960%
+Geometry/time kernel               43.02%          428/50000 = 0.856%
+Count only                         26.03%          600/50000 = 1.200%
+
+Paired self-split-head-minus-reference differences in percentage points,
+conditional source-group 95% intervals:
+Raw/prior:                  -1.12  [-2.10, -0.15] (primary descriptive contrast).
+Untrained features:         +0.63  [-0.10, +1.37] (required mechanism control).
+Physics template:           -3.71  [-5.13, -2.29].
+Previous model statistic:   +4.88  [+3.56, +6.20].
+
+Versus raw/prior the self-split head recovers 38 missed windows and loses 61
+that raw/prior finds. Versus untrained features it recovers 39 and loses 26.
+The fitted score's improvement over the handwritten statistic therefore does
+not establish a benefit from self-splitting features.
+
+The secondary .1% nominal false-positive point is retained, including its
+positive result against raw/prior: 28.32% versus 26.86%, +1.46 pp interval
+[+0.68, +2.29], measured FPR .086% for both. Against untrained features the
+gain remains +.63 pp with interval [-.05, +1.37]. The registered primary and
+mechanism-control criteria remain unmet; do not switch the headline to this
+secondary operating point after observing it.
+
+Uncertainty and scope
+---------------------
+Intervals resample complete test-source groups, conditional on the fixed
+encoders, selected heads and calibration; they omit encoder/head fitting,
+selection and calibration uncertainty. Nominal rates are shared but measured
+test false-positive rates are not exactly equal. The viewer includes Wilson
+null intervals and full low-FPR ROC curves. In particular the raw/prior and
+self-split nominal 1% points are not identical measured operating points, so
+do not interpret the small negative contrast as a universal harm claim.
+No multiplicity-adjusted confirmatory or causal pretraining claim is made.
+
+The toy has a fixed signal clock, uniform independent background and a known
+response. Its globally informative prior and synthetic labels do not reproduce
+real untriggered detector conditions. Source disjointness tests interpolation
+within the same declared source population, not a new detector or physics domain.
+
+Verification and resources
+--------------------------
+25 focused detection/probe tests pass (10 new probe tests and 15 earlier tests).
+Scoped Ruff passes. Engineering smoke test and full evidence audit pass.
+Every saved head score and empirical tail probability reproduces exactly from
+cached features. Training-only scaler means reproduce to <7e-18. Recomputing
+128 cases in new batches gives maximum logit difference 7.54e-5, no primary
+decision changes, and confirms no source overlap or altered frozen artifacts.
+
+The registered extraction/fitting/calibration/test phase takes 672.16 seconds
+(11.20 minutes), allocated GPU peak .3355 GiB, process peak 2.028 GiB. No encoder
+parameters are fitted. Probability summaries are reduced on-device rather than
+transferring full PDFs. These numbers demonstrate a manageable frozen probe;
+they do not measure future encoder-training cost or isolated throughput.
+
+Next work
+---------
+Use only training/validation data for diagnosis. Check how the representation
+and linear score retain event-specific sensor/time structure, how much gain
+comes from the static prior, and whether validation log-loss selection trades
+off low-false-alarm ranking. Any revised head/selection/objective comparison
+requires a newly declared protocol and fresh test sources/calibration; do not
+tune this opened test or present later tuning as confirmation of this result.
+
+The larger matched splitting/reconstruction/from-scratch experiment needs an
+explicit new rationale after this failed gate. Real-data validation still needs
+documented untriggered windows, matched detector response/state/calibration and
+live exposure. Existing triggered/filtered ODF records do not supply that null
+population. Parameter decoding requires separately scored injection parameters.

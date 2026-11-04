@@ -1,0 +1,8 @@
+study: data/confocal_twochannel_motion_v1
+output: data/confocal_twochannel_motion_comparison_v1
+# Keep the Gaussian settings from the original two-detector trial fixed.
+gaussian_spatial_sigma_zyx: [0.5, 1.5, 1.5]
+gaussian_temporal_sigma: 1.0
+uniform_mixture: 0.01
+registration_block_frames: 16
+scope: exploratory follow-up on the same reserved photons; no tuning or clean image GT

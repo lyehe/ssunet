@@ -1,29 +1,17 @@
-"""CPU inference script.
-
-This script is used to run inference on CPU. It will be very slow for large images.
-"""
+"""CPU inference in observed photon-count units."""
 
 import numpy as np
 import pytorch_lightning as pl
 import torch
 
-from ssunet.constants import LOGGER
+from .gpuinference import _predict_counts, _volume
 
 
 def cpu_inference(model: pl.LightningModule, data: np.ndarray) -> np.ndarray:
-    """Run inference on CPU."""
-    LOGGER.info("Starting CPU inference")
+    """Predict a ZXY or ZCXY volume and preserve its observed photon count."""
+    volume, grayscale = _volume(data)
     device = torch.device("cpu")
     model.to(device)
     model.eval()
-    if data.dtype == bool:
-        data = data.astype(np.float32)
-        LOGGER.debug("Converted boolean data to float32")
-    LOGGER.debug(f"Input data shape: {data.shape}")
-    with torch.inference_mode():
-        torch_data = torch.from_numpy(data)[None, None, ...]
-        LOGGER.debug(f"Torch data shape: {torch_data.shape}")
-        output = torch.exp(model(torch_data))[0, 0]
-    LOGGER.debug(f"Output shape: {output.shape}")
-    LOGGER.info("CPU inference completed")
-    return output.detach().numpy()
+    output = _predict_counts(model, volume, device)
+    return output[:, 0] if grayscale else output

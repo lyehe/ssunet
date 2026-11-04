@@ -1,0 +1,63 @@
+study_id: neutrino_mechanism_v1
+main_study_config: config/neutrino_study.yml
+data:
+  output: data/neutrino/mechanism_study
+  cohort_events: 12000
+  cohort_seed: 2719
+  partition_seed: 7351
+  photon_split_seed: 42
+  split_probability: 0.5
+  time_window_ns: [0.0, 6400.0]
+  time_bins: 256
+  import_chunk_events: 512
+  exclude_main_cohort_and_all_pilot_families: true
+model:
+  channels: 16
+training:
+  seeds: [42, 43, 44]
+  epochs: 10
+  batch_size: 16
+  learning_rate: 0.001
+  weight_decay: 0.01
+  gradient_clip: 1.0
+  cpu_threads: 4
+  num_workers: 0
+  max_training_seconds_per_seed: 1800
+  max_evaluation_seconds_per_seed: 600
+  max_gpu_allocated_gib: 12
+  max_process_rss_gib: 4
+evaluation:
+  epochs: [0, 1, 2, 5, 10]
+  fixed_training_diagnostic_events: 120
+  bootstrap_seed: 20261025
+  bootstrap_draws: 10000
+  bootstrap_chunk_draws: 64
+  primary_stratum: retained_1_to_10
+variants:
+  - name: dense_fresh
+    architecture: unchanged
+    fresh_splits: true
+  - name: dense_fixed
+    architecture: unchanged
+    fresh_splits: false
+  - name: fine_fresh
+    architecture: full_temporal_resolution
+    fresh_splits: true
+  - name: residual_fresh
+    architecture: prior_mixture_residual
+    fresh_splits: true
+residual:
+  input_time_ns: 25
+  prior_fraction: 0.25
+  prior_time_ns: 100
+  prior_pseudocount: 0.0001
+  initial_correction_scale: 0.0
+downstream:
+  feature_time_bins: 64
+  ridge_penalties: [0.01, 0.1, 1.0, 10.0, 100.0]
+  primary_metrics: [mean_absolute_log10_energy_error, mean_angular_error_degrees]
+  methods: [raw_observation_marginals, selected_baseline_marginals, pretrained_model_marginals]
+  include_retained_total_for_all_methods: true
+  pretrained_source: main_study_selected_checkpoints
+  physics_labels_used_only_by_probe: true
+  test_once_after_validation_selection: true

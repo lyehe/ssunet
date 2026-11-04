@@ -1,0 +1,149 @@
+Frozen-feature event detector: finite follow-up protocol, 2026-10-26
+
+Motivation and scope
+--------------------
+The first fixed synthetic detection study improved on count only but lost to
+the static training prior and physics templates. Test whether a fitted event
+score can exploit frozen learned features more effectively than its previous
+handwritten statistic. Preserve every first-study result and test decision.
+The following is a NEW exploratory probe, motivated by that opened study.
+It is not an independent confirmation of a hypothesis specified before it.
+
+This protocol evaluates an exact-Poisson toy, binary event discrimination and
+an event-labelled linear head on a self-supervised frozen encoder. It does not
+claim fully self-supervised detection, clean photon GT, physical reconstruction,
+causality of the self-splitting objective or real subthreshold neutrino recovery.
+
+Population, folds and observation budget
+---------------------------------------
+Use the established analytic response, same 256 sensors, 256 fixed 25 ns time
+bins, 0--6400 ns acquisition clock, independent uniform background with expected
+one photon/window, and expected signal .25/.5/1/2/3/5/8/12. Retain every sampled
+window, including zero detections from a positive underlying rate. No count-
+based event selection, truth-dependent alignment, or observed-count strata.
+
+New independent random streams (seed 2026102603) and fresh source groups:
+* Train: 512 sources x 8 strengths x 2 repeats = 8192 signal windows, 8192 nulls.
+* Validation: 128 x 8 x 2 = 2048 signal windows, 8192 nulls.
+* Calibration: 20000 null windows, used only for score-to-tail calibration.
+* Test: 512 x 8 x 4 = 16384 signal windows, 50000 nulls.
+All source positions must differ from the complete earlier analytic cohort,
+the first detection study, and every other fold in this follow-up. Persist
+source/observation fingerprints, exact streams and overlap checks. Source IDs,
+positions and signal strengths never enter feature extraction or prediction.
+
+All methods use the same complete recorded photons, with one frozen A/B split
+at p=.5. Both halves are available observations for event detection. Neither
+half is an additional measurement or an unrecorded prediction target.
+
+Three matched head arms
+-----------------------
+1. Raw + prior: features of full recorded counts, geometry and a training-only
+   static prior; additional encoder feature channels are padded with zeros.
+2. Raw + prior + self-split: the same base plus features of the three previously
+   validation-selected analytic encoders (42/43/44), frozen without fine-tuning.
+3. Raw + prior + untrained: the same base plus three randomly initialized copies
+   of the identical backbone (42/43/44), frozen without training.
+
+Learned and random arms have identical feature definitions/dimensions and the
+same encoder parameter budgets. The raw arm has identical head parameter layout
+but fewer varying inputs. Random features control for the extra varying feature
+capacity; padding alone does not make effective capacities equal. Do not call
+a learned-versus-raw gain proof of a pretraining benefit if random features
+provide the same gain.
+
+Base features: log1p sensor and full-resolution time histograms; per-sensor
+mean normalized time; full count and log count; empty flag; occupied sensors
+and time bins; count GLR; static-prior log density-ratio sum/mean/max; static-
+prior amplitude-profile likelihood; geometry/time cross-kernel score; same-
+sensor and same-time photon-pair multiplicities; mean/std observed time; photon-
+weighted x/y/z centroid. These deterministic transformations are computed from
+observations and fixed metadata, not event labels or injected parameters.
+The base is stronger than a count threshold or fixed-weight prior score.
+
+For each encoder arm, summarize the averaged predicted PDF by 64 spatial groups,
+64 temporal groups and first temporal moments for each spatial group. Spatial
+groups are fixed contiguous groups of four sensors in the declared toy geometry.
+Add mean/max across sensors of the 32-channel sensor-context hidden activations,
+concatenating the three seeds (hidden channels from different seeds are not
+averaged as if they were aligned). For A/B use symmetric means and absolute
+differences. Add symmetric cross-prediction log score, per-photon cross score,
+PDF entropy, inter-half Jensen-Shannon divergence/L1 distance, maximum predicted
+bin probability and KL to the static prior. Empty halves retain deterministic
+prior/encoder predictions and contribute zero scored photon evidence.
+
+Every encoder receives only integer recorded counts, fixed geometry/live mask
+and p. No new encoder is trained. Frozen weights and selected training prior
+are checked against the earlier analytic lock before extraction. Cache the
+same deterministic empty predictions for speed; do not invent photons.
+
+Head fitting and selection
+--------------------------
+Use the identical linear logistic head, float64 CPU optimization, standardized
+features fitted on TRAIN ONLY, std floor 1e-6 and clipping to +/-20. L2 penalties
+are [1e-4,1e-3,1e-2,.1,1]; each candidate starts at zero and receives at most 300
+L-BFGS iterations, same convergence tolerances and line-search rules. The loss
+weights event presence/absence equally. Injection-presence labels are used only
+for head fitting/validation, never encoder pretraining or feature extraction.
+Fit scalers independently for each arm with the same rules. Keep feature-count,
+training-time, convergence and regularization-selection records for every arm.
+
+Select penalty by balanced validation binary log loss, break ties by declared
+candidate order. This validation objective is not low-false-alarm efficiency;
+a negative test result also limits this particular linear probe/selection rule.
+Nonfinite fitting or a selected head's max absolute gradient above 1e-4 stops
+before calibration/test. Report fixed iteration-budget exhaustion separately.
+Logits are discrimination scores under an artificial injection population, not
+physical posterior probabilities of a real neutrino event.
+
+Freeze selected heads/scalers, code, configuration, protocol, encoder states,
+training/validation observations/features/labels and selection before generating
+calibration/test data. Then generate independent null calibration observations,
+extract features and lock every calibration score. Generate/open the new test
+only after this second lock. Never select a score, penalty, seed or threshold
+using calibration outcomes or the opened test. Existing outputs are preserved;
+the command requires a new directory.
+
+Controls, outcomes and uncertainty
+----------------------------------
+Retain fixed count, static prior, geometry/time kernel, 125-source physics-
+template search and previous frozen-ensemble statistic on the same windows.
+Do not give the physics-template score or injected parameters to any head.
+Each method calibrates its own smoothed empirical upper-tail ranks using the
+same independent per-window tie randomizer. Calibrate the entire template scan.
+Primary alpha=.01/window; secondary .001/window is an empirical prototype rate,
+not an exposure-based instrument guarantee. Report actual independent test false
+alarms with Wilson 95% intervals and low-FPR ROC; rates are not exactly equal.
+
+Primary descriptive contrast: self-split head minus raw+prior at expected signal
+two, nominal alpha=.01. The untrained-feature head is the required mechanism
+control. Report all fixed strengths, every head/control, recoveries AND losses,
+conditional source-group paired 95% intervals (2000 draws), and no multiplicity-
+adjusted confirmatory claim. Bootstrap all 32 views of one TEST source together.
+Intervals condition on fixed encoders, fitted heads and calibration. They do
+not include head/encoder fitting, calibration or procedure-selection uncertainty.
+
+A gain over raw+prior alone is insufficient. Positive conditional intervals over
+both raw+prior and untrained features at the primary strength would justify a
+separate matched-pretraining-objective study on new folds. It would not isolate
+self-splitting from architecture, training data or alternative pretraining.
+Report the physics-template gap regardless of the head comparisons. If there
+is no clear learned-feature gain, report it without optimizing this test.
+
+Engineering and next stages
+---------------------------
+Use GPU 0 for frozen feature extraction, four CPU threads for heads, batch 24,
+maximum 1800 seconds through fitting/calibration/test extraction, process memory
+4 GiB and allocated GPU memory 4 GiB. Stream batches and keep compact features,
+not all sensor-time count maps or PDF predictions. Reduce predicted PDFs in FP64
+on the extraction device and transfer only compact summaries to the host; verify
+equivalence against the NumPy reference. Store features in FP32 and fit heads in
+FP64. Shared-machine throughput is not an isolated benchmark. Preserve partial
+results on a resource stop.
+
+Subsequent objective comparison keeps the dense full-temporal-resolution FP32
+architecture, observations, labels and update budgets matched across splitting,
+observed-count reconstruction and untrained/from-scratch controls. Real-noise
+validation needs documented untriggered/zero-bias windows, detector-state/live
+exposure and matched response simulation. Physical decoding requires separately
+scored injection parameters. No external messages or requests are authorized.

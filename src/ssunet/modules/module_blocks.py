@@ -120,7 +120,11 @@ class UpConvDual3D(UnetBlockConv3D):
 
     def __other__(self):
         """Define other modules."""
-        merge_channels = self.in_channels if self.merge_mode == "concat" else self.out_channels
+        merge_channels = (
+            self.out_channels * 2
+            if self.merge_mode == "concat" and self.skip_out
+            else self.out_channels
+        )
         self.resconv = self.merge_conv(self.out_channels, self.out_channels)
         self.conv1 = self.conv333(merge_channels, self.out_channels)
         self.conv2 = self.conv333(self.out_channels, self.out_channels)

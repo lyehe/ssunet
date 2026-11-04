@@ -171,3 +171,7 @@ cython_debug/
 /model_dir
 /model_dir/*
 /models
+
+# Vendored third-party binaries and local training runs
+third-parties/
+models_spad/

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Confocal GAP: 3D and 4D comparison</title>
+<style>
+:root{color-scheme:light;--blue:#2563eb;--orange:#c2410c;--ink:#142033;--muted:#58677a}
+*{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:var(--ink);font:16px/1.55 system-ui,sans-serif}
+main{max-width:1140px;margin:auto;padding:38px 22px 70px}h1{font-size:31px;line-height:1.2;margin:10px 0}
+h2{font-size:21px;margin:0 0 13px}p{margin:10px 0;color:var(--muted)}a{color:var(--blue)}
+.eyebrow{font-size:12px;letter-spacing:1.6px;text-transform:uppercase;color:var(--blue)}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:26px 0}.card,.panel{background:white;border:1px solid #dde5ef;border-radius:14px;padding:24px}.panel{margin:20px 0}
+.card.blue{border-top:4px solid var(--blue)}.card.orange{border-top:4px solid var(--orange)}
+.phase{font-size:13px;color:var(--muted)}.step{font-size:30px;font-weight:700;margin:8px 0}
+progress{width:100%;height:11px;accent-color:var(--blue)}.orange progress{accent-color:var(--orange)}
+.numbers{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-top:18px}.number{font-size:22px;font-weight:650}.label{font-size:12px;color:var(--muted)}
+.spec{font-size:13px;color:var(--muted);margin-top:18px}.status{padding:9px 14px;background:#e7efff;border-radius:8px;display:inline-block;font-size:14px}
+svg{width:100%;height:auto;min-height:220px}.legend{font-size:13px;display:flex;gap:20px;flex-wrap:wrap}.blue-text{color:var(--blue)}.orange-text{color:var(--orange)}
+img{max-width:100%;display:block;border-radius:8px}.links{display:flex;gap:18px;flex-wrap:wrap;font-size:14px}table{border-collapse:collapse;width:100%;font-size:14px}td,th{padding:10px;border-bottom:1px solid #e3e9f2;text-align:left}
+.limits{font-size:14px;border-left:3px solid #b7c7dd;padding-left:15px}.hidden{display:none}
+@media(max-width:700px){main{padding:24px 14px}.cards{grid-template-columns:1fr}.card,.panel{padding:18px}h1{font-size:26px}}
+</style>
+<main>
+<div class="eyebrow">Real confocal photon counts · acquisition holdout</div>
+<h1>Does time context help predict held-out photons?</h1>
+<p>Four-level GAP U-Nets with similar parameter counts. Both train on the same photon splits with an effective batch of four. No clean image is assumed.</p>
+<div class="status" id="status">Loading run status…</div>
+<div class="cards">
+<section class="card blue" id="conv4d"><h2>4D · XYZ + time</h2><div class="phase">Queued</div><div class="step">0 / 500</div><progress max="500" value="0"></progress><div class="numbers"><div><div class="number nll">—</div><div class="label">Held-out photon NLL ↓</div></div><div><div class="number memory">—</div><div class="label">Peak reserved VRAM</div></div></div><div class="spec"></div></section>
+<section class="card orange" id="conv3d"><h2>3D · XYZ per time point</h2><div class="phase">Queued</div><div class="step">0 / 500</div><progress max="500" value="0"></progress><div class="numbers"><div><div class="number nll">—</div><div class="label">Held-out photon NLL ↓</div></div><div><div class="number memory">—</div><div class="label">Peak reserved VRAM</div></div></div><div class="spec"></div></section>
+</div>
+<section class="panel"><h2>Held-out photon likelihood</h2><p>Lower NLL is better. Evaluation occurs at updates 0, 100, 200, 300, 400 and 500. The dashed line is the uniform arrival distribution.</p><div class="legend"><span class="blue-text">● 4D GAP</span><span class="orange-text">● 3D GAP</span><span>— Uniform reference</span></div><svg id="chart" viewBox="0 0 960 330" role="img" aria-label="Held-out photon negative log likelihood by training update"></svg></section>
+<section class="panel hidden" id="final-panel"><h2>Final fixed-step comparison</h2><p id="final-text"></p><div class="links"><a href="comparison_summary.json">Metrics</a><a href="evidence_audit.json">Checkpoint replay audit</a><a href="learning_curves.png">Export learning curves</a></div></section>
+<section class="panel"><h2>What the observed data look like</h2><p>Three preselected validation patches. Raw input A and held-out B are noisy observations. The temporal mean is for visual context and may blur motion; it is not ground truth.</p><img src="observations.png" alt="Central slices of raw input photons, noisy held-out photons, and a temporal average" loading="lazy"></section>
+<section class="panel hidden" id="prediction-panel"><h2>Predicted arrival distributions</h2><p>Both models receive the same A photons. Predictions are probabilities on the full TZYX patch; these central slices use one common probability color scale per patch. Visible smoothing and row-wise banding need further characterization; lower NLL alone does not establish faithful recovery of fine detail.</p><img src="prediction_examples.png" alt="Input A, held-out B, 3D predicted probability, 4D predicted probability, and a noisy temporal reference" loading="lazy"></section>
+<section class="panel"><h2>Fixed setup</h2><table><tbody id="setup"></tbody></table><p class="limits">This pilot holds out a separate acquisition. Independent biological replicates have not been established, and validation patches can overlap. One seed and one fixed training budget cannot establish general superiority or discovery of previously undetectable structures.</p><div class="links"><a href="protocol.txt">Protocol</a><a href="config.yml">Configuration</a><a href="softmax_audit.json">Softmax numerical check</a><a href="source_snapshot.json">Training source hashes</a></div></section>
+<p id="updated" style="font-size:13px"></p>
+</main>
+<script>
+const colors={conv4d:'#2563eb',conv3d:'#c2410c'};
+const ns='http://www.w3.org/2000/svg';
+const snapshot=__OFFLINE_DATA__;
+async function read(path){if(location.protocol==='file:')return snapshot[path]??null;try{const r=await fetch(path+'?t='+Date.now(),{cache:'no-store'});return r.ok?await r.json():snapshot[path]??null}catch{return snapshot[path]??null}}
+function node(tag,attributes={},content=''){const el=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attributes))el.setAttribute(k,v);el.textContent=content;return el}
+function chart(curves,uniform){const svg=document.querySelector('#chart');svg.replaceChildren();const points=Object.values(curves).flat();const values=[uniform,...points.map(x=>x.photon_nll)];const lo=Math.min(...values),hi=Math.max(...values);const margin=Math.max(.08,(hi-lo)*.12),ymin=lo-margin,ymax=hi+margin;const x=s=>65+s/500*855,y=v=>275-(v-ymin)/(ymax-ymin)*245;
+for(let i=0;i<=5;i++){const value=ymin+(ymax-ymin)*i/5,yy=y(value);svg.append(node('line',{x1:65,x2:920,y1:yy,y2:yy,stroke:'#e1e8f0'}),node('text',{x:55,y:yy+4,'text-anchor':'end',fill:'#58677a','font-size':12},value.toFixed(2)))}
+for(let step=0;step<=500;step+=100)svg.append(node('text',{x:x(step),y:300,'text-anchor':'middle',fill:'#58677a','font-size':12},String(step)));
+svg.append(node('line',{x1:65,x2:920,y1:y(uniform),y2:y(uniform),stroke:'#77879b','stroke-dasharray':'6 5'}),node('text',{x:490,y:325,'text-anchor':'middle',fill:'#58677a','font-size':12},'Optimizer update'));
+for(const [name,rows] of Object.entries(curves)){if(!rows.length)continue;svg.append(node('polyline',{points:rows.map(p=>`${x(p.step)},${y(p.photon_nll)}`).join(' '),fill:'none',stroke:colors[name],'stroke-width':2.5}));for(const p of rows)svg.append(node('circle',{cx:x(p.step),cy:y(p.photon_nll),r:4,fill:colors[name]}))}}
+let timer;
+async function refresh(){const meta=await read('study_metadata.json');if(!meta)return;const process=await read('training/pilot/process.json');const curves={};for(const name of ['conv4d','conv3d']){const [progress,result,curve]=await Promise.all([read(`training/pilot/${name}/progress.json`),read(`training/pilot/${name}/result.json`),read(`training/pilot/${name}/learning_curve.json`)]);curves[name]=curve||[];const card=document.getElementById(name),spec=meta.models[name];card.querySelector('.spec').textContent=`${spec.widths.join(' → ')} channels · ${(spec.parameters/1e6).toFixed(2)}M parameters · batch ${spec.batch_size} × accumulation ${spec.accumulation_steps}`;if(progress){card.querySelector('.phase').textContent=progress.phase==='complete'?'Complete':progress.phase;card.querySelector('.step').textContent=`${progress.step} / ${progress.total_steps}`;card.querySelector('progress').value=progress.step;card.querySelector('.nll').textContent=progress.last_validation.photon_nll.toFixed(4);card.querySelector('.memory').textContent=progress.peak_gpu_reserved_gib?progress.peak_gpu_reserved_gib.toFixed(2)+' GiB':'—'}if(result)card.querySelector('.phase').textContent='Complete'}
+chart(curves,meta.uniform_nll);document.querySelector('#status').textContent=process?.status==='complete'?'Training complete · final audit and plots below':process?.status==='running'?'Training on physical GPU 0':process?.status||'Waiting for worker';document.querySelector('#updated').textContent=location.protocol==='file:'?'Report snapshot generated '+new Date(snapshot.generated_utc).toLocaleString():'Page updated '+new Date().toLocaleString();
+const tbody=document.querySelector('#setup');tbody.replaceChildren();for(const [k,v] of Object.entries(meta.setup)){const tr=document.createElement('tr'),a=document.createElement('th'),b=document.createElement('td');a.textContent=k;b.textContent=v;tr.append(a,b);tbody.append(tr)}
+const final=await read('comparison_summary.json');if(final){document.querySelector('#final-panel').classList.remove('hidden');document.querySelector('#final-text').textContent=final.description;document.querySelector('#prediction-panel').classList.remove('hidden');if(process?.status==='complete')clearInterval(timer)}}
+refresh();timer=setInterval(refresh,15000);
+</script>
+</html>

@@ -1,0 +1,9 @@
+Single Photon Challenge retirement, 2026-10-25
+User explicitly requested removal of SSUNet artifacts and anything related to the photon challenge.
+All models_spad checkpoints (including named inference exports), abandoned temporary Torch states,
+and submission.zip are selected for deletion; see execution_receipt.json for the actual outcome.
+Original configs, logs, TensorBoard records, analysis, source, repository history and environments remain.
+Old checkpoint-based inference/training now requires retraining or restoring weights.
+The old dataset root D:/Yehe/PC is absent; no dataset root was deleted.
+Unrelated SPAD camera captures/SDKs are outside this confirmed challenge scope.
+Full file inventory and scope evidence: C:\Users\jenkinslab\project\featurexx\logs\research_cleanup_20261025_v1

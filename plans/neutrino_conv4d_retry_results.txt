@@ -1,0 +1,82 @@
+4D convolution retry: completed 2026-10-27
+
+Finding
+The small full x/y/z/time model improves low-count held-out photon prediction
+over both the old dense backbone and a full-time-resolution control in this
+exploratory P-ONE simulation pilot. Its all-photon advantage over the full-time
+control is uncertain. This supports trying spatial/time coupling for arrival
+distributions; it is not proof of recovered real neutrino events or of a causal
+advantage of self-splitting over alternative training objectives.
+
+Configuration: config/neutrino_conv4d_retry.yml
+Protocol: plans/neutrino_conv4d_retry_protocol.txt
+Reproduction: plans/neutrino_conv4d_retry_usage.txt
+Results: data/neutrino/conv4d_retry_v1/results.json
+Viewer: http://127.0.0.1:8765/conv4d_retry_v1/index.html
+
+Fixed comparison
+Original 800 training and 100 validation records; observed integer photon
+splits, p=.5, split seed 42. No test observations, physical labels or truth
+sidecars were used. All three architectures use seeds 42/43/44, 5,000 updates,
+batch size 16, FP32, matched shuffled observations and fresh epoch splits,
+AdamW lr=.001/weight_decay=.01 and clipping 1. The fixed final step is primary.
+
+Photon-weighted NLL, nats per held-out photon; lower is better.
+Method                                All photons    1-10 retained photons
+Original dense reference                 2.963655             4.134634
+Full-time-resolution reference           2.210544             3.716048
+Full 4D CNN                              2.183318             3.274752
+Previously tuned retained/prior mix      2.689193             4.696247
+Fixed 50/50 retained/prior mix            3.060300             4.973736
+
+The low-count stratum has 50 events, 36 with nonempty targets, and 120 held-out
+photons. All-event scoring has 907 held-out photons in 100 records. These are
+the same records across seeds, not three independent validation datasets.
+Means are per-event seed NLL averages, not probability-ensemble scores.
+
+4D minus control in the primary low-count stratum, with descriptive 95%
+whole-configuration bootstrap intervals conditional on these fitted models:
+Original dense:      -0.859882 [-1.106350, -0.577734]
+Full-time reference: -0.441296 [-0.706097, -0.208480]
+Previously tuned mix:-1.421495 [-1.887762, -1.007090]
+
+4D minus full-time for all photons is -0.027226 [-0.261729, +0.028130].
+The 4D seed-specific low-count scores are 3.2222, 3.3134 and 3.2886
+(rounding; exact values are in the seed result files).
+
+Replacing A with 20 training-donor draws matched exactly on retained count
+raises 4D low-count NLL to 11.138809. Exact count-matching coverage is 100%
+in this primary stratum. Intervals for unmatched donor strata are withheld.
+Empty-input 4D NLL is 7.388465 versus 7.273954 for the dense reference: no
+empty-input advantage is established. Empty inputs predict priors, and empty
+targets contribute zero location likelihood loss.
+
+Efficiency and recovery
+The 4D model has 3,945 parameters; each reference has 3,585. All use GPU 0.
+4D training takes about 149-153 seconds per seed including loading/updates,
+excluding evaluation/setup. Allocated GPU tensor peaks are 0.188-0.191 GiB;
+recorded process peaks are at most 1.921 GiB. These are workstation timings
+on a 60-sensor pilot, not a full-detector or isolated performance benchmark.
+
+A daemon restart stopped seed 43 after its 1,000-update checkpoint. The seven
+completed runs were preserved. Recovery restored model, optimizer, epoch and
+batch cursor, then completed its original 5,000-step trajectory and seed 44.
+A CPU interruption test reproduces uninterrupted weights and scores exactly.
+The resumed timing includes the rounded pre-checkpoint time and new updates;
+discarded uncheckpointed work and restart overhead are unmeasured/excluded.
+
+Verification and limitations
+All nine final checkpoints replay every saved validation event NLL exactly.
+Training/model/native source hashes and the observed shard hash match their
+frozen manifest; the completed pre-restart result hashes are unchanged.
+Saved example probability distributions are normalized and nonnegative.
+Native and portable 4D outputs and all parameter gradients agree on real
+detector-grid inputs. Focused model/scoring checks and two recovery tests pass.
+
+Figures show predicted distributions, retained A counts and noisy held-out B
+counts on separate axes; B is not a clean photon GT image. Example records
+were chosen by input-count stratum and record order, not prediction quality.
+The source is curated P-ONE simulation with qualified generation/selection
+assumptions. This reuses a small, previously explored validation cohort. The
+intervals omit model selection, seed-fitting and unknown deeper-family
+uncertainty. No new test, real-background detection or decoding claim is made.

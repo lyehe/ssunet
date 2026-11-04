@@ -1,0 +1,68 @@
+Completed confocal GAP comparison: effective batch four
+======================================================
+
+Completed 2026-10-28 on physical GPU 0 (RTX 4090). Both models finished the
+registered 500-update schedule, each using 2,000 identical canonically indexed
+training patches and fixed held-out photon splits. The primary endpoint is the
+final update, with no early stopping or selection of an earlier checkpoint.
+
+Final acquisition-holdout scores (lower NLL is better)
+----------------------------------------------------
+                  Photon-weighted NLL   Equal-patch NLL   Training minutes
+  Uniform              15.24923797          15.24923797             --
+  XYZ-only 3D GAP       15.12148088          15.09377055          40.93
+  XYZT 4D GAP           15.10872977          15.08090082          66.65
+
+4D improves the primary score by 0.01275111 nats/photon over 3D. Parameter
+counts are 17,973,665 (4D) and 17,797,591 (3D). Physical batch/accumulation
+is 2/2 for 4D and 1/4 for 3D, giving effective batch four for each model.
+Peak allocated/reserved CUDA memory is 18.32/21.57 GiB for 4D and
+15.28/17.91 GiB for 3D. Training times above exclude validation and startup.
+
+Both models use raw integer HyD photon counts with GAP supervision and
+Barron et al.'s fixed log-softmax, equation 5, in loss and scoring:
+https://jonbarron.info/softmaxfix/
+The teacher-logit cancellation correction is not applicable to these count
+targets. Analytic FP32/FP64 numerical checks are in softmax_audit.json.
+
+Verification
+------------
+53 relevant tests passed. Reloading both final checkpoints reproduced pooled,
+equal-patch and every per-patch recorded NLL exactly. Maximum probability-mass
+error was 8.34e-7 (4D) and 9.54e-7 (3D). The audit checked training source
+snapshots, all 26 external convolution-package source files, cached counts,
+source metadata, model configurations and validation photon draws.
+
+Interpretation and limits
+-------------------------
+This is a modest likelihood improvement in one acquisition-holdout pilot.
+There is one seed and one training budget. Independent biological replicates
+have not been established; the 16 validation patches may overlap, so their
+2,194,425 target-photon total is not a count of unique independent events.
+No statistical significance or general superiority claim is established.
+
+Visual inspection of the predeclared patches (0, 7, 15) shows spatial
+structure, smoothing and visible row-wise banding in predictions, especially
+4D. The cause of the banding is not established. A lower NLL alone does not
+establish faithful recovery of fine structures or previously undetectable
+observations. The temporal averages contain noisy A+B counts and may blur
+motion; they are visual context, not clean ground truth. Predictions are
+normalized photon-arrival distributions; PSNR is not used.
+
+Artifacts and replay
+--------------------
+Study root: data/confocal_gap4d_features32_batch4_v1/
+  index.html                  Standalone dashboard with embedded plots/data
+  prediction_examples.png/svg Input A, held-out B, 3D/4D probabilities, mean C
+  prediction_examples.npz     Full 4D probability arrays for displayed examples
+  learning_curves.png/svg     Both registered likelihood weighting schemes
+  comparison.csv             Final metrics, model sizes, batching, time, memory
+  comparison_summary.json    Numerical comparison with per-patch scores
+  evidence_audit.json        Checkpoint/source/data replay checks
+  training/pilot/*/last.pt    Final model and optimizer checkpoints
+
+  .venv/Scripts/python.exe -m src.tools.confocal_evaluate
+  .venv/Scripts/python.exe -m src.tools.confocal_report
+
+The optional HTTP server was rejected by automatic approval review with
+"blocked by policy". No server was started; open index.html as a local file.

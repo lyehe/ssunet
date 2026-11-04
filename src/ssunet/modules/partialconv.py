@@ -1,153 +1,102 @@
-"""Partial Convolutional Layers."""
+"""Partial convolutions with binary validity masks and padding correction."""
+
+import math
 
 import torch
 import torch.nn.functional as tnf
 from torch import nn
 
-from ..constants import EPSILON
 from ..exceptions import InvalidInputShapeError
 
 
-class PartialConv3d(nn.Conv3d):
-    """3D Partial Convolutional Layer for Image Inpainting from NVIDIA.
+class _PartialConv:
+    """Shared mask bookkeeping for the two convolution dimensions."""
 
-    https://arxiv.org/abs/1811.11718 for padding in this application.
-    """
+    def _initialize_masks(self, dimensions: int) -> None:
+        self._dimensions = dimensions
+        mask_channels = self.in_channels // self.groups if self.multi_channel else 1
+        mask_outputs = self.out_channels if self.multi_channel else 1
+        updater = torch.ones(mask_outputs, mask_channels, *self.kernel_size)
+        # Derived masks are rebuilt on demand and must not change checkpoint keys.
+        self.register_buffer("weight_maskUpdater", updater, persistent=False)
+        self.register_buffer("update_mask", torch.empty(0), persistent=False)
+        self.register_buffer("mask_ratio", torch.empty(0), persistent=False)
+        self.slide_winsize = math.prod(updater.shape[1:])
+        self._mask_cache_key = None
+        self._last_mask_was_explicit = False
 
-    def __init__(
-        self, *args, multi_channel: bool = True, return_mask: bool = False, **kwargs
-    ) -> None:
-        """Initialize PartialConv3d."""
-        super().__init__(*args, **kwargs)
-        self.multi_channel = multi_channel
-        self.return_mask = return_mask
+    def forward(
+        self, input: torch.Tensor, mask_in: torch.Tensor | None = None
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+        """Convolve valid inputs and correct for missing samples at the boundary."""
+        expected_dimensions = self._dimensions + 2
+        if input.ndim != expected_dimensions:
+            raise InvalidInputShapeError(expected_dimensions, input.shape)
 
-        self.weight_maskUpdater = (
-            torch.ones(self.out_channels, self.in_channels, *self.kernel_size)
-            if multi_channel
-            else torch.ones(1, 1, *self.kernel_size)
-        )
-        self.slide_winsize = torch.prod(torch.tensor(self.weight_maskUpdater.shape[1:]))
-        self.last_size = (None, None, None, None, None)
-        self.update_mask = torch.tensor([])
-        self.mask_ratio = torch.tensor([])
-
-    def forward(self, input: torch.Tensor, mask_in: torch.Tensor | None = None):
-        """Forward pass."""
-        if len(input.shape) != 5:
-            raise InvalidInputShapeError(5, input.shape)
-
-        if mask_in is not None or self.last_size != tuple(input.shape):
-            self.last_size = tuple(input.shape)
-
-            with torch.no_grad():
-                self.weight_maskUpdater = self.weight_maskUpdater.to(input)
-
-                mask = (
-                    mask_in
-                    if mask_in is not None
-                    else torch.ones(
-                        input.data.shape
-                        if self.multi_channel
-                        else (input.shape[0], 1, *input.shape[2:])
-                    ).to(input)
+        cache_key = (tuple(input.shape), input.device, input.dtype)
+        if mask_in is not None or self._last_mask_was_explicit or self._mask_cache_key != cache_key:
+            with torch.no_grad(), torch.autocast(input.device.type, enabled=False):
+                mask_shape = (
+                    tuple(input.shape)
+                    if self.multi_channel
+                    else (input.shape[0], 1, *input.shape[2:])
                 )
-
-                self.update_mask = tnf.conv3d(
-                    mask,
-                    self.weight_maskUpdater,
-                    bias=None,
-                    stride=self.stride,
-                    padding=self.padding,
-                    dilation=self.dilation,
-                    groups=1,
-                )
-
-                self.mask_ratio = self.slide_winsize / (self.update_mask + EPSILON)
-                self.update_mask = torch.clamp(self.update_mask, 0, 1)
-                self.mask_ratio = torch.mul(self.mask_ratio, self.update_mask)
-
-        raw_out = super().forward(torch.mul(input, mask_in) if mask_in is not None else input)
-
-        if self.bias is not None:
-            bias_view = self.bias.view(1, self.out_channels, 1, 1, 1)
-            output = torch.mul(raw_out - bias_view, self.mask_ratio) + bias_view
-            output = torch.mul(output, self.update_mask)
-        else:
-            output = torch.mul(raw_out, self.mask_ratio)
-
-        return output, self.update_mask if self.return_mask else output
-
-
-class PartialConv2d(nn.Conv2d):
-    """2D Partial Convolutional Layer for Image Inpainting from NVIDIA.
-
-    https://arxiv.org/abs/1811.11718 for padding in this application.
-    """
-
-    def __init__(
-        self, *args, multi_channel: bool = True, return_mask: bool = False, **kwargs
-    ) -> None:
-        """Initialize PartialConv2d."""
-        super().__init__(*args, **kwargs)
-        self.multi_channel = multi_channel
-        self.return_mask = return_mask
-
-        self.weight_maskUpdater = (
-            torch.ones(self.out_channels, self.in_channels, *self.kernel_size)
-            if multi_channel
-            else torch.ones(1, 1, *self.kernel_size)
-        )
-
-        self.slide_winsize = torch.prod(torch.tensor(self.weight_maskUpdater.shape[1:]))
-        self.last_size = (None, None, None, None)
-        self.update_mask = torch.tensor([])
-        self.mask_ratio = torch.tensor([])
-
-    def forward(self, input: torch.Tensor, mask_in: torch.Tensor | None = None):
-        """Forward pass."""
-        if len(input.shape) != 4:
-            raise InvalidInputShapeError(4, input.shape)
-
-        if mask_in is not None or self.last_size != tuple(input.shape):
-            self.last_size = tuple(input.shape)
-
-            with torch.no_grad():
-                if self.weight_maskUpdater.type() != input.type():
-                    self.weight_maskUpdater = self.weight_maskUpdater.to(input)
-
-                # if mask is not provided, create a mask
-                mask = (
-                    mask_in
-                    if mask_in is not None
-                    else (
-                        torch.ones(input.data.shape).to(input)
-                        if self.multi_channel
-                        else torch.ones((input.shape[0], 1, *input.shape[2:])).to(input)
+                mask_dtype = torch.float64 if input.dtype == torch.float64 else torch.float32
+                if mask_in is None:
+                    mask = torch.ones(mask_shape, device=input.device, dtype=mask_dtype)
+                else:
+                    mask = torch.broadcast_to(
+                        mask_in.to(device=input.device, dtype=mask_dtype), mask_shape
                     )
-                )
-
-                self.update_mask = tnf.conv2d(
+                convolution = tnf.conv3d if self._dimensions == 3 else tnf.conv2d
+                counts = convolution(
                     mask,
-                    self.weight_maskUpdater,
-                    bias=None,
+                    self.weight_maskUpdater.to(device=input.device, dtype=mask_dtype),
                     stride=self.stride,
                     padding=self.padding,
                     dilation=self.dilation,
-                    groups=1,
+                    groups=self.groups if self.multi_channel else 1,
                 )
+                self.update_mask = (counts > 0).to(dtype=mask_dtype)
+                self.mask_ratio = self.slide_winsize / counts.clamp_min(1)
+                self.mask_ratio = self.mask_ratio * self.update_mask
+            self._mask_cache_key = cache_key
+            self._last_mask_was_explicit = mask_in is not None
 
-                self.mask_ratio = self.slide_winsize / (self.update_mask + EPSILON)
-                self.update_mask = torch.clamp(self.update_mask, 0, 1)
-                self.mask_ratio = torch.mul(self.mask_ratio, self.update_mask)
-
-        raw_out = super().forward(torch.mul(input, mask) if mask_in is not None else input)
-
-        if self.bias is not None:
-            bias_view = self.bias.view(1, self.out_channels, 1, 1)
-            output = torch.mul(raw_out - bias_view, self.mask_ratio) + bias_view
-            output = torch.mul(output, self.update_mask)
+        masked_input = input if mask_in is None else input * mask_in.to(input)
+        raw_out = super().forward(masked_input)
+        ratio = self.mask_ratio.to(raw_out)
+        valid = self.update_mask.to(raw_out)
+        if self.bias is None:
+            output = raw_out * ratio
         else:
-            output = torch.mul(raw_out, self.mask_ratio)
+            bias = self.bias.to(raw_out).view(1, self.out_channels, *([1] * self._dimensions))
+            output = ((raw_out - bias) * ratio + bias) * valid
 
-        return output, self.update_mask if self.return_mask else output
+        if self.return_mask:
+            return output, valid
+        return output
+
+
+class PartialConv3d(_PartialConv, nn.Conv3d):
+    """3D partial convolution using NVIDIA's padding-correction formulation."""
+
+    def __init__(
+        self, *args, multi_channel: bool = True, return_mask: bool = False, **kwargs
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.multi_channel = multi_channel
+        self.return_mask = return_mask
+        self._initialize_masks(3)
+
+
+class PartialConv2d(_PartialConv, nn.Conv2d):
+    """2D partial convolution using NVIDIA's padding-correction formulation."""
+
+    def __init__(
+        self, *args, multi_channel: bool = True, return_mask: bool = False, **kwargs
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.multi_channel = multi_channel
+        self.return_mask = return_mask
+        self._initialize_masks(2)

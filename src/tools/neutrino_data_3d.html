@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Detector data in 3D</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin:0; background:#f2f5f9; color:#192d43; font:15px/1.5 system-ui,sans-serif; }
+    header { padding:20px 28px 14px; background:white; border-bottom:1px solid #dce4ed; }
+    header h1 { margin:0 0 3px; font-size:25px; letter-spacing:-.5px; }
+    header p { margin:0; color:#60748c; }
+    main { display:grid; grid-template-columns:300px minmax(0,1fr); gap:18px; padding:18px; max-width:1800px; margin:auto; }
+    aside { background:white; border:1px solid #dce4ed; border-radius:12px; padding:20px; }
+    label { display:block; font-weight:650; margin:0 0 7px; }
+    select,button { font:inherit; }
+    select { width:100%; border:1px solid #c7d3e1; border-radius:7px; background:white; padding:9px 8px; margin-bottom:18px; color:#192d43; }
+    .badge { display:inline-block; font-size:11px; font-weight:750; letter-spacing:.8px; padding:5px 9px; background:#e9f3f6; color:#176578; border-radius:5px; }
+    .description { color:#576c83; font-size:13px; }
+    .stats { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:20px 0; }
+    .stat { padding:10px; border:1px solid #e4eaf1; border-radius:8px; }
+    .stat strong { display:block; font-size:24px; font-weight:650; }
+    .stat span { display:block; font-size:12px; color:#60748c; }
+    button { cursor:pointer; border:1px solid #c7d3e1; border-radius:7px; padding:7px 12px; color:#243a53; background:white; }
+    button:hover { background:#eef4fa; }
+    #play { background:#176a87; border-color:#176a87; color:white; min-width:72px; }
+    .actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .display { min-width:0; border-radius:12px; overflow:hidden; background:#0b1424; border:1px solid #213249; }
+    #plot { width:100%; height:calc(100vh - 240px); min-height:500px; }
+    .timeline { padding:14px 20px 18px; color:#e1ebf7; background:#142239; }
+    .timeline-head { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:8px; }
+    #time { font-variant-numeric:tabular-nums; }
+    #slider { width:100%; accent-color:#58c0db; cursor:pointer; }
+    .range { display:flex; justify-content:space-between; font-size:12px; color:#9fb4cd; font-variant-numeric:tabular-nums; }
+    .legend { margin-top:18px; font-size:13px; color:#526980; }
+    .swatch { display:inline-block; width:9px; height:9px; border-radius:50%; background:#a6b2c2; margin-right:5px; }
+    .note { font-size:12px; color:#6a7d93; margin-top:18px; }
+    a { color:#176a87; }
+    footer { padding:0 22px 20px; color:#6a7d93; font-size:12px; }
+    @media(max-width:850px) { main { grid-template-columns:1fr; } aside { padding:14px; } .stats { margin:10px 0; } #plot { height:60vh; min-height:420px; } header { padding:16px 20px; } }
+  </style>
+  <script>__PLOTLY_JS__</script>
+</head>
+<body>
+<header><h1>Detector data in 3D</h1><p>Rotate and zoom the detector. Play the arrivals or explore a sparse, bright, or empty record.</p></header>
+<main>
+  <aside>
+    <label for="dataset">Data</label><select id="dataset"></select>
+    <label for="event">Example</label><select id="event"></select>
+    <span id="kind" class="badge"></span>
+    <p id="description" class="description"></p>
+    <div class="stats">
+      <div class="stat"><strong id="shown">0</strong><span id="unit">detections shown</span></div>
+      <div class="stat"><strong id="locations">0</strong><span>positions with hits</span></div>
+    </div>
+    <p id="record" class="description"></p><p id="charge" class="description"></p>
+    <div class="actions"><button id="focus">Focus on hits</button><button id="full">Full detector</button></div>
+    <div class="legend"><p><span class="swatch"></span>Gray dots: reference sensors</p><p>Color: first arrival time at a position<br>Size: recorded count at that position</p></div>
+    <p id="geometry-note" class="note"></p>
+    <p class="note">Complete saved records and original source times. Empty records show no detections; they do not establish absence of a physical event.</p>
+    <p class="note"><a href="index.html" download="detector_data_3d.html">Save offline viewer</a> &middot; <a href="preview.png">3D overview image</a><br><a href="manifest.json">Sources and example selection</a></p>
+  </aside>
+  <section class="display">
+    <div id="plot" aria-label="Interactive three-dimensional detector observations"></div>
+    <div class="timeline">
+      <div class="timeline-head"><span id="time"></span><div class="actions"><button id="play">Play</button><button id="all">Show all</button></div></div>
+      <input id="slider" type="range" min="0" max="1000" value="1000" aria-label="Reveal recorded arrivals through time">
+      <div class="range"><span id="start"></span><span id="end"></span></div>
+    </div>
+  </section>
+</main>
+<footer>Drag to orbit &middot; Scroll to zoom &middot; Hover a colored marker for its recorded count and time &middot; No model predictions or particle tracks</footer>
+<script>
+"use strict";
+const observationData = __OBSERVATIONS_JSON__;
+const datasets = observationData.datasets;
+const elements = Object.fromEntries(["dataset","event","kind","description","shown","locations","unit","record","charge","geometry-note","slider","time","start","end","play"].map(id=>[id,document.getElementById(id)]));
+let dataset = datasets[0], event = null, timer = null, initialized = false;
+const camera = {eye:{x:1.55,y:1.4,z:.75},up:{x:0,y:0,z:1}};
+const plotConfig = {responsive:true,displaylogo:false,scrollZoom:true,toImageButtonOptions:{format:"png",filename:"detector_observations_3d",scale:2}};
+function stop() { if(timer!==null) clearInterval(timer); timer=null; elements.play.textContent="Play"; }
+function bounds(points) {
+  if(!points.length) points=dataset.geometry;
+  const lo=[Infinity,Infinity,Infinity], hi=[-Infinity,-Infinity,-Infinity];
+  for(const p of points) for(let j=0;j<3;j++) {lo[j]=Math.min(lo[j],p[j]);hi[j]=Math.max(hi[j],p[j]);}
+  const padding=Math.max(40,.12*Math.max(...hi.map((v,j)=>v-lo[j])));
+  return lo.map((v,j)=>[v-padding,hi[j]+padding]);
+}
+function activePositions() { return [...new Set(event.sensor)].map(index=>event.positions[index]); }
+function fitView(full) {
+  const range=bounds(full?dataset.geometry:activePositions());
+  return Plotly.relayout("plot",{"scene.xaxis.range":range[0],"scene.yaxis.range":range[1],"scene.zaxis.range":range[2],"scene.camera":camera});
+}
+function aggregate(fraction) {
+  const limit=fraction>=1?event.time_range_us[1]:event.time_range_us[0]+fraction*(event.time_range_us[1]-event.time_range_us[0]);
+  const counts=new Int32Array(event.positions.length), first=new Float64Array(event.positions.length).fill(Infinity), last=new Float64Array(event.positions.length).fill(-Infinity), charge=new Float64Array(event.positions.length);
+  let shown=0, totalCharge=0;
+  if(fraction>0) for(let i=0;i<event.sensor.length;i++) {
+    if(event.time_us[i]>limit) continue;
+    const s=event.sensor[i]; counts[s]++; shown++; first[s]=Math.min(first[s],event.time_us[i]);last[s]=Math.max(last[s],event.time_us[i]);
+    if(event.charge_pe!==null) {charge[s]+=event.charge_pe[i];totalCharge+=event.charge_pe[i];}
+  }
+  const x=[],y=[],z=[],colors=[],sizes=[],hover=[];
+  for(let s=0;s<counts.length;s++) if(counts[s]) {
+    const p=event.positions[s];x.push(p[0]);y.push(p[1]);z.push(p[2]);colors.push(first[s]);sizes.push(Math.min(27,5+2.8*Math.sqrt(counts[s])));
+    hover.push(`${counts[s]} ${dataset.unit}<br>First ${first[s].toFixed(4)} µs · last ${last[s].toFixed(4)} µs${event.charge_pe===null?"":`<br>Charge ${charge[s].toFixed(3)} PE`}<br>X ${p[0].toFixed(2)} m · Y ${p[1].toFixed(2)} m · Z ${p[2].toFixed(2)} m`);
+  }
+  return {x,y,z,colors,sizes,hover,shown,totalCharge,limit};
+}
+function drawTime() {
+  const a=aggregate(Number(elements.slider.value)/1000);
+  elements.shown.textContent=a.shown.toLocaleString();elements.locations.textContent=a.x.length.toLocaleString();
+  elements.time.textContent=`Arrivals through ${a.limit.toFixed(3)} µs`;
+  elements.charge.textContent=event.charge_pe===null?"":`Charge shown: ${a.totalCharge.toFixed(3)} PE (not a photon count)`;
+  document.body.dataset.shown=String(a.shown);
+  return Plotly.restyle("plot",{x:[a.x],y:[a.y],z:[a.z],"marker.color":[a.colors],"marker.size":[a.sizes],text:[a.hover]},[1]);
+}
+async function chooseEvent(index) {
+  stop();event=dataset.events[index];elements.slider.value="1000";
+  elements.record.textContent=dataset.id==="icecube"?`Run 115150 · source record ${event.record} · ${event.detections.toLocaleString()} pulses`:`Source event ${event.event_id} · ${event.detections.toLocaleString()} simulated photons`;
+  elements.unit.textContent=`${dataset.unit} shown`;
+  elements.start.textContent=`${event.time_range_us[0].toFixed(3)} µs`;elements.end.textContent=`${event.time_range_us[1].toFixed(3)} µs`;
+  const g=dataset.geometry, axis={title:{font:{size:12}},gridcolor:"#25374f",zerolinecolor:"#314b67",showbackground:false,color:"#adc0d7"};
+  const data=[{type:"scatter3d",mode:"markers",x:g.map(p=>p[0]),y:g.map(p=>p[1]),z:g.map(p=>p[2]),marker:{size:1.8,color:"#8eabc7",opacity:.23},hoverinfo:"skip",name:"Reference sensors"},{type:"scatter3d",mode:"markers",x:[],y:[],z:[],marker:{size:[],color:[],colorscale:observationData.colorscale,cmin:event.time_range_us[0],cmax:event.time_range_us[1],opacity:.98,colorbar:{title:{text:"First arrival<br>µs (source time)",font:{color:"#d0dfef",size:12}},tickfont:{color:"#c0d2e6"},thickness:14,len:.65}},text:[],hovertemplate:"%{text}<extra></extra>",name:"Recorded detections"}];
+  const layout={paper_bgcolor:"#0b1424",plot_bgcolor:"#0b1424",font:{color:"#c0d2e6"},margin:{l:10,r:18,t:10,b:35},showlegend:false,uirevision:dataset.id,scene:{bgcolor:"#0b1424",aspectmode:"data",camera,xaxis:{...axis,title:{text:"X (m)"}},yaxis:{...axis,title:{text:"Y (m)"}},zaxis:{...axis,title:{text:"Z (m)"}}}};
+  if(!initialized) {await Plotly.newPlot("plot",data,layout,plotConfig);initialized=true;} else {await Plotly.react("plot",data,layout,plotConfig);}
+  await drawTime();await fitView(dataset.id==="pone");
+  document.body.dataset.viewerReady="true";document.body.dataset.activeDataset=dataset.id;document.body.dataset.activeRecord=String(event.record);
+}
+async function chooseDataset(index) {
+  stop();dataset=datasets[index];elements.dataset.value=String(index);
+  elements.kind.textContent=dataset.kind;elements.description.textContent=dataset.description;elements["geometry-note"].textContent=dataset.geometry_note;
+  elements.event.replaceChildren();
+  dataset.events.forEach((value,i)=>{const option=document.createElement("option");option.value=String(i);option.textContent=`${value.category} · ${value.detections} ${dataset.unit}`;elements.event.append(option);});
+  const preferred=dataset.events.findIndex(value=>value.category===dataset.default_category);
+  elements.event.value=String(Math.max(0,preferred));await chooseEvent(Math.max(0,preferred));
+}
+datasets.forEach((value,index)=>{const option=document.createElement("option");option.value=String(index);option.textContent=value.name;elements.dataset.append(option);});
+elements.dataset.addEventListener("change",()=>chooseDataset(Number(elements.dataset.value)));
+elements.event.addEventListener("change",()=>chooseEvent(Number(elements.event.value)));
+elements.slider.addEventListener("input",()=>{stop();drawTime();});
+document.getElementById("all").addEventListener("click",()=>{stop();elements.slider.value="1000";drawTime();});
+document.getElementById("focus").addEventListener("click",()=>fitView(false));
+document.getElementById("full").addEventListener("click",()=>fitView(true));
+elements.play.addEventListener("click",()=>{
+  if(timer!==null) {stop();return;}
+  if(Number(elements.slider.value)>=1000) elements.slider.value="0";
+  elements.play.textContent="Pause";drawTime();
+  timer=setInterval(()=>{elements.slider.value=String(Math.min(1000,Number(elements.slider.value)+10));drawTime();if(Number(elements.slider.value)>=1000) stop();},80);
+});
+window.observationViewer={chooseDataset,chooseEvent,drawTime,aggregate,datasets};
+chooseDataset(0).catch(error=>{document.body.dataset.viewerError=error.message;elements.description.textContent=`Viewer error: ${error.message}`;});
+</script>
+</body>
+</html>

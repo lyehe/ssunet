@@ -1,0 +1,33 @@
+Fresh GAP training retry under the corrected current sources
+
+Configuration: config/neutrino_gap4d_retry_v2.yml
+Protocol: plans/neutrino_gap4d_retry_v2_protocol.txt
+Output: data/neutrino/gap4d_retry_v2
+Live/final viewer: http://127.0.0.1:8765/gap4d_retry_v2/index.html
+
+From the ssunet root, with the existing torch-convnd-enabled environment:
+  $env:CUDA_VISIBLE_DEVICES='0'
+  $env:MAX_JOBS='2'
+  $env:OMP_NUM_THREADS='4'
+  $env:CUBLAS_WORKSPACE_CONFIG=':4096:8'
+  .venv/Scripts/python.exe -m src.tools.neutrino_gap4d_retry --config config/neutrino_gap4d_retry_v2.yml --device cuda:0
+
+The run creates a fresh output directory. If interrupted, check that the
+recorded process is no longer active, then use the same command with --resume.
+The configuration, data and source identities must match its saved identity.
+Keep frozen training sources unchanged during a run. Checkpoints contain
+optimizer/RNG states and the deterministic training-epoch batch cursor.
+
+After all nine runs finish, replay every saved per-event validation NLL and
+export both score weightings and probability-distribution examples:
+  .venv/Scripts/python.exe -m src.tools.neutrino_gap4d_report --study data/neutrino/gap4d_retry_v2 --device cuda:0
+
+The source_snapshot.json file lists hash-verified copies of all training and
+native-library sources recorded in identity.json, plus reporting sources.
+Copies live under source_snapshot/. Earlier study files are unchanged.
+
+Only study_id, output and scope differ from the previous GAP configuration.
+P-ONE has multi-photon count bins and uses GAP. The corrected Bit2Bit offset
+mask applies to true one-bit acquisitions, so it does not alter this count
+experiment. Compare fresh validation scores with gap4d_retry_v1 to measure
+reproducibility; the reused validation observations do not form a new test.

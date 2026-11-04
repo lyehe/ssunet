@@ -1,0 +1,42 @@
+Paper-aligned GAP 4D retry, declared before fitting, 2026-10-27
+
+Use config/neutrino_gap4d_retry.yml and src/tools/neutrino_gap4d_retry.py.
+Output: data/neutrino/gap4d_retry_v1. Preserve the earlier count-weighted run.
+
+Data: original 800 training / 100 validation P-ONE simulation observations,
+same fixed p=.5, split seed 42, time window and 256 bins. No test records,
+truth sidecars, source labels or clean photon GT are used. Fixed evaluation
+splits and fresh training-epoch splits remain shared across architecture arms.
+
+Method: count data select GAP. Use the public multiscale sine encoding at
+ten levels and the per-example unit-mean target/log-mean-exp photon loss.
+No Bit2Bit input-hit mask is applied to multi-photon count data. Physical
+live support remains masked; prediction is one joint sensor/time PMF.
+The original GAP network/optimizer and random splitting schedule are not
+replicated: these remain the declared matched small detector architectures,
+fixed p=.5 and common FP32 optimizer. This isolates a practical GAP-style
+4D comparison, not a reproduction of the paper's microscopy benchmark.
+
+Arms: coarse dense reference and full-time reference (width 16, 4593
+parameters each), and full x/y/z/time residual CNN (width 4, 3981 parameters).
+All receive the same ten sine channels; A-only geometry and brightness
+metadata remain available. There is no target-derived input scaling.
+
+Seeds 42/43/44, 5000 updates each, batch 16, AdamW lr=.001, decay=.01,
+clipping 1, FP32; GPU 0 only. Fixed final step is used, without selecting
+the best validation checkpoint. Training ceiling 600 seconds per seed and
+12 GiB allocated GPU. Save atomic resumable checkpoints every 250 updates
+and at the fixed evaluation points. Record source/native/data identities.
+
+Report both per-nonempty-event cross entropy (aligned with GAP weighting)
+and photon-weighted NLL (compatible with the earlier predictive diagnostic),
+for all photons and input-defined 1-10 retained counts, plus other strata.
+The old photon-weighted low-count contrast remains the registered comparison
+for continuity; both weightings will be reported regardless of direction.
+Frozen prior/count controls and 20 training count-matched donor draws remain
+unchanged. Use 10000 whole-configuration bootstrap draws for descriptive
+paired differences; no unconditional or physical-event recovery claim.
+
+Figures retain fixed, input-defined example selection and label held-out B
+as noisy observations. This reuses an explored, small validation cohort and
+does not establish real-event detection or a causal splitting advantage.

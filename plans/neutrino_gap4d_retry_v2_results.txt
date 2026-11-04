@@ -1,0 +1,52 @@
+Fresh training retry after the Bit2Bit offset correction, 2026-10-27
+
+Completed all nine fresh fits: coarse temporal, full-time temporal and native
+4D architectures, each with seeds 42/43/44 and 5000 optimizer updates. Only
+study identity/output/scope metadata changed from the previous GAP protocol.
+All source files were held fixed; 38 hash-verified training/native/reporting
+files were archived in data/neutrino/gap4d_retry_v2/source_snapshot/.
+
+Method and data
+The original P-ONE training observations contain bins up to 444 photons.
+These are photon counts and use GAP, following the user's acquisition policy.
+True one-bit observations use the corrected Bit2Bit exponential-offset mask.
+This GAP rerun does not benchmark the binary-specific correction, which does
+not alter the GAP expression. The same 800 training / 100 validation events,
+splits, geometry, 256 time bins, sine inputs, unit-mean targets and joint PMF
+support are used. Reserved test records, clean photon GT and MC truth are
+excluded. Held-out split photons are noisy observations, not clean targets.
+
+Final scores averaged over the three seeds, lower is better
+Architecture            Photon NLL all / low       Event CE all / low
+Coarse temporal          3.369888 / 4.200219         5.120734 / 4.969150
+Full-time temporal       2.874665 / 3.749533         4.908299 / 4.743549
+4D                       3.012414 / 3.347322         4.619380 / 4.273617
+
+The retained 1-10 photon subset contains 50 observations, 36 nonempty targets
+and 120 held-out photons. All validation scoring uses 907 held-out photons.
+4D minus full-time low-count photon NLL is -0.402211, with a conditional
+whole-configuration bootstrap interval [-0.674007, -0.159406]. All-photon NLL
+is worse at the point estimate: +0.137748, interval [-0.173653, +0.287274].
+The previous conclusions are reproduced; this is no new independent test.
+
+Repeatability and integrity
+Maximum change in the six architecture-by-stratum aggregate photon NLLs
+(all photons / low count) compared with gap4d_retry_v1: 1.5805636e-6 nats/photon.
+Both runs have identical validation event/configuration IDs and retained and
+target photon counts. Per-event score differences and per-checkpoint floating
+state differences are recorded in retry_comparison.json; weights are not
+claimed bitwise identical. All nine fresh final checkpoint scores replay
+with zero per-event NLL error. Probability mass error is at most 3.5763e-7,
+invalid-support mass is zero, and data/source identities match the frozen run.
+All 38 archived source files match their recorded SHA256 values. Earlier
+study result files, checkpoints and identities remain preserved.
+
+Cost
+4D training seconds per seed: 157.1, 153.4, 155.4. Peak allocated GPU memory
+is 0.2089 GiB. Training time excludes evaluation/checkpoint overhead and was
+measured on a shared system. No broader performance claim is inferred.
+
+Viewer: http://127.0.0.1:8765/gap4d_retry_v2/index.html
+Detailed outputs: data/neutrino/gap4d_retry_v2
+Commands: plans/neutrino_gap4d_retry_v2_usage.txt
+Protocol: plans/neutrino_gap4d_retry_v2_protocol.txt

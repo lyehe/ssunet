@@ -1,0 +1,53 @@
+study_id: confocal_gap4d_test_v1
+cache: data/confocal_gap4d_test_v1/counts
+output: data/confocal_gap4d_test_v1/training
+observation_kind: photon_counts
+method: gap
+split_probability: 0.5
+photon_split_seed: 4201
+
+# The crops preserve native photon-count units, XYZ spacing and volume cadence.
+# Channel 1 is one detector channel; channel 0 is not used as a clean target.
+sources:
+  train:
+    path: '\\jnas2\Yehe\Confocal data\double snr data 2.lif'
+    series_index: 0
+    channel: 1
+    crop_tzyx: [[0, 64], [0, 40], [128, 384], [128, 384]]
+  validation:
+    path: '\\jnas2\Yehe\Confocal data\XYT cell microtuble 4.lif'
+    series_index: 1
+    channel: 1
+    crop_tzyx: [[0, 32], [0, 50], [128, 384], [128, 384]]
+
+models:
+  - name: conv4d
+    dimensions: 4
+    base_channels: 12
+    encoding_levels: 10
+    backend: native
+  - name: conv3d
+    dimensions: 3
+    base_channels: 20
+    encoding_levels: 10
+
+training:
+  seed: 42
+  patch_tzyx: [8, 8, 64, 64]
+  batch_size: 1
+  accumulation_steps: 2
+  steps: 500
+  optimizer: Adam
+  learning_rate: 0.0001
+  gradient_clip: 0.5
+  precision: fp32
+  cpu_threads: 4
+  max_training_seconds: 1200
+  max_gpu_allocated_gib: 12
+
+evaluation:
+  every_steps: 100
+  patches: 16
+  selection: final_fixed_step
+  metric: held_out_photon_nll
+  scope: exploratory_acquisition_holdout_not_independent_biological_replicates

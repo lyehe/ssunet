@@ -1,0 +1,83 @@
+Current confocal comparison: 32-channel 4D U-Net, effective batch four
+==================================================================
+
+The current CLI default is config/confocal_gap4d_features32_batch4.yml.
+Both models use full 16x16x128x128 TZYX patches and FP32 on physical GPU 0.
+4D: channels 32/64/128/256, 17,973,665 parameters, physical batch 2 with two
+accumulation steps. 3D: 54/108/216/432, 17,797,591 parameters, batch 1 with
+four accumulation steps. Effective batch is four patches per optimizer update
+in both models. The XYZ-only control treats time points independently.
+
+Every training example has a canonical RNG index. Changing microbatch grouping
+does not change its location or its A/B photon split. All four patch losses are
+averaged equally before one clipping/Adam update. Tests verify draws, objective
+and gradients across regrouping. Validation has a separate acquisition and a
+separate fixed RNG stream. GAP's raw-count input encoding and empirical target
+weighting remain unchanged.
+
+Both the new loss and scoring use the fixed log-softmax in Barron et al. (2026),
+equation 5. The implementation is src/ssunet/softmax_fix.py, with analytic tests
+for extremely confident logits in FP32 and FP64. Teacher-logit cancellation is
+not relevant to the observed count targets. Earlier studies retain their saved
+implementations; no global PyTorch function is monkey-patched.
+
+The fixed protocol is plans/confocal_gap4d_batch4_protocol.txt. The full run is
+500 updates / 2,000 patches per model, with evaluation at 0,100,200,300,400,500.
+Final fixed-step metrics are primary; there is no early stopping or selection
+of an earlier endpoint. Scores and per-patch photon totals are saved. The final
+report must describe this as a single-seed acquisition-holdout pilot; overlapping
+validation patches do not constitute independent biological replicates.
+
+Start or resume from the project root
+------------------------------------
+
+  .venv/Scripts/python.exe -m src.tools.confocal_train --train
+  .venv/Scripts/python.exe -m src.tools.confocal_train --train --resume
+
+The explicit config is --config config/confocal_gap4d_features32_batch4.yml.
+Use --model conv4d or --model conv3d to select one arm. Run --smoke-test for a
+separate three-update capacity check. Preparation reuses the verified local
+integer-count caches and performs source metadata/cache checksum checks.
+
+The driver locks the full-run directory to prevent duplicate workers. Resume
+restores optimizer, RNG and the example cursor, verifies source/config/data
+identity, and skips completed arms. Checkpoints are written every 25 updates
+and after evaluation; progress is published every five updates. Old smoke
+checkpoints without full run state do not support the new resume operation.
+Training sources are frozen in the output's source_snapshot/ directory; a
+source change during fitting is rejected. Do not edit frozen code during a run.
+
+Output: data/confocal_gap4d_features32_batch4_v1/
+Worker PID/status: training/pilot/process.json
+Per-model progress: training/pilot/<model>/progress.json
+Per-model curves/results/checkpoints: training/pilot/<model>/
+The launcher.json file identifies stdout/stderr logs and the launcher PID;
+the actual Python worker PID is in process.json.
+
+Reports and checkpoint replay
+-----------------------------
+
+Refresh the standalone report without allocating a GPU model:
+  .venv/Scripts/python.exe -m src.tools.confocal_report
+
+Add the predeclared raw-count example images and numerical softmax check:
+  .venv/Scripts/python.exe -m src.tools.confocal_report --observations --softmax-audit
+
+Only after both models finish, replay checkpoints on the fixed validation
+observations and export prediction images/full example probabilities:
+  .venv/Scripts/python.exe -m src.tools.confocal_evaluate
+
+The replay command rejects an active training worker. It checks source and
+cache identities, complete 500-update endpoints, held-out scores and normalized
+probabilities, then publishes evidence_audit.json and comparison_summary.json.
+The report's index.html embeds recorded progress and can be opened as a local
+file. Curves are exported as PNG/SVG. Predictions are arrival probabilities;
+raw A/B and temporal means are explicitly identified as noisy observations.
+There is no clean ground-truth image or PSNR criterion.
+
+Relevant correctness checks
+---------------------------
+  .venv/Scripts/python.exe -m pytest -q tests/test_softmax_fix.py tests/test_confocal_training.py tests/test_confocal_gap.py tests/test_photon_methods.py
+
+47 tests passed before the full run. This includes an exact CPU optimizer-resume
+trajectory. Native GPU backward reductions may have normal FP32 roundoff effects.

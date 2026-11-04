@@ -46,7 +46,7 @@ class DataConfig:
             rotation=0,
             random_crop=False,
             skip_frames=1,
-            normalize_target=False,
+            normalize_target=self.normalize_target,
             note=self.note + "_validation",
         )
 

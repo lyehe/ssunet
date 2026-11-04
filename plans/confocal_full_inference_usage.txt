@@ -1,0 +1,135 @@
+Whole-acquisition SSL reconstruction and napari playback
+=======================================================
+
+The selected input is Series013, channel index 1 (HyD4), from
+\\jnas2\Yehe\Confocal data\XYT cell microtuble 4.lif.
+Its full shape is [1024, 50, 512, 512] in TZYX order. The source is read-only.
+All time points, all Z planes and the full XY field are reconstructed.
+
+SSL reconstruction can be applied to the same acquisition used for training.
+A held-out acquisition is a tool for evaluating generalization; it is not a
+requirement for reconstruction. The config's historical source keys "train"
+and "validation" select files and do not restrict which may be reconstructed.
+No clean ground truth, second detector channel or temporal average is used.
+
+Open the saved patch comparison in napari
+-----------------------------------------
+Viewer dependencies are napari with a Qt backend and Dask. This viewer is
+tested with the installed napari 0.6.6 and PyQt5. On another environment:
+  python -m pip install "napari[pyqt5]==0.6.6" "dask[array]"
+
+  .venv/Scripts/python.exe -m src.tools.confocal_napari
+
+The three preselected examples are available with --example 0, 1 or 2.
+The viewer compares real counts C=A+B with the saved 3D/4D probabilities.
+It uses physical voxel spacing, 3D volume rendering and looping time playback.
+Rotate with the mouse; use the time slider's play button to pause/resume.
+Contrast limits for observations and probability maps have different units.
+
+Reconstruct the full selected acquisition
+-----------------------------------------
+  .venv/Scripts/python.exe -u -m src.tools.confocal_infer --precision fp16
+
+Default output is data/confocal_full_series013_v1/.
+The default source key is validation, which selects the full Series013 file.
+The model is the audited final 500-update 4D checkpoint (32/64/128/256 channels).
+Only physical GPU 0 is used. FP16 convolutions were checked against FP32 on
+three fixed real examples; arrival probabilities are normalized in FP32 using
+Barron et al.'s fixed log-softmax. Use --precision fp32 for full precision.
+
+The input photon count level matches training: C is split once into two
+complementary halves with p=0.5. Both halves are predicted and their conditional
+location distributions are averaged. Thinning is indexed by absolute time, so
+overlapping temporal contexts use exactly the same photons. This uses all the
+recorded photons without doubling the trained input count level.
+
+Input count values are not rescaled by the detector gain. Metadata requires
+unaveraged 8-bit PhotonCounting. Three distributed LIF planes are byte-compared
+against readlif before the sequential cache copy. The full count cache has a
+recorded SHA256 and source metadata identity.
+
+XYZ tiles are 16x128x128, overlapping by 4x32x32 with positive Hann weights.
+The temporal core is 96 volumes, with a 14-volume halo on each side covering
+the model's full temporal receptive field. The first core is 16 volumes for
+early viewing. Each half is processed separately to bound GPU memory. Host
+memory and output files are separate from GPU workspace. Temporal halos are
+real neighboring volumes and stop at the recorded acquisition boundaries.
+
+Each tile's predicted probability is scaled using its observed photon total.
+After spatial blending, the entire acquisition is normalized as one joint
+TZYX photon-arrival distribution. This joins local conditional predictions
+using observed photon masses; it is a tiled inference adaptation. Expected
+counts for display are q multiplied by the acquisition's observed total,
+which estimates exposure scale rather than providing a clean intensity target.
+
+Resume exactly the same run after an interruption
+-------------------------------------------------
+  .venv/Scripts/python.exe -u -m src.tools.confocal_infer --precision fp16 --resume
+
+Completed temporal chunks, photon draws and configuration are tracked.
+Checkpoint, training source, convolution package, cache and inference source
+identities are checked. Completed chunk hashes detect changed output. Global
+normalization has its own checkpoint and can be restarted without multiplying
+the count calibration twice. A lock prevents duplicate workers.
+Do not edit confocal_infer.py or confocal_inference.py during this run.
+
+Open the live full-volume viewer
+--------------------------------
+  .venv/Scripts/python.exe -m src.tools.confocal_napari --inference data/confocal_full_series013_v1
+
+The viewer reads one time point at a time through lazy, memory-mapped arrays.
+Frame loading uses explicit delayed reads because Dask's from_array copies
+NumPy/memmap inputs. The CPU image cache is capped at 1 GiB; --cache-gib can
+change the cap (0 disables it), avoiding napari's default 25% RAM allocation.
+It exposes only completed frames and refreshes as new chunks finish. Raw
+photon counts and expected-count reconstructions are shown side by side.
+Negative physical Z direction is reversed for display only. Full output
+arrays retain the original acquisition's TZYX order. The time slider is in
+volume indices; volume interval and voxel spacing are in manifest.json.
+
+Output files
+-------------
+  counts.npy             Original detected integer counts, uint8 TZYX
+  probability.npy        Final joint photon-arrival probabilities, float32 TZYX
+  expected_counts.npy    Final q * observed acquisition total, float32 TZYX
+  counts_manifest.json   Source identity, full count histogram, cache SHA256
+  manifest.json          Physical spacing, model identity and inference settings
+  progress.json          Completed frames and active chunk progress
+  precision_audit.json   Real-data FP16-versus-FP32 checks
+  normalization.json    Restart-safe global probability checkpoint
+  result.json           Final normalization, photon total, precision and runtime
+  napari_state.json      Viewer PID, current time and playback state
+  napari_preview.png     Screenshot captured from the live napari window
+
+Each float32 output occupies 53.7 GB; the count cache occupies 13.4 GB.
+Until progress.status is complete, expected_counts.npy is a partial tiled
+estimate and probability.npy is not yet a published whole-acquisition result.
+Use the live viewer to avoid reading unfinished frames.
+
+Apply the same saved model to its training acquisition
+------------------------------------------------------
+  .venv/Scripts/python.exe -u -m src.tools.confocal_infer --source train --output data/confocal_full_series001_v1 --precision fp16
+
+This selects all 1024x40x512x512 voxels in Series001 from double snr data 2.lif.
+Use a different output directory for each acquisition/configuration.
+
+Interpretation
+---------------
+The saved patch comparison shows broad spatial structure and visible banding,
+with a modest 4D likelihood advantage. Whole-volume inference is qualitative
+reconstruction, not a new clean-ground-truth accuracy or detection evaluation.
+The temporal average is noisy context and may blur motion. The tiled,
+complementary-half inference result has not been assigned the earlier single-
+patch validation score. No claim of previously undetectable structure follows
+from a smoother rendering.
+
+Relevant correctness tests:
+  .venv/Scripts/python.exe -m pytest -q tests/test_confocal_inference.py tests/test_confocal_napari.py
+
+After completion, check every output voxel, verify global probability mass,
+count calibration and file/source identities, and export first/middle/last
+example figures and a photon-count time course:
+  .venv/Scripts/python.exe -m src.tools.confocal_full_report
+
+napari playback documentation:
+https://napari.org/stable/getting_started/viewer.html

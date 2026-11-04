@@ -2,6 +2,7 @@ import argparse
 import logging
 
 import numpy as np
+import torch
 from tifffile import imwrite
 
 from src.ssunet.configs import MasterConfig
@@ -33,6 +34,13 @@ def parse_arguments():
     return parser.parse_args()
 
 
+def inference_array(data: np.ndarray | torch.Tensor) -> np.ndarray:
+    """Convert an array or tensor to the CPU float32 array used by inference."""
+    if isinstance(data, torch.Tensor):
+        return data.detach().to(device="cpu", dtype=torch.float32).numpy()
+    return np.asarray(data, dtype=np.float32)
+
+
 def main():
     """Main execution function."""
     try:
@@ -58,7 +66,9 @@ def main():
         # Create datasets and loaders
         logger.info("Preparing data loaders...")
         training_data = BinomDataset(data, data_config, config.split_params)
-        validation_data = ValidationDataset(validation_data, validation_config)
+        validation_data = ValidationDataset(
+            validation_data, validation_config, split_params=config.split_params
+        )
 
         training_loader = config.loader_config.loader(training_data)
         validation_loader = config.loader_config.loader(validation_data)
@@ -80,9 +90,10 @@ def main():
         logger.info("Running inference...")
         clear_vram()
 
+        input_array = inference_array(data.primary_data)
         output = gpu_patch_inference(
             model,
-            data.primary_data.astype(np.float32),
+            input_array,
             min_overlap=16,
             initial_patch_depth=32,
             device=config.device,
@@ -90,7 +101,9 @@ def main():
         trainer.save_checkpoint(config.train_config.default_root_dir / "model.ckpt")
 
         # Post-process and save output
-        output = output / np.mean(output) * np.mean(data.primary_data)
+        output_mean = float(np.mean(output))
+        input_mean = float(np.mean(input_array))
+        output = output / output_mean * input_mean if output_mean > 0 else np.zeros_like(output)
         output_path = config.train_config.default_root_dir / "output.tif"
         imwrite(output_path, output)
         logger.info(f"Results saved to {output_path}")

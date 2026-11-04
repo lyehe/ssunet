@@ -1,0 +1,107 @@
+Two-channel motion controls: microtubule 3 and 4
+================================================
+
+This exploratory follow-up compares the existing two-channel GAP checkpoint
+with fixed Gaussian controls. Both detectors are retained. There was no new
+training. The network was trained on microtubule 3; microtubule 4 tests transfer.
+The original completed training and continuous inference remain unchanged.
+
+Data and controls
+-----------------
+The same four 128-time clips, T=256..383, and original 14-time halos are used.
+Each clip has two detectors, 16 Z planes and 128x128 XY pixels. These are
+bounded regions, not complete acquisitions. Predictions use exactly the same
+two complementary 40% photon inputs as the saved network predictions.
+The remaining 20% photon locations are used only for scoring/comparison.
+An array equality check verifies split conservation against the observed and
+reserved photons in every core. Expected-count display scales use observed
+total photons and do not expose their reserved spatial locations to predictors.
+
+Both Gaussian controls keep the original trial's settings, without tuning:
+  Spatial sigma ZYX: (0.5, 1.5, 1.5) pixels
+  Temporal sigma: 0 or 1 acquired volume (2.52 s MT3; 1.97 s MT4)
+  Uniform mixture: 0.01
+  Truncation: 3 sigma; real temporal context, reflecting spatial borders
+Each complementary input produces a full-clip normalized PDF; the two PDFs
+are averaged. The network has joint detector context, whereas each Gaussian
+uses one detector independently. Their spatial padding also differs.
+
+Reserved-photon distribution scores
+-----------------------------------
+Negative log likelihood, nats/photon; lower is better. Pooling weights each
+photon equally. No observation is treated as a clean intensity target, and
+PSNR is not used. Absolute 128-time NLLs cannot be compared with the previous
+16-time patch NLLs, which describe a smaller probability sample space.
+
+                          MT3 pooled      MT4 pooled
+  Spatial Gaussian         17.116147       17.272774
+  Space + time Gaussian    16.819250       17.120003
+  Two-channel GAP          16.784157       17.137313
+  GAP frozen spatial shape 16.807701       17.137728
+  Uniform                  17.328680       17.328680
+
+MT3 has 831,689 reserved photons; MT4 has 2,027,831.
+GAP beats the temporal Gaussian by 0.03509 nats/photon on MT3. It loses by
+0.01731 on MT4 transfer. Per-detector and per-region scores are in the report.
+
+The frozen-shape diagnostic uses the product of the network PDF's spatial
+and temporal marginals. It preserves changing total intensity and average
+spatial structure while removing their interactions. The network's full PDF
+improves over this diagnostic by 0.02354 nats/photon on MT3 and 0.00042 on MT4.
+This describes predictive interactions, not independently validated motion.
+
+Bulk movement comparison
+------------------------
+Whole projected XY patterns are registered in 16-time blocks as in the
+original motion review. These are not filament tracks or biological GT.
+Apparent net HyD4 displacement magnitudes, micrometers:
+
+  Region                   Reserved    Temporal Gaussian     GAP
+  MT3 lower left             1.820           1.792            0.883
+  MT3 lower right            0.768           0.697            0.080
+  MT4 lower left             0.424           0.445            0.028
+  MT4 lower right            0.018           0.013            0.000
+
+In the changing HyD4 regions, the Gaussian agrees more closely with reserved
+and full observed-photon registration than GAP does. Gaussian and network
+HyD2 registrations also have disagreements with the observations in some
+regions, so the Gaussian is not validated as a complete motion estimator.
+Intensity changes, focus and stage/cell drift remain alternative explanations
+for bulk shifts. No uncertainty calibration or individual filament identities
+are available. The current checkpoint is not validated for measuring
+microtubule motion, even where it improves the photon prediction score.
+
+Verification and artifacts
+--------------------------
+15 tests pass, including an explicit Gaussian-kernel reference, known-count
+analytic likelihood, independent temporal/spatial marginals, no-count inputs,
+halo checks and known displacement controls. Scoped Ruff checks pass.
+An independent dense NumPy likelihood reduction checks all eight network
+clip/detector scores: maximum absolute loss difference is 5.59e-9 nats total.
+Maximum relative projected count calibration error is 5.61e-9; PDF mass error
+is 5.66e-9. Trained model and original inference source hashes were checked.
+
+Output: data/confocal_twochannel_motion_comparison_v1/
+  index.html                  Four comparison movies, plots and score tables
+  photon_scores.png           Per-region, per-detector distribution scores
+  bulk_motion.png             Observed/reserved/Gaussian/GAP XY trajectories
+  comparison.json             Full scores, per-time blocks and trajectories
+  clips/<region>/             Four-method GIF and Z-mean projections
+  verification.json           Independent score and calibration checks
+  protocol.json               Fixed settings and executed analysis source hashes
+  source_snapshot/            Executed analysis sources
+  report_sources.json         Final report rendering sources
+
+The report renderer was optimized after the numerical analysis to load each
+compressed projection array once. The analysis snapshot and scores were
+preserved. Movies use a fixed blue/green palette, matched per-detector contrast
+across methods, true timestamps and accelerated 5 fps playback. No clean GT
+is available. The same reserve had already been viewed; this is not a fresh
+confirmatory test or a benchmark against tuned published methods.
+
+Replay:
+  .venv/Scripts/python.exe -m src.tools.confocal_motion_compare
+  .venv/Scripts/python.exe -m src.tools.confocal_motion_compare --report-only
+  .venv/Scripts/python.exe -m pytest -q tests/test_confocal_motion_comparison.py tests/test_confocal_motion.py
+
+Configuration: config/confocal_motion_comparison.yml

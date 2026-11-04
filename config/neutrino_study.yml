@@ -1,0 +1,67 @@
+study_id: neutrino_self_split_100k_v1
+source:
+  database: data/neutrino/controlled_reference/source/pone_small.db
+  archive: data/neutrino/controlled_reference/source/pone_small.tar.gz
+  archive_sha256: dd74ac6edbe37f54f5fa8d5d3b1683b486ad9d59850e2f6ead1851d2ec92b7a4
+  geometry: data/neutrino/controlled_reference/source/pone_triangle_geometry.parquet
+  geometry_sha256: 370c5b4c88d80c076a88f55c6706bd6932db456bb5f64597aa4582d36927acd6
+  pilot: data/neutrino/controlled_reference/prometheus_pone_reference_1000.h5
+  allowed_contract: qualified_curated_predictive_photon_thinning
+data:
+  output: data/neutrino/study
+  cohort_events: 100000
+  engineering_events: 10000
+  partition_seed: 701
+  cohort_seed: 1701
+  photon_split_seed: 42
+  split_probability: 0.5
+  time_window_ns: [0.0, 6400.0]
+  time_bins: 256
+  import_chunk_events: 512
+model:
+  name: DensePhotonReference
+  channels: 16
+training:
+  seeds: [42, 43, 44]
+  epochs: 10
+  batch_size: 16
+  learning_rate: 0.001
+  weight_decay: 0.01
+  gradient_clip: 1.0
+  precision: bf16_with_fp32_normalization
+  cpu_threads: 4
+  num_workers: 0
+  max_training_seconds_per_seed: 1800
+  max_evaluation_seconds_per_seed: 600
+  max_gpu_allocated_gib: 12
+  max_process_rss_gib: 4
+evaluation:
+  epochs: [0, 1, 2, 5, 10]
+  primary_stratum: retained_1_to_10
+  checkpoint_selection: lowest_primary_validation_nll_then_earliest_step
+  baseline_selection: lowest_primary_validation_nll_then_candidate_order
+  fixed_training_diagnostic_events: 160
+  diagnostic_seed: 20261025
+  donor_seed: 914
+  donor_draws: 20
+  donor_cache_events: 256
+  exact_primary_donors_required: true
+  bootstrap_seed: 20261025
+  bootstrap_draws: 10000
+  bootstrap_chunk_draws: 64
+  practical_improvement_nats_per_photon: 0.10
+baselines:
+  original_prior_pseudocount: 0.5
+  frozen_prior_time_ns: 200
+  frozen_prior_pseudocount: 0.0001
+  frozen_mixture_prior_fraction: 0.25
+  prior_time_ns: [0, 25, 50, 100, 200, 400]
+  prior_pseudocounts: [0.0001, 0.001, 0.01, 0.1, 0.5, 1.0]
+  input_time_ns: [0, 25, 50, 100, 200, 400]
+  input_space_m: [0, 150, 400, null]
+  mixture_prior_fractions: [0.01, 0.1, 0.25, 0.5, 0.9, 1.0]
+test:
+  separate_shard_required: true
+  require_analysis_lock: true
+  repeat_scoring_allowed: false
+  secondary_split_probabilities: [0.25, 0.75]

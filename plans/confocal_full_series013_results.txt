@@ -1,0 +1,92 @@
+Completed whole-acquisition 4D SSL reconstruction
+================================================
+
+Completed 2026-10-28. The input is the full Series013, HyD4 channel (index 1),
+from \\jnas2\Yehe\Confocal data\XYT cell microtuble 4.lif.
+All 1024x50x512x512 TZYX voxels were reconstructed: 13,421,772,800 voxels.
+The NAS source was read-only. The full input contains 644,005,170 detected
+counts, 95.38% zero-valued voxels, and consecutive count values from 0 to 7.
+
+SSL inference can use training acquisitions. Series013 is the full acquisition
+selected for this run; its old config key "validation" does not impose a
+holdout requirement on reconstruction. The same tool supports --source train.
+
+Method and resources
+---------------------
+The audited 500-update 4D GAP checkpoint was used, with no further training.
+Complementary p=0.5 photon halves preserve the trained input count level and
+both contribute to the averaged conditional arrival distribution. Spatial
+tiles overlap with positive Hann weights. Real temporal halos cover the full
+14-volume temporal receptive-field radius. The original acquisition order
+is preserved in the files; negative physical Z is reversed only for display.
+
+Convolutions use FP16; Barron log-softmax and output probabilities use FP32.
+Three real-data precision checks passed: maximum probability L1 difference
+from FP32 was 0.0003371 and maximum absolute NLL difference was 6.62e-6
+nats/photon. Core inference time was 6,626.26 seconds (110.44 minutes), plus
+count thinning, cache verification, global export/calibration and audit.
+Peak PyTorch-allocated GPU memory was 13.92 GiB, on physical GPU 0 only.
+
+Final verification
+-------------------
+The independent full-acquisition audit passed. It checked all output voxels,
+the original source metadata and cache, model checkpoint, archived/current
+training and inference implementations, and the external convolution sources.
+
+  Joint TZYX probability sum (float64 reduction): 1.0000000390585089
+  Relative total count-calibration error:        6.07970633280715e-8
+  Maximum pointwise error versus float32 q*N:    0
+  Final expected-count sum:                      644,005,209.1536231
+
+The small total discrepancy is ordinary float32 rounding. Fifteen inference
+and viewer regression tests passed. Scoped Ruff lint and formatting checks
+passed. The preceding training/normalization/checkpoint suite had 53 passes.
+
+Visual assessment and limits
+-----------------------------
+The predeclared first, middle and last examples (T=0,512,1023) show broad cell
+boundaries and bright structures consistent with the noisy depth averages.
+Fine detail remains smoothed, with visible banding in the central slices.
+The cause of the banding has not been established. The reconstructed photon
+totals retain the observed decline across the acquisition.
+
+Raw observations and depth averages are noisy data, not clean ground truth.
+This is a normalized arrival-distribution reconstruction with count-calibrated
+display values, not a clean-intensity accuracy or previously-undetectable-event
+demonstration. The earlier single-patch likelihood score does not score this
+tiled, complementary-half inference procedure.
+
+Total expected counts are calibrated globally, without forcing each volume
+to match its observed photon count. At the first and last time points, the
+predicted totals differ from the observed totals by approximately +0.76% and
+-1.52%, respectively. Observed totals are themselves noisy measurements.
+
+Artifacts and napari
+---------------------
+Output directory: data/confocal_full_series013_v1/
+  probability.npy                   Final float32 joint TZYX PDF, 50 GiB
+  expected_counts.npy               Final float32 q * observed total, 50 GiB
+  counts.npy                        Original uint8 detector counts, 12.5 GiB
+  whole_acquisition_examples.png/svg First/middle/last slices and depth means
+  photon_time_course.png            Observed and predicted counts by volume
+  whole_acquisition_audit.json      Independent full-array/source audit
+  result.json                       Runtime, precision and normalization
+  manifest.json                     Source, geometry, tiling and model identity
+  precision_audit.json              FP16-versus-FP32 checks
+
+Napari was opened and played in 3D; it was later switched to 2D and closed.
+To reopen the complete sequence from the project root:
+
+  .venv/Scripts/python.exe -m src.tools.confocal_napari --inference data/confocal_full_series013_v1
+
+The viewer reads one volume at a time and caps its CPU image cache at 1 GiB.
+The corrected viewer used approximately 2 GiB of physical RAM in playback;
+the cache cap is also recorded in napari_state.json. Use the time slider to
+play/pause and the 2D/3D button to change the rendering. --cache-gib adjusts
+the image cache. There is no need to load the whole 50-GiB array into RAM.
+
+Replay the completed independent audit and figures:
+  .venv/Scripts/python.exe -m src.tools.confocal_full_report
+
+Full usage, units and dependency versions:
+  plans/confocal_full_inference_usage.txt

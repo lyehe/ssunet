@@ -1,0 +1,25 @@
+study_id: confocal_joint_channels32_v1
+output: data/confocal_joint_channels32_v1
+source:
+  path: '\\jnas2\Yehe\Confocal data\Cell cluster 1 min.lif'
+  series_index: 0
+  channels: all
+  crop_tzyx: [[0, 64], [0, 144], [128, 384], [128, 384]]
+model:
+  dimensions: 4
+  base_channels: 32
+  depth: 4
+  encoding_levels: 10
+  backend: native
+training:
+  seed: 42
+  photon_split_seed: 4302
+  patch_tzyx: [16, 16, 128, 128]
+  batch_size: 2
+  accumulation_steps: 2
+  learning_rate: 0.0001
+  gradient_clip: 0.5
+  logit_normalization: barron2026_per_detector
+  precision: fp32
+  # A forward/backward readiness test; do not report it as a quality comparison.
+  smoke_steps: 3

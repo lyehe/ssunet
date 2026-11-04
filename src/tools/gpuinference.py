@@ -1,16 +1,30 @@
-"""GPU inference script."""
+"""Patch-based inference with stable photon-distribution normalization."""
 
 import math
 from dataclasses import dataclass, field
-from itertools import product
+from itertools import pairwise, product
 
 import numpy as np
 import pytorch_lightning as pl
 import torch
-from torch.cuda.amp.autocast_mode import autocast
 from tqdm import tqdm
 
-from ..ssunet.constants import LOGGER
+if __package__ == "src.tools":
+    from ..ssunet.constants import LOGGER
+    from ..ssunet.inference import (
+        logits_to_expected_counts,
+        model_distribution_dims,
+        reflected_window,
+        temporal_window_size,
+    )
+else:
+    from ssunet.constants import LOGGER
+    from ssunet.inference import (
+        logits_to_expected_counts,
+        model_distribution_dims,
+        reflected_window,
+        temporal_window_size,
+    )
 
 
 class InvalidDataDimensionError(ValueError):
@@ -18,7 +32,6 @@ class InvalidDataDimensionError(ValueError):
 
     def __init__(self):
         super().__init__("Data must be 3D or 4D")
-        LOGGER.error("InvalidDataDimensionError: Data must be 3D or 4D")
 
 
 class PatchSizeTooLargeError(RuntimeError):
@@ -26,26 +39,69 @@ class PatchSizeTooLargeError(RuntimeError):
 
     def __init__(self):
         super().__init__("Patch size too large for available VRAM")
-        LOGGER.error("PatchSizeTooLargeError: Patch size too large for available VRAM")
 
 
 class InvalidPatchValuesError(ValueError):
-    """Exception raised when patch values are too small."""
+    """Exception raised when patch values cannot cover the requested volume."""
 
     def __init__(self):
         super().__init__("Patch values are too small")
-        LOGGER.error("InvalidPatchValuesError: Patch values are too small")
+
+
+def _volume(data: np.ndarray) -> tuple[np.ndarray, bool]:
+    """Convert ZXY or ZCXY data to float32 ZCXY without changing its owner."""
+    data = np.asarray(data)
+    grayscale = data.ndim == 3
+    if grayscale:
+        data = data[:, None, ...]
+    elif data.ndim != 4:
+        raise InvalidDataDimensionError()
+    if any(size == 0 for size in data.shape):
+        message = "Inference requires a nonempty volume"
+        raise ValueError(message)
+    return data.astype(np.float32, copy=False), grayscale
+
+
+def _device(device: int | str | torch.device) -> torch.device:
+    """Resolve the historically supported integer GPU indices."""
+    return torch.device(f"cuda:{device}" if isinstance(device, int) else device)
+
+
+def _predict_counts(
+    model: torch.nn.Module,
+    patch: np.ndarray,
+    device: torch.device,
+    mixed_precision: bool = False,
+    valid_length: int | None = None,
+) -> np.ndarray:
+    """Predict a ZCXY patch in the same expected-count units as its input."""
+    valid_length = patch.shape[0] if valid_length is None else valid_length
+    depth = temporal_window_size(model, patch.shape[0])
+    if depth != patch.shape[0]:
+        patch = reflected_window(patch, 0, depth)
+    batch = torch.from_numpy(np.ascontiguousarray(patch.swapaxes(0, 1)))[None].to(device)
+    dtype = torch.float16 if device.type == "cuda" else torch.bfloat16
+    with (
+        torch.inference_mode(),
+        torch.autocast(device_type=device.type, dtype=dtype, enabled=mixed_precision),
+    ):
+        logits = model(batch)
+        prediction = logits_to_expected_counts(
+            logits[:, :, :valid_length],
+            batch[:, :, :valid_length],
+            dim=model_distribution_dims(model),
+        )
+    return prediction[0].float().cpu().numpy().swapaxes(0, 1)
 
 
 def gpu_inference(model: pl.LightningModule, data: np.ndarray, device_num: int = 0) -> np.ndarray:
-    """Run inference on GPU."""
-    device = torch.device(f"cuda:{device_num}")
+    """Run full-volume GPU inference and preserve the observed photon count."""
+    data, grayscale = _volume(data)
+    device = _device(device_num)
     model.to(device)
     model.eval()
-    with torch.no_grad():
-        torch_data = torch.from_numpy(data)[None, None, ...].to(device)
-        output = torch.exp(model(torch_data))[0, 0]
-    return output.detach().cpu().numpy()
+    output = _predict_counts(model, data, device)
+    return output[:, 0] if grayscale else output
 
 
 def gpu_patch_inference(
@@ -57,74 +113,41 @@ def gpu_patch_inference(
     test_vram=False,
     mixed_precision=False,
 ) -> np.ndarray:
-    """Run patch inference on GPU."""
-    if isinstance(device, int):
-        device = f"cuda:{device}"
-    if isinstance(device, str):
-        device = torch.device(device)
+    """Run temporal patch inference on CPU or GPU with aligned overlap blending.
+
+    Each window is normalized to its observed count before blending. Short
+    sequences are reflected to the requested depth and trimmed to recorded time.
+    """
+    if initial_patch_depth <= 0 or min_overlap < 0 or min_overlap >= initial_patch_depth:
+        message = "Require 0 <= min_overlap < initial_patch_depth"
+        raise ValueError(message)
+    data, grayscale = _volume(data)
+    device = _device(device)
     model.to(device)
     model.eval()
-
-    num_dims = len(data.shape)
-    if num_dims == 3:
-        data = data[:, None, ...]
-    elif num_dims == 4:
-        pass
-    else:
-        raise InvalidDataDimensionError()
-
     z, c, x, y = data.shape
-    patch_depth = initial_patch_depth
-    patch_size = (patch_depth, c, x, y)
+    depth = temporal_window_size(model, initial_patch_depth)
+    if test_vram:
+        depth = patch_sizer(model, (c, depth, x, y), depth, min_overlap, mixed_precision)
 
-    patch_depth = (
-        patch_sizer(model, patch_size, initial_patch_depth, min_overlap, mixed_precision)
-        if test_vram
-        else patch_depth
-    )
-    num_patches = (z + patch_depth - min_overlap - 1) // (patch_depth - min_overlap)
-    overlap = (num_patches * patch_depth - z) // (num_patches - 1) if num_patches > 1 else 0
-
-    output = np.zeros_like(data, dtype=np.float32)
-    stream_for_data = torch.cuda.Stream(device=device)
-    stream_for_inference = torch.cuda.Stream(device=device)
-
-    data = data.swapaxes(0, 1).astype(np.float32)
-
-    with torch.no_grad(), tqdm(total=num_patches, desc="Inference #") as pbar:
-        for i in range(num_patches):
-            start_depth = min(i * (patch_depth - overlap), z - patch_depth)
-            end_depth = min(start_depth + patch_depth, z)
-
-            with torch.cuda.stream(stream_for_data):  # type: ignore
-                patch = data[:, start_depth:end_depth]
-                torch_patch = torch.from_numpy(patch)[None, ...].to(device, non_blocking=True)
-            stream_for_data.synchronize()
-            with torch.cuda.stream(stream_for_inference):  # type: ignore
-                if mixed_precision:
-                    with autocast():
-                        patch_output = torch.exp(model(torch_patch))[0]
-                else:
-                    patch_output = torch.exp(model(torch_patch))[0]
-                output_cpu = patch_output.detach().cpu().numpy().swapaxes(0, 1)
-            stream_for_inference.synchronize()
-
-            pbar.set_postfix(
-                vram_usage=f"{torch.cuda.max_memory_reserved(device) / (1024 ** 3):.1f} GB"
-            )
-
-            if i == 0:
-                output[start_depth:end_depth] = output_cpu
-            elif i == num_patches - 1:
-                output[start_depth + overlap // 2 :] = output_cpu[overlap // 2 :]
-            else:
-                prev_end_depth = start_depth + overlap // 2
-                output[start_depth:prev_end_depth] = output[start_depth:prev_end_depth]
-                output[prev_end_depth:end_depth] = output_cpu[overlap // 2 :]
-
-            pbar.update(1)
-
-    return output if num_dims == 4 else output[:, 0]
+    if z <= depth:
+        starts = [0]
+    else:
+        starts = list(range(0, z - depth + 1, depth - min_overlap))
+        if starts[-1] != z - depth:
+            starts.append(z - depth)
+    output = np.zeros(data.shape, dtype=np.float32)
+    coverage = np.zeros(z, dtype=np.int32)
+    for start in tqdm(starts, desc="Inference #"):
+        window = reflected_window(data, start, depth)
+        end = min(start + depth, z)
+        prediction = _predict_counts(
+            model, window, device, mixed_precision, valid_length=end - start
+        )
+        output[start:end] += prediction[: end - start]
+        coverage[start:end] += 1
+    output /= coverage[:, None, None, None]
+    return output[:, 0] if grayscale else output
 
 
 def gpu_skip_inference(
@@ -135,61 +158,29 @@ def gpu_skip_inference(
     patch_depth: int = 32,
     mixed_precision=False,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Run skip inference on GPU.
-
-    Some frames are skipped to reduce the memory usage and data size.
-    """
-    if isinstance(device, int):
-        device = f"cuda:{device}"
-    if isinstance(device, str):
-        device = torch.device(device)
+    """Predict selected center frames using temporally aligned context windows."""
+    if skip <= 0 or patch_depth <= 0:
+        message = "skip and patch_depth must be positive"
+        raise ValueError(message)
+    data, grayscale = _volume(data)
+    device = _device(device)
     model.to(device)
     model.eval()
-
-    num_dims = len(data.shape)
-    if num_dims == 3:
-        data = data[:, None, ...]
-    elif num_dims == 4:
-        pass
-    else:
-        raise InvalidDataDimensionError()
-
-    z, c, x, y = data.shape
-    skipped_start_idx = patch_depth // 2
-    skipped_end_idx = z - patch_depth // 2
-    frame_idx = list(range(skipped_start_idx, skipped_end_idx, skip))
-    skipped_data = data[skipped_start_idx:skipped_end_idx:skip, ...]
-    output = np.zeros_like(skipped_data, dtype=np.float32)
-    num_patches = len(skipped_data)
-
-    stream_for_data = torch.cuda.Stream(device=device)
-    stream_for_inference = torch.cuda.Stream(device=device)
-
-    data = data.swapaxes(0, 1)
-
-    with torch.no_grad(), tqdm(total=num_patches, desc="Inference #") as pbar:
-        for i in range(num_patches):
-            start_depth = frame_idx[i] - (patch_depth // 2)
-            end_depth = frame_idx[i] + (patch_depth // 2)
-
-            with torch.cuda.stream(stream_for_data):  # type: ignore
-                patch = data[:, start_depth:end_depth].astype(np.float32)
-                torch_patch = torch.from_numpy(patch)[None, ...].to(device, non_blocking=True)
-            stream_for_data.synchronize()
-            with torch.cuda.stream(stream_for_inference):  # type: ignore
-                if mixed_precision:
-                    with autocast():
-                        patch_output = torch.exp(model(torch_patch))[0]
-                else:
-                    patch_output = torch.exp(model(torch_patch))[0]
-                output_cpu = patch_output.detach().cpu().numpy().swapaxes(0, 1)
-            stream_for_inference.synchronize()
-            output[i] = output_cpu[patch_depth // 2]
-            pbar.update()
-            pbar.set_postfix(
-                vram_usage=f"{torch.cuda.max_memory_reserved(device) / (1024 ** 3):.1f} GB"
-            )
-    return (skipped_data, output) if num_dims == 4 else (skipped_data[:, 0], output[:, 0])
+    patch_depth = temporal_window_size(model, patch_depth)
+    half = patch_depth // 2
+    frame_idx = (
+        list(range(half, data.shape[0] - half, skip))
+        if data.shape[0] > patch_depth
+        else list(range(0, data.shape[0], skip))
+    )
+    skipped_data = data[frame_idx]
+    output = np.zeros_like(skipped_data)
+    for i, frame in enumerate(tqdm(frame_idx, desc="Inference #")):
+        window = reflected_window(data, frame - half, patch_depth)
+        output[i] = _predict_counts(model, window, device, mixed_precision)[half]
+    if grayscale:
+        return skipped_data[:, 0], output[:, 0]
+    return skipped_data, output
 
 
 def patch_sizer(
@@ -199,36 +190,63 @@ def patch_sizer(
     min_overlap: int,
     mixed_precision: bool = False,
 ) -> int:
-    """Determine the patch depth based on the VRAM capacity."""
-    patch_depth = initial_patch_depth
-    while patch_depth > min_overlap * 2 + 1:
+    """Find a temporal depth that fits, reducing the actual CZYX test shape."""
+    if initial_patch_depth <= 0 or not 0 <= min_overlap < initial_patch_depth:
+        message = "Require 0 <= min_overlap < initial_patch_depth"
+        raise ValueError(message)
+    depth = temporal_window_size(model, initial_patch_depth)
+    minimum = temporal_window_size(model, 1)
+    while depth > min_overlap and depth >= minimum:
         try:
-            test_model_vram(model, patch_size, mixed_precision)
-            break
-        except RuntimeError:
-            LOGGER.info(f"Patch depth {patch_size} too large. Reducing patch depth")
-            patch_depth = patch_depth // 2
-        if patch_depth < min_overlap:
-            LOGGER.error("Patch size too large. Exiting")
-            raise PatchSizeTooLargeError()
-    LOGGER.info(f"Patch depth: {patch_depth}")
-    return patch_depth
+            test_model_vram(model, (patch_size[0], depth, *patch_size[2:]), mixed_precision)
+        except torch.cuda.OutOfMemoryError:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            LOGGER.info("Patch depth %d too large; reducing it", depth)
+            depth = (depth // 2 // minimum) * minimum
+        else:
+            return depth
+    raise PatchSizeTooLargeError()
 
 
 def test_model_vram(
     model: pl.LightningModule,
     patch_size: tuple[int, int, int, int],
-    mixed_precision=False,
+    mixed_precision=False,  # noqa: PT028 -- public inference helper, not a pytest test
 ) -> None:
-    """Estimate the VRAM usage of the model."""
-    dummy_input = torch.rand(1, *patch_size).to(model.device)
-    with torch.no_grad():
-        if mixed_precision:
-            with autocast():
-                _ = model(dummy_input)
-        _ = model(dummy_input)
-    del dummy_input, _
-    torch.cuda.empty_cache()
+    """Estimate model memory for batch-first CZYX input."""
+    device = getattr(model, "device", None)
+    if device is None:
+        device = next(model.parameters(), torch.empty(0)).device
+    device = torch.device(device)
+    dtype = torch.float16 if device.type == "cuda" else torch.bfloat16
+    dummy_input = torch.rand(1, *patch_size, device=device)
+    with (
+        torch.inference_mode(),
+        torch.autocast(device_type=device.type, dtype=dtype, enabled=mixed_precision),
+    ):
+        output = model(dummy_input)
+    del dummy_input, output
+    if device.type == "cuda":
+        torch.cuda.empty_cache()
+
+
+def _spatial_starts(size: int, patch_size: int, count: int) -> tuple[int, list[int]]:
+    """Choose evenly spaced, overlapping spatial patches covering one dimension."""
+    if patch_size <= 0 or count <= 0:
+        message = "Spatial patch size and split counts must be positive"
+        raise ValueError(message)
+    patch_size = min(size, patch_size)
+    if count == 1:
+        if patch_size < size:
+            message = "A single spatial patch must cover its dimension"
+            raise ValueError(message)
+        return patch_size, [0]
+    starts = sorted(set(np.linspace(0, size - patch_size, count, dtype=int).tolist()))
+    if any(b - a > patch_size for a, b in pairwise(starts)):
+        message = "Spatial patches leave uncovered pixels; increase patch size or split"
+        raise ValueError(message)
+    return patch_size, starts
 
 
 def grid_inference(
@@ -240,91 +258,27 @@ def grid_inference(
     min_overlap: int = 16,
     initial_patch_depth: int = 32,
 ) -> np.ndarray:
-    """Run grid inference on GPU."""
-    if len(data.shape) == 3:
-        _, max_x, max_y = data.shape
-    else:
-        _, __, max_x, max_y = data.shape
+    """Run spatially tiled inference in common expected-count units."""
+    volume, grayscale = _volume(data)
     split_x, split_y = split if isinstance(split, tuple) else (split, split)
-
-    result = np.zeros_like(data, dtype=np.float32)
-
-    # Calculate overlaps ensuring they're even numbers
-    overlap_x = (patch_size * split_x - max_x + 1) // (split_x - 1)
-    overlap_y = (patch_size * split_y - max_y + 1) // (split_y - 1)
-
-    total_patches = split_x * split_y
-    for i, j in tqdm(
-        product(range(split_x), range(split_y)), total=total_patches, desc="Grid inference"
+    patch_x, starts_x = _spatial_starts(volume.shape[-2], patch_size, split_x)
+    patch_y, starts_y = _spatial_starts(volume.shape[-1], patch_size, split_y)
+    result = np.zeros_like(volume)
+    coverage = np.zeros(volume.shape[-2:], dtype=np.int32)
+    for x, y in tqdm(
+        product(starts_x, starts_y), total=len(starts_x) * len(starts_y), desc="Grid inference"
     ):
-        # Calculate patch boundaries from the input data
-        if i < (split_x - 1):
-            patch_x_start = i * (patch_size - overlap_x)
-            patch_x_end = patch_x_start + patch_size
-        else:  # last row
-            patch_x_end = max_x
-            patch_x_start = patch_x_end - patch_size
-
-        if j < (split_y - 1):
-            patch_y_start = j * (patch_size - overlap_y)
-            patch_y_end = patch_y_start + patch_size
-        else:  # last column
-            patch_y_end = max_y
-            patch_y_start = patch_y_end - patch_size
-
-        if i == 0:
-            result_x_start = 0
-            result_x_end = patch_x_end - overlap_x // 2
-            output_x_start = 0
-            output_x_end = patch_size - overlap_x // 2
-        elif i == split_x - 1:
-            result_x_start = patch_x_start + overlap_x // 2 - 1
-            result_x_end = max_x
-            output_x_start = overlap_x // 2 - 1
-            output_x_end = patch_size
-        else:
-            result_x_start = patch_x_start + overlap_x // 2
-            result_x_end = patch_x_end - overlap_x // 2
-            output_x_start = overlap_x // 2
-            output_x_end = patch_size - overlap_x // 2
-
-        if j == 0:
-            result_y_start = 0
-            result_y_end = patch_y_end - overlap_y // 2
-            output_y_start = 0
-            output_y_end = patch_size - overlap_y // 2
-        elif j == split_y - 1:
-            result_y_start = patch_y_start + overlap_y // 2 - 1
-            result_y_end = max_y
-            output_y_start = overlap_y // 2 - 1
-            output_y_end = patch_size
-        else:
-            result_y_start = patch_y_start + overlap_y // 2
-            result_y_end = patch_y_end - overlap_y // 2
-            output_y_start = overlap_y // 2
-            output_y_end = patch_size - overlap_y // 2
-
-        data_patch = data[..., patch_x_start:patch_x_end, patch_y_start:patch_y_end]
-        output = gpu_patch_inference(
+        selection = (..., slice(x, x + patch_x), slice(y, y + patch_y))
+        result[selection] += gpu_patch_inference(
             model,
-            data_patch.astype(np.float32),
+            volume[selection],
             min_overlap=min_overlap,
             initial_patch_depth=initial_patch_depth,
             device=device,
         )
-
-        input_patch = data[..., result_x_start:result_x_end, result_y_start:result_y_end]
-        output_patch = output[..., output_x_start:output_x_end, output_y_start:output_y_end]
-        output_patch = (
-            output_patch
-            / np.mean(output_patch, axis=(1, 2), keepdims=True)
-            * np.mean(input_patch, axis=(1, 2), keepdims=True)
-        ) if len(data.shape) == 3 else (output_patch
-            / np.mean(output_patch, axis=(1, 2, 3), keepdims=True)
-            * np.mean(input_patch, axis=(1, 2, 3), keepdims=True)
-        )
-        result[..., result_x_start:result_x_end, result_y_start:result_y_end] = output_patch
-    return result
+        coverage[x : x + patch_x, y : y + patch_y] += 1
+    result /= coverage
+    return result[:, 0] if grayscale else result
 
 
 @dataclass

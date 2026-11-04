@@ -1,0 +1,147 @@
+Microtubule 3: completed joint-channel 4D GAP trial
+================================================
+
+Completed 2026-10-28. Source: XYT cell microtuble 3.lif, Series003 (index 1),
+both HyD 2 and HyD 4 detectors. The trial includes all 1024 time points and
+all 64 Z planes in the central 256x256 XY crop. The NAS source was read-only.
+This is a training and scored-patch reconstruction trial, not a completed
+whole-acquisition reconstruction of the original 512x512 field.
+
+The 17,974,018-parameter joint 4D model used widths 32/64/128/256, four
+levels, ten photon features per detector, physical batch 2, accumulation 2,
+16x16x128x128 TZYX patches, FP32 with TF32 disabled, and physical GPU 0.
+The fixed 500-update endpoint completed in 3963.98 seconds (66.07 minutes).
+Peak PyTorch-allocated memory was 18.788 GiB; reserved memory was 20.066 GiB.
+
+Photon normalization and evaluation
+----------------------------------
+The source declares unaveraged 8-bit PhotonCounting. Values remain raw
+integer counts; no detector-gain division, intensity normalization or
+binarization was applied. This multi-count acquisition uses GAP.
+
+One permanent binomial split assigns 80% of photons to training and 20% to
+evaluation. Evaluation photons never enter any optimization input or target.
+Training repeatedly splits its own pool 50:50. Each input therefore has
+approximately 40% of the original count level. Both retained detector channels
+provide joint input context. Each detector has its own GAP target weighting
+and Barron log-softmax over TZYX. Neither detector serves as clean ground truth.
+
+Twelve fixed patches cover early T=0, middle T=504 and late T=1008, with four
+fixed ZYX locations in each phase. There are 278,826 reserved target photons:
+84,661 in HyD 2 and 194,165 in HyD 4. The late patches contain only 214 of
+these photons (73 and 141 by detector). The full raw cache contains 39,007,006
+HyD 2 counts and 75,576,006 HyD 4 counts.
+
+Final results: lower NLL is better
+---------------------------------
+All values are nats per reserved photon, with the same fixed inputs/targets.
+
+  Method                   Pooled       HyD 2        HyD 4
+  Joint 4D GAP              14.871011    14.264454    15.135485
+  Fixed 4D Gaussian         15.105704    14.464577    15.385251
+  Fixed 3D Gaussian         15.696176    14.890372    16.047527
+  Uniform                   15.249238    15.249238    15.249238
+
+The equal-detector mean NLL is 14.699969 for the network versus 14.924914 for
+the 4D Gaussian control. The network improves on these particular fixed
+Gaussian controls in both detectors. This is not a benchmark against all
+traditional methods, tuned Gaussian controls or published neural checkpoints.
+The Gaussian settings were fixed before fitting; no target-driven tuning.
+
+  Phase       Target photons   Joint 4D GAP   4D Gaussian   Uniform
+  Early       154,039          14.925738      15.106447     15.249238
+  Middle      124,573          14.802692      15.097017     15.249238
+  Late            214          15.246944      19.627468     15.249238
+
+The early and middle data account for the predictive gain. The late neural
+score is essentially at the uniform reference and has few photons. The 1%
+uniform floor in the fixed Gaussian controls is especially poor in these
+nearly dark cases. Their failure does not establish recovery of a hidden
+biological signal by the network.
+
+The learning curve was not monotonic: pooled NLL at steps 100/200/300/400/500
+was 15.006471/14.918742/14.884146/15.016654/14.871011. The reported endpoint
+remains the declared step 500. Intermediate checkpoints at 100,200,300,400
+are retained for review. Only one model seed and acquisition were tested;
+the patches are not independent biological replicates.
+
+Visual assessment
+------------------
+The predeclared first spatial example in each phase is largely background.
+Those examples are retained in the primary report. Supplemental figures show
+every one of the twelve scored patches, avoiding selection of favorable views.
+Time/depth means reveal broad cell structures in early/middle cases 2,3,6,7.
+The network suppresses noisy texture but also strongly smooths structure,
+including much of the detail in HyD 4. Fine microtubule recovery is not
+established. Raw means are noisy contextual views, not clean references.
+
+The raw count time course falls close to background around T=800--850 in
+both detectors. Its cause is unknown; movement outside the sampled region,
+illumination changes and photobleaching have not been distinguished. Do not
+treat the late recording as labeled biological no-event data. There is no
+clean-image PSNR or previously-undetectable-event claim from this trial.
+
+Correctness and independent replay
+---------------------------------
+Twenty-two relevant CPU tests passed before fitting, including permanent
+photon isolation, count conservation, joint-channel gradients, exact C=1
+parity and exact interrupted/resumed optimizer trajectories. The three-update
+full-size GPU readiness check passed before the 500-update run.
+
+The independent final-checkpoint replay passed with exactly zero difference
+from the stored final NLL. It verified raw/training-pool hashes, configuration,
+all 12 local archived/current source files, the installed convolution sources
+and checkpoint identity. An independent NumPy likelihood reduction verified
+all 72 detector/case classical-control combinations; maximum difference was
+5.69e-8 nats/photon.
+
+Every exported case was checked for matching CTZYX coordinates, finite
+nonnegative probabilities, unit mass and per-detector count calibration.
+Maximum probability-mass error: 1.13565e-6 (FP32 normalization).
+Maximum relative count-calibration error: 1.13559e-6.
+Pointwise expected counts exactly equal q times that detector's observed total,
+with the product rounded to float32. All nine historical training/inference
+source hashes remain unchanged. Supplemental exports also reproduce each
+scored case's reserved-photon likelihood.
+
+Five real-data napari checks passed, covering both detectors, phase/patch
+switching, physical Z orientation, movie/mean display and shared contrast.
+Windows layer replacement now explicitly activates the viewer's OpenGL
+context. The result viewer was launched successfully in 3D with all four
+observed/predicted detector panels, initially on middle-phase case 6.
+
+Artifacts
+---------
+data/confocal_microtubule3_joint4d_v1/
+  training/result.json / last.pt     Full fixed-endpoint result and checkpoint
+  comparison.json                   Independent primary replay and comparisons
+  index.html                        Primary report, including predeclared examples
+  gallery.html                      Visual review of all scored cases
+  heldout_comparison.png/svg         Learning curves and phase-specific gains
+  observed_time_course.png           Full cached raw counts by time/detector
+  prediction_comparison.png          Predeclared single time/Z slices
+  time_mean_comparison.png           Predeclared noisy 16-time means
+  all_cases_early/middle/late.png    All fixed patches, noisy time-and-depth means
+  examples/index.json               All twelve selectable scored patches
+  examples/<case>/                   Raw counts, probability and expected-count arrays
+  baseline_replay_audit.json         Independent classical-score reduction
+  export_audit.json                  All-case probability/count calibration check
+  all_cases_visual_audit.json        Supplemental inference/source identity
+
+The outputs are conditional per-patch arrival distributions. Display values
+multiply each distribution by its own detector's observed patch photon total.
+This does not score or reconstruct the full acquisition with tiled inference.
+
+Open both detector channels, observed versus predicted, in napari:
+  .venv/Scripts/python.exe -m src.tools.confocal_joint_napari
+
+The picker offers all twelve fixed patches, source coordinates and raw-movie
+or noisy temporal-mean display. A shared counts/voxel contrast control applies
+to both observations and predictions. It does not load the whole acquisition.
+The primary replay/visualization commands are:
+  .venv/Scripts/python.exe -m src.tools.confocal_joint_report
+  .venv/Scripts/python.exe -m src.tools.confocal_joint_visualize
+
+Fixed protocol: plans/confocal_microtubule3_joint4d_protocol.txt
+Configuration: config/confocal_microtubule3_joint4d.yml
+Runtime: torch 2.10.0+cu130, torch-convnd 0.5.0, NumPy 2.2.6, SciPy 1.15.3.

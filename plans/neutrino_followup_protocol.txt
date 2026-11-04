@@ -1,0 +1,86 @@
+Finite follow-up protocol, frozen during development on 2026-10-25
+
+All claims below are conditional predictive claims. Relative arrival PDFs are
+normalized on the declared support. Neither realized B nor MC labels enter a
+self-supervised model forward pass, and no PSNR threshold is used.
+
+Analytic study (config/neutrino_diagnostics.yml)
+----------------------------------------------
+6,000 exact Poisson observations in 1,000 source-position groups; all six signal
+levels of one source remain in the same partition. Model seeds 42/43/44 each
+receive ten epochs. No latent source position or expected rate is a training
+feature. Select checkpoints/baseline parameters on validation, then evaluate
+600 test observations from 100 held-out sources once.
+
+Report held-out NLL and KL(true expected location PDF || prediction). The known
+latent oracle has more information than the model and is a diagnostic reference,
+not an attainable target conditional on a sparse A. Signal=0 with background=1
+is background-only, not a zero-intensity state. A zero-intensity state has no
+conditional photon-location PDF; observed zero counts can occur at positive rate.
+
+The first analytic test found a negative low-count learned-vs-simple-control
+comparison. Keep that result and the late failure of analytic seed 43. The
+known-GT figures use an analytic-trained model, never P-ONE-to-toy transfer.
+
+Response diagnostics are finite, fixed seed 42, no refitting, and exploratory:
+added independent background; known inactive support; fixed timing offsets;
+independent efficiency thinning; within-bin merging; binned nonparalyzable dead
+time; and delayed afterpulses. The latter three change the independent-Poisson
+observation contract. Their empirical NLLs are not evidence for Poisson theory.
+
+Mechanism study (config/neutrino_ablations.yml)
+---------------------------------------------
+Fresh 12,000 source records / 11,970 known configuration families. Exclude all
+100,812 known main/pilot families, rank eligible families without photon counts,
+and assign whole families persistently. Actual folds: 9,594 train / 1,221
+validation / 1,185 reserved test. Known main/pilot family overlap is zero.
+
+Finite methods: unchanged dense/fresh splits, unchanged dense/fixed splits,
+full temporal resolution/fresh splits, and a prior/count residual model/fresh
+splits. Three seeds, ten epochs, same observations, optimizer, shuffled order,
+batch size and resource ceilings. Actual FLOPs and wall times need not match;
+report them rather than describing the architectures as equal-FLOP experiments.
+
+The temporal variant keeps exactly the same parameter layout and removes
+256->64->256 pooling. The residual starts at a training-only prior/count mixture;
+its learned scale/gates use A and metadata only. Preserve all best/final scores.
+These are finite exploratory mechanism tests, with whole-family paired intervals
+and no multiplicity-adjusted confirmatory claim.
+
+Auxiliary jobs use GPU 1 while the unchanged main study retains GPU 0. The real
+pulse job may share GPU 1. Compare quality at matched examples/updates and caps;
+do not treat co-running throughput numbers as isolated architecture benchmarks.
+
+Additional precision branch is documented separately in
+plans/neutrino_precision_followup.txt. It arose from main validation instability
+before either the main or mechanism test was opened.
+
+Registered split-probability shifts
+----------------------------------
+After the primary locked analysis, evaluate its same selected models at p=.25
+and .75 without retraining, reselecting baselines, changing primary decisions or
+choosing a favorable seed. Source events/families remain the same. Bootstrap
+whole families jointly across repeated views, never count views as new events.
+
+Separate labelled downstream probe
+---------------------------------
+Freeze main-study encoders and baseline before reading the mechanism cohort's
+physics labels for probe fitting. Use its same independent 9594/1221/1185 folds
+and never reuse the main test for labels or tuning. Self-supervised pretraining
+never receives these labels.
+
+All methods receive the same dimension of sensor/time marginal probabilities,
+per-sensor first time moments, retained count and zero-input flag. Methods:
+raw empirical A (uniform fallback when empty), frozen selected simple estimator,
+and each of the three frozen main encoders. A ridge probe uses only labelled
+training records for scaling/fitting and chooses one of five registered penalties
+on validation. Score probe test labels after selection is written to a lock.
+
+Targets: log10 of stored source energy and the unit direction formed from stored
+initial zenith/azimuth interpreted in radians. Archive energy-unit certification
+is not inferred. Primary descriptive errors: mean absolute log-energy error and
+mean angular error in degrees. Report model-minus-raw/model-minus-estimator
+paired group intervals, empty/low-count strata and all negative results.
+
+This is a limited labelled linear probe on curated simulation. It cannot establish
+an end-to-end neutrino reconstruction improvement or real-detector physics gain.

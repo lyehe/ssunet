@@ -1,0 +1,110 @@
+Development-only diagnosis after the frozen-feature probe, 2026-10-26
+
+Purpose and access boundary
+---------------------------
+Diagnose whether the fixed encoders retain useful event-specific timing
+structure and whether validation log-loss selection trades away low-false-alarm
+ranking. This analysis is motivated by already opened negative detector studies.
+It is exploratory development, not another independent test or a rescue of an
+earlier result. Do not modify, reselect or reevaluate completed test outcomes.
+
+Read only the previous probe's train/validation observations, features, labels
+and fixed scores, plus frozen references, encoder states, selected head states,
+head-selection metadata and config/feature/head-lock metadata. A filesystem
+access wrapper rejects calibration/test folders and test result files even for
+hashing. No prior test truth is needed to rebuild the frozen encoders. Snapshot
+code/protocol and log every data path read. Write into a fresh directory.
+
+1. Selection metric diagnosis
+-----------------------------
+Refit every original logistic-head candidate on the same TRAIN features/labels
+using the same fixed grid, preprocessing, loss and iteration budget. Retain
+each candidate, rather than only the former balanced-validation-log-loss winner.
+Record every candidate's gradient and iteration-budget status. Candidates
+failing the original selected-head gradient gate remain visible but are
+ineligible for a tail-preferred recommendation. Do not increase their budgets.
+Verify that the penalty-.1 heads and validation scores reproduce the saved
+original choices within numerical tolerance. There is no encoder fitting.
+
+Report balanced validation log loss alongside validation efficiency at expected
+signal two and averaged over all registered signal levels. For a tail diagnostic,
+repeat twenty deterministic two-fold background calibration partitions within
+VALIDATION: each null's rank uses only the other background half; signal source
+groups remain together and use their assigned fold's background reference.
+Use the existing independent per-window tie randomizers. Report measured null
+rates, variation across partitions and how often each candidate ranks first.
+These reuse the SAME validation windows. Partition ranges are not confidence
+intervals and repetitions are not additional observations. Validation's 256
+two-photon signals and 8192 nulls provide limited tail-selection precision,
+especially at nominal .001 (about four calibration-tail events per half).
+
+The tail-preferred candidate is a development suggestion. Selecting it on these
+validation outcomes and reporting those outcomes is optimistic. Never apply a
+revised selection rule to the existing test and describe it as confirmation.
+Tail preference maximizes mean efficiency across partitions, breaking ties by
+the original grid order; record tie-adjusted first-place fractions separately.
+
+2. Synthetic expected-timing diagnostic
+--------------------------------------
+Using source positions only as diagnostic labels, derive the signal-only
+expected time marginal from the established analytic response. Four targets:
+expected mean, 10th percentile, median and 90th percentile in ns, with quantiles
+at bin centers. Positive-signal windows only: background has no signal-timing
+target. Keep positive events with zero recorded photons; they have defined
+injection parameters but no recorded event-specific information.
+
+Fit standardized linear ridge timing heads on TRAIN only. Compare a constant
+training-target mean; raw/prior inputs; raw plus full learned or full random
+features; and learned/random PDF-only and hidden-only features WITHOUT raw
+features. Use fixed penalties .01/.1/1 and report all, primary .1. No timing
+penalty selection uses validation. Normalize targets on training statistics;
+report validation MAE in ns for every target, expected signal and observed-count
+stratum, including empty observations. This is a limited labelled linear timing
+probe under a fixed signal clock; it neither proves timestamp preservation nor
+event direction/energy reconstruction. The PDF targets are expected injection
+statistics, not clean photon images or photon-level training targets.
+
+3. Sensor-time pairing intervention
+-----------------------------------
+Choose 2048 validation windows by a fixed random permutation of row IDs, without
+consulting labels, counts or prediction quality. Within each window and EACH
+recorded A/B half separately, permute photon time-bin assignments among the
+same photon sensor IDs. Preserve integer multiplicity, offsets, A/B membership,
+every sensor histogram and every time histogram exactly. Count and report
+eligible windows and those whose joint count map actually changes.
+
+Run the exact frozen learned and untrained encoders on original and permuted
+observations in identical batch shapes. Compare PDF total variation, temporal
+and spatial marginal changes, relative hidden-feature changes, and the saved
+heads' logit responses separated into raw-feature and added-feature contributions.
+Record cached-feature replay error as a numerical control. Report changed and
+unchanged subsets, background and signal subsets. No event-level physical false
+alarm or discovery claim is attached to these perturbed observations.
+Rebuild the fixed kernel summary with its previous .5 prior-mixture fraction;
+require numerical agreement with cached original development features before
+interpreting any intervention response.
+
+Small response can indicate reliance on fixed-clock priors/marginals, but is not
+alone proof of an architecture bug: time averaging, few photons, nonlinear
+local features and the known response all affect it. Large response alone does
+not establish useful timing information. Interpret together with the linear
+expected-timing probe. Any next architecture/objective change needs a fresh
+protocol and new held-out evaluation.
+
+Budget and deliverables
+-----------------------
+Use four CPU threads, GPU 0 only for frozen inference, batch 24, total finite
+budget 1200 s, 4 GiB process/allocated GPU ceilings. Persist input identities,
+all candidate heads, selection/timing/coupling tables, data-access log, plots
+and an explicit development-only interpretation. Earlier studies/archives and
+statistical locks remain unchanged. No external communication is authorized.
+
+Execution correction
+--------------------
+The first development run stopped on the original unselected self-split
+penalty-1e-4 candidate (gradient .0002246 after 300 steps). Reusing the production
+fitter for one candidate at a time incorrectly applied its selected-head gate
+to every diagnostic point. Preserve development_diagnostics_v1 as incomplete.
+The v2 diagnostic returns every fixed-budget candidate and records the gate
+status explicitly. The same candidate is still excluded from recommendations;
+no completed detector study, fitting budget or selection rule is altered.

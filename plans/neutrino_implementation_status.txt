@@ -1,0 +1,86 @@
+Phased-plan implementation status
+Active objective: implement plans/neutrino_phased_plan.txt in full.
+Started: 2026-10-25
+
+Phase 0: protocol/configuration and hashed evidence index written.
+Phase 1: source audit and stable group index written. 1,993 repeated initial-state
+         families (3,986 records) grouped. Exact physical Poisson interpretation
+         remains unverified; the plan's qualified predictive mode is retained.
+Phase 2: lazy process-local HDF5 loading, explicit worker epoch indices, bounded
+         donor cache, streamed baseline/model scoring, chunked grouped bootstrap
+         and resumable optimizer/cursor state implemented. Focused checks pass.
+         Engineering measurement: 684 examples/sec, 1.68 GiB host peak working
+         set, 0.078 GiB allocated GPU memory. Full suite: 166 passed, 8 warnings.
+Phase 3: 100k new events materialized: 79,771 train / 10,181 validation / 10,048
+         reserved test. Nested engineering folds: 7,988 / 963 / 1,049. No known
+         family crossing or pilot-related overlap; original times/empties kept.
+Phase 4: COMPLETE. 180 baseline candidates and three fixed 10-epoch dense runs.
+         Selected validation mean low-count NLL 4.112627 vs 4.372927 control;
+         paired delta -0.260299 [-0.285932,-0.234888]. Exact primary donor coverage
+         100%; mean delta vs donor -4.6710. Development resource/point gates pass.
+         Seed 43 diverged late: epoch-10 low NLL 223.77; its registered selected
+         checkpoint is epoch 2. Preserve this failure and all final-budget scores.
+Phase 5: COMPLETE. Main sealed test (session 67618) completed on cuda:0.
+         Mean low NLL 4.093423 vs selected baseline 4.338507; delta -0.245084
+         [-0.272125,-0.218388]. Exact donor contrast and all resource gates pass.
+         The frozen 75/25 control still leads overall: 2.734047 vs model 2.857924.
+         Training session 12052 and lock session 28118 completed successfully.
+Phase 6: Analytic study COMPLETE: 600 test records/100 sources; learned low NLL
+         10.4063 vs selected simple control 9.9550 (negative); known-oracle NLL
+         8.3364. Mean event KL model 1.7069 vs baseline 1.5753. GT models were
+         trained on analytic observations only. Response diagnostics complete.
+         Fresh mechanism cohort: 9594/1221/1185 events; all known main/pilot
+         families excluded. Four methods x three seeds x ten epochs COMPLETE,
+         analysis locked and test COMPLETE. Fine temporal low NLL 3.952540 vs
+         unchanged 4.294847; delta -0.342308 [-0.409386,-0.276561].
+         Small-cohort FP32 comparison COMPLETE (session 28691), both precisions
+         stable at only 6000 steps. Thus no failure-regime causal claim from it.
+         Matched seed-43 FP32 continuation from main epoch 2 to 5 is COMPLETE
+         (session 58123), preserving parent optimizer/RNG/cursor. Its fresh test
+         improves matched epoch-5 NLL by 1.298282 [1.159142,1.436853]. This is a
+         single failure-case diagnostic. Both precision studies are locked and
+         tested; registered p=.25/.75 shifts are also COMPLETE without refitting.
+Phase 7: Real marked-pulse contract and run-separated artifacts COMPLETE. Native
+         DOM identity matching rejected (positions drift up to 23.4 m); v2 uses
+         fixed spatial cells, not asserted native IDs. Charges/positions preserved.
+         Real FP32 model training COMPLETE (session 83000): selected epoch 2,
+         marked validation NLL 11.9882; 3972 parameters, about 20 examples/sec,
+         0.372 GiB allocated GPU in engineering check. Real first test COMPLETE
+         (measured session 44918): marked-pulse NLL 9.932161 vs registered temporal
+         control 13.849807. One bright selected test run; no physical no-event,
+         Poisson, real low-count or general new-run claim. Stronger real controls
+         would require a newly frozen comparison rather than retuning this test.
+         Independent labelled probe COMPLETE on fresh families: modest log-energy
+         error improvement, no clear direction benefit. Labels were probe-only.
+
+The phased implementation and finite evaluations are complete. Scientific limits
+and negative findings remain explicit; see plans/neutrino_study_results.txt.
+
+Authoritative artifacts: data/neutrino/study/source_audit.json,
+source_group_index.parquet, cohort_manifest.json/parquet, shards.json,
+engineering_profile.json, engineering_selection.json, baseline_selection.json,
+training_manifest.json, active_job.json, and per-seed run records.
+The main test was opened only by its locked first analysis. All planned jobs
+completed; no test result was overwritten. Do not repeat a sealed test or restart
+a future live job merely because a tool poll times out.
+Frozen source files include all main core/driver files and each completed or
+running experiment's driver/model files. New visualization/report modules can
+be edited independently; do not silently invalidate the analysis identities.
+The old stdin-launched optional worker probe failed (Windows spawn); its scores
+were never used. The main study uses the verified zero-worker module entry point.
+
+Latest full verification: 166 passed, 8 warnings (session 31890). A broad check
+also exposed a checkpoint-allowlist ordering assumption and a nested/preexisting
+allowance bug; checkpoints.py now adds only new scoped allowances, with exact
+set-preservation regression tests. This file is not used by the photon driver.
+
+New protocol files: neutrino_followup_protocol.txt, neutrino_precision_followup.txt,
+neutrino_real_data_contract.txt. Commands are repository-root src.tools entrypoints.
+Final hub: data/neutrino/study/results_index.html.
+Final viewers: study/visualizations_test_v1/index.html,
+analytic_study/visualizations_v2/index.html, study/followup_visualizations/index.html.
+Combined offline bundle: data/neutrino/neutrino_study_results.zip (20 PNG figures
+plus SVG/HTML/score/protocol exports and frozen computation sources). Earlier validation viewers
+remain historical snapshots. The bundle passed ZIP integrity and file checks.
+All five frozen analysis identities match current computation files and data;
+final_evidence_index.json records the result hashes. Scoped lint and diff checks pass.

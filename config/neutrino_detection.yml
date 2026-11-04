@@ -1,0 +1,31 @@
+study_id: neutrino_subthreshold_feasibility_v1
+output: data/neutrino/detection_study_v1
+protocol: plans/neutrino_detection_protocol.txt
+pretraining_config: config/neutrino_diagnostics.yml
+generator:
+  seed: 2026102601
+  background_expected_photons: 1.0
+  calibration_background_windows: 10000
+  test_background_windows: 20000
+  test_source_groups: 256
+  repetitions_per_source: 4
+  signal_expected_photons: [0.25, 0.5, 1, 2, 3, 5, 8, 12]
+  source_min_m: [-150, -150, -1050]
+  source_max_m: [150, 150, -450]
+  split_probability: 0.5
+scoring:
+  model_seeds: [42, 43, 44]
+  template_points_per_axis: 5
+  template_signal_grid: [0.25, 0.5, 1, 2, 3, 5, 8, 12]
+evaluation:
+  false_positive_rates: [0.01, 0.001]
+  primary_false_positive_rate: 0.01
+  primary_expected_signal: 2
+  bootstrap_draws: 2000
+  bootstrap_seed: 2026102602
+runtime:
+  batch_size: 24
+  cpu_threads: 4
+  max_seconds: 1200
+  max_process_rss_gib: 4
+  max_gpu_allocated_gib: 4

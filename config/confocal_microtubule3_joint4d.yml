@@ -1,0 +1,44 @@
+study_id: confocal_microtubule3_joint4d_v1
+output: data/confocal_microtubule3_joint4d_v1
+observation_kind: photon_counts
+method: gap
+source:
+  path: '\\jnas2\Yehe\Confocal data\XYT cell microtuble 3.lif'
+  series_index: 1
+  channels: all
+  crop_tzyx: [[0, 1024], [0, 64], [128, 384], [128, 384]]
+model:
+  dimensions: 4
+  base_channels: 32
+  depth: 4
+  encoding_levels: 10
+  backend: native
+photon_pool:
+  seed: 8801
+  training_probability: 0.8
+training:
+  seed: 42
+  photon_split_seed: 4302
+  patch_tzyx: [16, 16, 128, 128]
+  split_probability: 0.5
+  batch_size: 2
+  accumulation_steps: 2
+  learning_rate: 0.0001
+  gradient_clip: 0.5
+  precision: fp32
+  logit_normalization: barron2026_per_detector
+  steps: 500
+  checkpoint_every: 25
+evaluation:
+  every_steps: 100
+  split_seed: 4354
+  phases:
+    early: 0
+    middle: 504
+    late: 1008
+  # Local ZYX starts within the central-XY cache, identical for every phase.
+  spatial_starts: [[0, 0, 0], [16, 0, 128], [32, 128, 0], [48, 128, 128]]
+  uniform_mixture: 0.01
+  gaussian_spatial_sigma_zyx: [0.5, 1.5, 1.5]
+  gaussian_temporal_sigma: 1.0
+  scope: single-acquisition photon-holdout pilot; no clean ground truth

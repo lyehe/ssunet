@@ -1,0 +1,96 @@
+study_id: neutrino_published_gap_comparison_v1
+output: data/neutrino/published_gap_comparison_v1
+dataset: data/neutrino/controlled_reference/prometheus_pone_reference_1000.h5
+dataset_sha256: 1f927ea60a8327546c958f5bc5740d0f872ea0f38d1470271eb08f83958f2209
+scope: published_GAP_backbone_transfer_to_PONE_with_paper_and_matched_training_setups_exploratory_validation
+split_probability: 0.5
+photon_split_seed: 42
+models:
+- name: published_gap_paper
+  depth: 6
+  start_filts: 28
+  levels: 10
+  gradient_clip: 0.5
+  optimizer:
+    kind: adam
+    learning_rate: 0.0001
+    weight_decay: 0.0
+    scheduler_patience: 10
+  training_overrides:
+    batch_size: 32
+    steps: 2500
+- name: published_gap_matched
+  depth: 6
+  start_filts: 28
+  levels: 10
+  gradient_clip: 1.0
+  optimizer:
+    kind: adamw
+    learning_rate: 0.001
+    weight_decay: 0.01
+    scheduler_patience: null
+training:
+  seeds:
+  - 42
+  - 43
+  - 44
+  steps: 5000
+  batch_size: 16
+  learning_rate: 0.001
+  weight_decay: 0.01
+  gradient_clip: 1.0
+  precision: fp32
+  cpu_threads: 4
+  max_training_seconds_per_seed: 1200
+  max_gpu_allocated_gib: 12
+evaluation:
+  steps:
+  - 0
+  - 110
+  - 250
+  - 500
+  - 1000
+  - 2000
+  - 3000
+  - 4000
+  - 5000
+  primary_selection: final_fixed_step
+  primary_stratum: retained_1_to_10
+  fixed_training_events: 160
+  training_subset_seed: 20261027
+  donor_seed: 914
+  donor_draws: 20
+  bootstrap_seed: 20261027
+  bootstrap_draws: 10000
+baselines:
+  original_prior_pseudocount: 0.5
+  tuned_prior_time_bandwidth_ns: 200
+  tuned_prior_pseudocount: 0.0001
+  tuned_mixture_prior_fraction: 0.25
+observation_kind: photon_counts
+method: gap
+target_normalization: per_event_unit_mean_live_support
+input_encoding: GAP_multiscale_sine
+reference_study: data/neutrino/gap4d_retry_v2
+upstream_commit: 135b8c67ce5a6ab4c44bcdd0fbe756f75526e249
+adaptations_and_limits:
+- Released GAP U-Net at paper dimensions; this is a detector-data transfer, not a
+  reproduction of the microscopy benchmark.
+- Sensors are lexicographically ordered by physical x/y/z into a sensor/time image;
+  this differs from physical 4D adjacency.
+- Zero padding to pooling multiples is cropped before live-support probability normalization.
+- Whole 60-by-256 event observations replace random 256-by-256 image crops; image
+  flips/transposes are omitted because sensor and time axes are not exchangeable.
+- Fixed p=.5 and training-only fitting are shared with the 4D comparator; original
+  variable-thinning microscopy schedule is not replicated.
+- Paper setup uses batch 32, Adam 1e-4, clip .5, and epoch-wise ReduceLROnPlateau;
+  matched setup uses batch 16 and the 4D AdamW optimizer. Both see 80000 training
+  examples over 100 epochs; the matched setup changes both optimizer and batch size.
+- Final fixed-step scores are reported for both setups without best-checkpoint or
+  optimizer selection.
+- This reuses the same 100-event simulation validation cohort; descriptive intervals
+  exclude seed/selection uncertainty and do not establish real-event detection.
+- No clean photon GT, test observations, MC truth, intensity matching or PSNR is used.
+- Parameter counts and compute differ; actual training times and peak GPU allocations
+  are reported.
+upstream_source_sha256: 3568742971dec5e83e5ebabfe30de1fb331c75bad47264fa439e58d8c6fca9ed

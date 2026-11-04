@@ -1,0 +1,118 @@
+Frozen subthreshold detection feasibility: first test, 2026-10-26
+
+Decision
+--------
+The model detects weak analytic injections missed by a count-only threshold.
+It does not establish an improvement over strong reference methods: the static
+training prior and the fixed physics-template search are both better. This
+does not yet support a distinct self-splitting detection contribution, real
+subthreshold neutrino recovery or decoding of physical event parameters.
+
+The first result remains fixed. No new checkpoint, detection statistic,
+amplitude grid or threshold was selected after opening this test.
+
+Study and artifacts
+-------------------
+Protocol: plans/neutrino_detection_protocol.txt
+Configuration: config/neutrino_detection.yml
+Code: src/ssunet/neutrino_detection.py and src/tools/neutrino_detection.py
+Outputs: data/neutrino/detection_study_v1/
+Viewer: http://127.0.0.1:8765/detection_study_v1/index.html
+Command: python -m src.tools.neutrino_detection --config
+         config/neutrino_detection.yml --device cuda:0
+
+The analytic-trained checkpoints selected previously on validation (42/43/44)
+were frozen and their predicted probabilities averaged. No retraining or
+event-labelled fitting was performed. Inputs to the scorer are recorded counts
+and fixed support/geometry, not injected source parameters or labels. Models
+have 3,585 parameters each, 10,755 parameters for the three-model ensemble.
+
+There are 10,000 background calibration windows and 28,192 fresh test windows:
+20,000 background-only and 8,192 signal-plus-background windows from 256 unseen
+source positions, four independent repeats at eight expected signal strengths.
+All 32 views of one source are resampled together for uncertainty. Source
+position overlap with the complete previous analytic study is zero.
+
+Every method uses the same complete recorded photon budget. Empty windows and
+signals producing zero photons remain in the denominator (8,078 empty test
+windows overall). Splitting into A/B does not provide extra observations: both
+halves are recorded photons available to the detector. The shape score is a
+calibrated statistic, not P(event) or an asserted generative likelihood ratio.
+
+Primary operating point
+-----------------------
+Target false-positive rate .01 per window; expected signal two photons plus
+expected uniform background one photon. There are 1,024 signal windows here.
+
+Method                    Detected/1024   Efficiency   Test FP/20000   FP rate
+Count only                   255          24.90%          180          0.900%
+Static training prior        544          53.13%          163          0.815%
+Geometry/time kernel         467          45.61%          237          1.185%
+Physics-template search      576          56.25%          197          0.985%
+Frozen self-split ensemble   451          44.04%          189          0.945%
+
+Model-minus-control efficiency differences, percentage points, conditional 95%
+source-group bootstrap intervals:
+Count:              +19.14  [+16.60, +21.68]
+Static prior:        -9.08  [-11.33,  -6.93]
+Geometry/time:       -1.56  [ -3.61,  +0.49]
+Physics template:   -12.21  [-14.65,  -9.67]  (primary descriptive contrast)
+
+The model recovers 214 injections missed by count only but misses 18 found by
+count only. Against the physics-template search it recovers 22 and loses 147.
+Against the static prior it recovers 14 and loses 107. Report both directions;
+selected examples of model-only recoveries would overstate the evidence.
+
+The static prior consumes no event-specific shape information and uses only
+the same analytic training detections. Its stronger efficiency at a lower
+measured false-positive rate makes the count-only gain insufficient evidence
+for useful adaptive decoding by this frozen model/statistic.
+
+False alarms and uncertainty
+----------------------------
+The nominal calibration rates are shared; realized test false-positive rates
+are not exactly equal. Independent null uncertainty and low-FPR ROC curves are
+shown in the viewer. The kernel's primary null interval [1.044%, 1.345%] lies
+above the nominal 1% rate. Its slightly higher raw efficiency is therefore not
+a comparison at the same realized false-positive rate. Do not adjust its or
+any model's threshold using this opened test.
+
+The model's primary test null interval is [0.820%, 1.089%]; the physics-template
+interval is [0.857%, 1.132%]. Source bootstrap intervals condition on the fixed
+models and calibration set; they exclude calibration/selection/model-training
+uncertainty. Comparisons are exploratory and not multiplicity corrected.
+
+The secondary nominal .001 comparison is retained in JSON/CSV. With 20,000
+null test windows its tail precision is limited; it is not an instrument-level
+false-alarm certification. These fixed-window toy rates cannot be converted
+to alarms per day without real live exposure and scan/dependence accounting.
+
+Scope and next finite experiment
+--------------------------------
+The response is the established 256-sensor, 256-bin exact-Poisson analytic toy,
+not neutrino transport or calibrated detector response. Expected signal
+strengths, source positions and expected PDFs are evaluation/injection truth;
+there is no clean photon observation used as a target or PSNR requirement.
+The new detection population emphasizes weaker signals than the prior mixed-
+brightness pretraining population. Generalization to that population is part
+of this feasibility test, not a newly optimized detector training regime.
+
+The scoring/load/generation phase took 104.13 seconds on GPU 0 (RTX 4090), with
+measured peak allocated GPU memory .299 GiB and process memory 1.443 GiB.
+Bootstrap/report rendering are outside this timer; shared-machine throughput
+is not an isolated architecture or training benchmark.
+
+Next, on new source folds, compare a detector using raw observations and the
+static prior with the same detector augmented by frozen learned features.
+Train/calibrate the event score on dedicated folds. For the main contribution,
+compare matched dense encoders pretrained with self-splitting versus observed-
+count reconstruction and untrained features at equal observation/label/update
+budgets. Predeclare FP32/full-resolution architecture, finite seeds, noise
+population and detection score before opening another test. The current test
+must not be used to choose these settings or make a new confirmatory claim.
+
+Real validation still requires documented untriggered/zero-bias observations,
+matched detector response, state/calibration and live exposure. The existing
+triggered/filtered real pulse files do not provide that null population.
+Direction, energy and timing recovery need their own injection-parameter error
+and uncertainty tests. Stage 1 evaluates binary detection only.

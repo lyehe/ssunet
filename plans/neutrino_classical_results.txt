@@ -1,0 +1,90 @@
+Traditional method comparison completed, 2026-10-28
+
+Summary
+Traditional methods are competitive on this pilot. Temporal Gaussian KDE has
+the best all-photon point score, while the 4D neural predictor has substantially
+better low-count photon prediction. A uniform advantage of the neural model
+is not supported. This is the same explored simulation validation cohort.
+
+Selection protocol
+Configuration groups within the original 800 training observations were split
+into 640 population-prior-fit and 160 inner-tuning observations, seed 20261028.
+No inner-tuning event photons entered prior fitting during selection. All 614
+predeclared prior/family/concentration combinations were evaluated; TV candidates
+met the declared objective-gap convergence criterion. Selection minimizes mean
+cross entropy over nonempty inner-training B targets. The lock was written and
+hashed before reading outer validation photon arrays. The prior was then refitted
+on all 800 training observations with its locked settings. No outer validation
+data were used to choose parameters. Tuning took 14.62 seconds on this system.
+
+Locked settings
+Population prior: 100 ns temporal smoothing, equal-event weighting, .0001
+pseudocount per live location.
+Dirichlet shrinkage: concentration 3 observed photons.
+Temporal KDE: 12.5 ns fixed bandwidth, no spatial smoothing, concentration 3.
+Spatial/time KDE: 50 m spatial and 100 ns temporal base bandwidths, N_A^(-1/8)
+scaling, concentration .1.
+Poisson-TV: regularization 3, vertical strength 0 (temporal TV selected),
+concentration 3. This is a Poisson-TV shape plus population-prior shrinkage.
+
+Final held-out predictive scores, lower is better
+Estimator                 Photon NLL all / low     Event CE all / low
+4D neural                 3.012414 / 3.347322        4.619380 / 4.273617
+Released GAP, matched     3.590670 / 3.658091        4.930168 / 4.675821
+Historical tuned mixture  2.689193 / 4.696247        5.871634 / 6.024382
+Dirichlet shrinkage       2.727412 / 4.437667        5.514238 / 5.517213
+Temporal Gaussian KDE     2.553331 / 4.090979        5.245806 / 5.115246
+Spatial/time Gaussian KDE 3.258830 / 4.389268        5.301987 / 4.976926
+Poisson-TV + prior        2.876450 / 4.403205        5.537465 / 5.481969
+Population prior only     7.517904 / 7.534091        7.631458 / 7.539937
+
+The 1-10 retained-A subset contains 50 observations, 36 nonempty targets and
+120 held-out photons. All-photon scoring contains 907 held-out photons across
+100 observations and 55 nonempty targets. Five observations with A>30 supply
+725 held-out photons, nearly 80% of the all-photon weighting.
+
+4D minus temporal KDE, conditional whole-configuration bootstrap:
+  Low-count photon NLL: -.743657 [-.958170, -.524445].
+  All-photon NLL:       +.459082 [-.480029, +.985344].
+Thus the low-count comparison favors 4D, while the pooled-photon KDE advantage
+is a point estimate with an uncertain paired difference. Equal-event scores
+favor 4D over every newly tested classical estimator as well. No global ranking
+over all traditional algorithms, real data, or physical detection tasks is claimed.
+
+Verification and resources
+13 tests pass: mass conservation at kernel boundaries, dead support, physical
+sensor permutation, analytic Dirichlet prediction, empty observations, prior
+weighting, exact Poisson proximal/KKT equations, adjoint identities, analytic
+two-bin TV solutions and disjoint training configuration groups. Scoped Ruff
+lint/format checks pass. Numerical objective-gap tolerance for TV was tested
+separately from parameter-error tolerance using exact small solutions.
+
+The audit refits the locked prior and replays all five deterministic fields
+for all 100 validation observations. Probability and event-NLL replay errors
+are zero; maximum PMF sum error is 4.4409e-16 and invalid-support mass is zero.
+The fit/tuning group separation, selection lock SHA, source/data/reference
+identities and all 10 archived fitting/reporting source files are verified.
+Earlier neural comparison files remain preserved.
+
+Validation prediction times for all 100 observations: Dirichlet .0021 s,
+temporal KDE .0041 s, spatial/time KDE .0065 s, Poisson-TV .2943 s. These are
+setup-inclusive locked-estimator GPU measurements, not a matched comparison
+with neural training time. Peak allocated GPU memory during the study was
+.4917 GiB. The selected TV prediction converged in 450 iterations with maximum
+primal-dual gap 9.6403e-5 per input photon, below the 1e-4 criterion.
+
+Limits
+The counts are curated P-ONE simulation, not real untriggered telescope data.
+Poisson physics and latent source independence remain unverified. The validation
+cohort was explored earlier; intervals condition on fitted estimators and omit
+parameter-selection/model-seed uncertainty. The historical mixture had been
+validation-tuned before this study and is labeled as a historical comparator.
+Classical parameter choices came only from the declared training split.
+Outputs predict relative photon locations, not event presence or absolute
+arrival rates. No clean photon GT, PSNR, reserved test photons, MC truth or
+target-derived inference intensity scaling was used.
+
+Viewer: http://127.0.0.1:8765/classical_comparison_v1/index.html
+Detailed evidence: data/neutrino/classical_comparison_v1
+Protocol and primary sources: plans/neutrino_classical_protocol.txt
+Commands: plans/neutrino_classical_usage.txt

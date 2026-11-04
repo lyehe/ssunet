@@ -24,21 +24,22 @@ dependencies = [
     "torch",
     "torchvision",
     "lightning",
-    "numpy < 2",
+    "numpy",
     "h5py",
     "pyyaml",
     "tqdm",
     "matplotlib",
     "seaborn",
     "pandas",
-    "pyiqa"
+    "pyiqa",
+    "setuptools>=70,<72",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff", "tox", "pre-commit"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["ssunet"]
+packages = ["src/ssunet", "src/tools"]
 
 [tool.pytest.ini_options]
 pythonpath = [".", "src"]
@@ -48,6 +49,7 @@ testpaths = ["tests"]
 line-length = 100
 target-version = "py310"
 exclude = ["*.ipynb"]
+extend-exclude = ["src/ssunet/vendor/gap"]
 
 [tool.ruff.lint]
 select = [
@@ -81,3 +83,12 @@ convention = "google"
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 "tests/*" = ["S101"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu130" }
+torchvision = { index = "pytorch-cu130" }
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true

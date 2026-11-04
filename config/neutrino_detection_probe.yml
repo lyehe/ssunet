@@ -1,0 +1,53 @@
+study_id: neutrino_frozen_detection_probe_v1
+output: data/neutrino/detection_probe_v1
+protocol: plans/neutrino_detection_probe_protocol.txt
+frozen_config: config/neutrino_detection.yml
+generator:
+  seed: 2026102603
+  background_expected_photons: 1.0
+  source_min_m: [-150, -150, -1050]
+  source_max_m: [150, 150, -450]
+  signal_expected_photons: [0.25, 0.5, 1, 2, 3, 5, 8, 12]
+  split_probability: 0.5
+  train:
+    background_windows: 8192
+    source_groups: 512
+    repetitions_per_source: 2
+  validation:
+    background_windows: 8192
+    source_groups: 128
+    repetitions_per_source: 2
+  calibration:
+    background_windows: 20000
+    source_groups: 0
+    repetitions_per_source: 0
+  test:
+    background_windows: 50000
+    source_groups: 512
+    repetitions_per_source: 4
+features:
+  sensor_groups: 64
+  time_groups: 64
+  random_encoder_seeds: [42, 43, 44]
+head:
+  penalties: [0.0001, 0.001, 0.01, 0.1, 1.0]
+  max_iterations: 300
+  history_size: 20
+  tolerance_grad: 0.0000001
+  tolerance_change: 0.0000000001
+  feature_scale_floor: 0.000001
+  feature_clip: 20.0
+  selection_metric: balanced_validation_log_loss
+evaluation:
+  false_positive_rates: [0.01, 0.001]
+  primary_false_positive_rate: 0.01
+  primary_expected_signal: 2
+  bootstrap_draws: 2000
+  bootstrap_seed: 2026102604
+runtime:
+  batch_size: 24
+  head_batch_size: 1024
+  cpu_threads: 4
+  max_seconds: 1800
+  max_process_rss_gib: 4
+  max_gpu_allocated_gib: 4

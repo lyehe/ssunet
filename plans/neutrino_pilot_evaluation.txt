@@ -1,0 +1,158 @@
+Photon-splitting pilot: evaluation
+Date: 2026-10-25
+Historical scope: the 110-step checkpoint. A subsequent unchanged-architecture
+5,000-step, three-seed pilot improves low-count results; see
+plans/neutrino_longer_pilot.txt for the latest assessment.
+
+Assessment
+----------
+The small dense model is affordable to train and uses information specific to
+each event's retained photons. Its present prediction quality is worse than
+a simple retained-count-plus-prior estimator, including in the intended low-
+count regime. The pilot therefore passes the implementation/cost milestone;
+it has not met the scientific success criterion in the original plan.
+
+Evaluation scope
+----------------
+The original profile saved no checkpoint. Its exact seed-42 schedule was
+reproduced: 10 warmup plus 100 profiled optimizer steps, approximately 2.2 passes
+through 800 training events, using the original raw-count loss. Model weights
+were retained for these diagnostics. Its frozen validation NLL reproduces the
+original report within 1e-5 nats/photon. No network fitting used validation
+targets, no test events were scored, and no truth sidecar was read.
+
+Dataset SHA-256:
+  1f927ea60a8327546c958f5bc5740d0f872ea0f38d1470271eb08f83958f2209
+Observed integer counts, fixed windows and original partitions were unchanged.
+
+Scores
+------
+Photon-weighted negative log likelihood; nats per held-out photon, lower better.
+All-event validation: 100 observations, 55 with nonempty targets, 907 photons.
+Low-count means 1--10 RETAINED INPUT photons: 50 observations, 36 with nonempty
+targets, 120 held-out photons. It does not mean 1--10 total observed photons.
+
+Method                                     All events    Low count
+Uniform                                         9.640        9.640
+Original training prior                         8.452        8.854
+Validation-selected training prior              7.308        7.613
+Dense model                                     4.686        5.795
+Fixed 50/50 retained-count/prior mixture          3.060        4.974
+Validation-selected retained-count mixture       2.689        4.696
+Model with count-matched donor inputs          [excluded]     9.530
+
+The fixed mixture is q = 0.5*A/sum(A) + 0.5*original_training_prior, falling
+back to that prior when A is empty. It uses no learned network or validation
+bandwidth/mixture tuning. It was added as a posthoc diagnostic, not a previously
+registered confirmatory test. Its score is better than the model by 1.625
+nats/photon overall and 0.821 nats/photon in the low-count stratum.
+
+Exploratory paired event/configuration bootstrap, 10,000 replicates:
+  model minus fixed mixture, all:     +1.625 [0.602, 2.055]
+  model minus fixed mixture, low:     +0.821 [0.225, 1.471]
+  model minus matched donor, low:     -3.735 [-4.541, -2.750]
+Negative model-minus-control differences favor the model. These descriptive
+95% intervals condition on one trained network and the selected diagnostics;
+they do not include model-seed, hyperparameter-selection or upstream latent-
+configuration uncertainty. They are not a substitute for untouched-test results.
+
+What the controls show
+----------------------
+1. Event conditioning helps. Twenty donor-input realizations replace each
+   validation input with a training event matched on retained photon count.
+   All low-count matches are exact; p, exposure and geometry are unchanged.
+   Low-count model NLL worsens from 5.795 to 9.530. The result supports use of
+   event-specific location/timing information beyond total brightness.
+   All-event donor NLL is not interpreted: the five brightest validation events
+   lack exact donor count matches, confounding that control outside low counts.
+
+2. The initial baselines were weak. The original prior adds 7,680 uniform
+   pseudophotons to 9,688 actual training photons, a 44.2% uniform component.
+   Tuning only a training-derived time prior lowers its validation NLL from
+   8.452 to 7.308. More importantly, even the fixed untuned retained-count
+   mixture outperforms the model. The headline comparison against uniform or
+   the original unconditional prior overstated the model's relative quality.
+
+3. Global results are concentrated. One event supplies 47.6% of validation
+   target photons, and five events supply 79.9%. The inverse concentration of
+   photon weights, (sum B)^2/sum(B^2), is 3.81 effective weighted events. This
+   is a concentration diagnostic, not a replacement sample-size estimate.
+   Photon weighting is intentional and remains the primary objective; report
+   retained-count strata and event-level uncertainty alongside it.
+
+4. Empty-input prediction needs work. The model scores 9.285 with A=0, compared
+   with 7.939 for the tuned prior. Only 11 events and 15 target photons support
+   that comparison. Empty targets correctly contribute zero to a photon-location
+   likelihood. These scores do not evaluate physical no-event detection.
+
+5. Time coarsening is a partial limitation. The model reduces 256 time bins to
+   64 before linear upsampling. Applying that operation to the selected simple
+   estimator worsens its overall NLL from 2.689 to 3.490, consistent with loss
+   of narrow peaks. However, its low-count NLL improves slightly from 4.696 to
+   4.632. Coarsening alone does not explain the model's low-count deficit.
+   This estimator diagnostic is not a causal architectural ablation.
+
+6. The run is very short. No convergence or model-capacity conclusion follows
+   from 110 optimizer steps. Train/validation learning curves and a fixed longer
+   schedule are needed to separate undertraining from architectural limitations.
+
+Exploratory baseline selection
+------------------------------
+The tuned prior selects among 36 candidates fit on training photons: Gaussian
+time widths 0/25/50/100/200/400 ns and per-bin pseudocounts
+0.0001/0.001/0.01/0.1/0.5/1. Its chosen width is 200 ns and pseudocount 0.0001.
+The retained-count estimator selects among 144 candidates: six time kernels,
+four spatial kernels (identity, 150 m, 400 m, uniform), and six prior weights.
+The best all-event validation candidate uses 75% normalized retained counts and
+25% tuned prior, with no time or spatial smoothing. Thus it is a count/prior
+mixture rather than a nonzero-bandwidth smoother. Baseline choices were selected
+on these scored validation observations, making the tuned scores optimistic;
+the fixed mixture requires no such selection and reaches the same conclusion.
+
+Cost and applicability
+----------------------
+Original profile: 3,585 parameters, approximately 955 training examples/second,
+0.0793 GiB peak PyTorch tensor allocation on one RTX 4090. It measures only this
+small 60-sensor model on a short, repeated-event pilot. It supports a practical
+dense implementation; full-detector geometry and larger-model cost are unmeasured.
+
+The physical reference is simulated P-ONE data in water. Upstream selection,
+clock semantics, unit-photon interpretation and repeated latent configurations
+still need full provenance review before a physical Poisson-supervision claim.
+The exact analytic thinning audit remains valid for its constructed reference.
+No result here establishes improved neutrino reconstruction or real-data benefit.
+No photon ground-truth image, image PSNR or clean-image target is needed for
+the reported held-out photon likelihood comparisons.
+
+Recommended next experiment
+---------------------------
+Continue on the pilot before scaling to the 100,000-event comparison. Retain
+checkpoints and train/validation curves for a fixed longer schedule. Keep the
+fixed mixture and matched-count donor as required controls. Test a dense output
+head that can preserve fine temporal structure and starts from, or explicitly
+contains, the training-derived prior and retained-count mixture. Compare that
+change with longer training of the current model so their effects are separable.
+All gating/mixing choices at inference must use A, geometry and p only.
+
+Proceed to the three-seed test study after model and baseline settings are fixed
+on training/validation data. The scientific gate remains improvement over the
+strongest simple control in the predeclared 1--10 retained-photon regime.
+
+Saved evidence and reproduction
+-------------------------------
+data/neutrino/controlled_reference/pone_pilot_evaluation.json
+  Per-event NLLs, strata, bootstrap differences, selected parameters and grid.
+data/neutrino/controlled_reference/pone_pilot_evaluation_checkpoint.pt
+  Reproduced pilot weights, observation-shard hash, configuration and step count.
+data/neutrino/controlled_reference/pone_pilot_evaluation.png and .svg
+  All-event and low-count score comparison.
+data/neutrino/controlled_reference/evaluate_pilot.py
+  Reproduction and diagnostic script; reuses the saved matching checkpoint.
+
+From the repository root:
+  python data/neutrino/controlled_reference/evaluate_pilot.py
+
+Analysis assertions verify positive normalized densities, finite scores,
+matching source hashes and reproduction of original model/prior scores within
+1e-5. No production loader, model, loss or training implementation was changed
+for this evaluation. The prior 129-test implementation check was not rerun.

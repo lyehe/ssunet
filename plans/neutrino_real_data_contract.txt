@@ -1,0 +1,90 @@
+Real-observation contract and prospective empirical pilot, 2026-10-25
+
+Primary source: https://icecube.umd.edu/PublicData/
+Additional release inventory: https://icecube.wisc.edu/science/data-releases/
+KM3NeT source: https://github.com/KM3NeT/KM3-230213A-data
+
+Observation audit
+-----------------
+The downloaded IceCube ODF files contain calibrated reconstructed pulse charge,
+time and position in triggered/filtered records. These are not raw ADC waveforms
+or certified independently detected unit photons. Almost all charge values are
+fractional PE. The original ODF files and unchanged HDF5 values remain preserved.
+The ODF float decoder uses the upstream decimal-mantissa representation; it was
+checked against the published first IC59 event and source-tool decoder.
+
+Native identity matching was rejected after the audit: the supplied geometry
+matches IC59, but 2013 reported positions differ by as much as 23.423 m. Nearest
+identities are ambiguous for several reported positions. The aborted strict
+import is retained in data/neutrino/pulse_study/train.h5; it was not trained.
+
+The separately versioned v2 pilot uses fixed Voronoi spatial cells anchored on
+the supplied 5,480-position geometry, with a predeclared 50 m maximum quantization
+distance. It permits explicit many-to-one cell assignments; it does not claim
+cross-run DOM identity. Raw pulse coordinates and fractional charges are saved
+exactly alongside cell indices. No test-pulse-derived recentering is performed.
+
+Many 2013 pulse timestamps exceed the reported event duration, including ms
+tails. Use a globally fixed 0--64 us analysis window on unmodified source time,
+not a guessed event-length exposure mask or A+B-dependent event alignment.
+The analysis crop is a qualified preprocessing choice made after schema/clock
+audit, before any real-model performance was examined. All source pulses remain
+in storage; outside-window counts are reported. In validation, 8,225 of 15,975
+pulses lie outside this window. This is a substantial limitation.
+
+No actual per-run live-sensor status, complete DAQ exposure/dead-time record or
+zero-interaction labels accompany these samples. The array mask represents
+candidate spatial support, not certified live sensors. It cannot support an
+absolute physical rate, efficiency correction or physical no-event classifier.
+
+Predictive objective
+--------------------
+Each split unit is one whole reconstructed pulse with its charge mark. Assign
+the unchanged PE amplitude to fixed categories [0,.5), [.5,1), [1,2), [2,infinity).
+This is categorical mark prediction, never rounding charge into photon counts.
+Keep whole pulses/marks together when constructing A/B. The loss is the raw
+held-out pulse count-weighted joint cell/time/charge-category log score. Report
+the arrival marginal by summing over mark categories as a separate metric.
+
+This is an empirical conditional prediction risk on response-processed pulses.
+It does not invoke independent-Poisson thinning theory or claim latent photon
+intensity recovery. Known analytic photon GT is not real-data GT.
+
+Prospective split and budget: config/neutrino_pulses.yml
+------------------------------------------------------
+Train: run 115150 / 2010 IC59, 8,348 records, 466,724 pulses inside analysis window,
+       124 empty records and 5,266 records with 1--30 pulses.
+Validation: run 121585 / 2013 enriched selection, 71 records, 7,750 in-window
+            pulses, one empty, no records with 1--30 in-window pulses.
+Test: run 122252 / 2013 large-NChannel selection, 1,329 records; this is a bright,
+      differently selected population, not an independent low-count real test.
+
+Runs never cross folds. Overlapping reported acquisition intervals within a run
+are grouped for descriptive within-run uncertainty. One run per fold cannot
+quantify new-run generalization uncertainty or all possible time dependence.
+
+One seed, three epochs, batch two, unchanged declared optimizer and strict
+time/memory caps. Dense temporal convolutions share parameters across cells;
+four mark channels are internal, avoiding a DOM-pair matrix. Full FP32 is used
+because development studies exposed BF16 logit drift on the separate simulation.
+Choose checkpoint and finite mixture parameters by all-marked-pulse validation
+NLL. Low-count checkpoint selection is not supported by this real validation
+sample. Do not pretend that the bright real test establishes a low-count claim.
+
+Report frozen test scores once, including failure to beat the simple estimator,
+clock/window loss, charge-mark contract, position quantization, memory/time and
+domain shifts. No clean-real-photon GT or physics gain is inferred.
+
+No-event/zero-bias evidence
+--------------------------
+The ODF source explicitly describes triggered/filtered events. Its empty records
+do not establish no physical interaction. The available single-event KM3NeT and
+Glashow releases likewise do not supply an unbiased, exposure-labelled no-event
+population for this pilot. L1/coincidence-selected timeslices require their own
+trigger/exposure/calibration audit and are not automatically zero-bias windows.
+
+The public release inventories were checked again; no downloaded sample here
+provides the needed complete zero-bias/live/exposure contract. Retain that claim
+as unsupported. A future no-event study requires documented untriggered/zero-bias
+windows and detector-state information, or an explicitly different empirical
+background task. No request was sent to a collaboration or external contact.
