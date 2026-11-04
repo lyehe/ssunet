@@ -33,6 +33,7 @@ dependencies = [
     "pandas",
     "pyiqa",
     "setuptools>=70,<72",
+    "torch-convnd",
 ]
 
 [project.optional-dependencies]
@@ -87,6 +88,7 @@ convention = "google"
 [tool.uv.sources]
 torch = { index = "pytorch-cu130" }
 torchvision = { index = "pytorch-cu130" }
+torch-convnd = { path = "../torch-convnd", editable = true }
 
 [[tool.uv.index]]
 name = "pytorch-cu130"

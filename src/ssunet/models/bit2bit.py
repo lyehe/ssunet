@@ -15,6 +15,7 @@ from ..distributions import logits_to_probabilities
 from ..exceptions import InvalidUpModeError
 from ..losses import loss_functions, photon_nll
 from ..modules import BLOCK, conv111
+from ..modules.partialconv import PartialConv3d
 
 OPTIMIZER = {
     "adam": Adam,
@@ -157,7 +158,8 @@ class Bit2Bit(pl.LightningModule):
     @staticmethod
     def _weight_init(module: nn.Module) -> None:
         """Initialize the weights of the model."""
-        if isinstance(module, nn.Conv3d):
+        # torch-convnd's partial layers are not nn.Conv3d subclasses.
+        if isinstance(module, nn.Conv3d | PartialConv3d):
             init.xavier_normal_(module.weight)
             init.constant_(module.bias, 0)  # type: ignore
 

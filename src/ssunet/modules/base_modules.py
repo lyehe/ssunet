@@ -35,7 +35,7 @@ def convnnn(
     kernel_size: int,
     z_conv: bool,  # True = 3D convolution & False = 2D convolution
     partial: bool = False,
-) -> nn.Conv3d:
+) -> nn.Conv3d | PartialConv3d:
     """Helper function to create nxnxn convolutions with padding.
 
     :param in_channels: number of input channels

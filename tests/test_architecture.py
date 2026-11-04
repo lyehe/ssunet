@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 import pytorch_lightning as pl
 import torch
+import torch_convnd
 
 from src.ssunet.checkpoints import checkpoint_config_imports
 from src.ssunet.configs import ModelConfig
@@ -43,6 +44,17 @@ def test_configured_architecture_forward_backward(block, merge):
     assert any(isinstance(layer, PartialConv3d) for layer in model.modules())
     assert all(layer.merge_mode == merge for layer in model.up_convs)
     assert all(torch.isfinite(p.grad).all() for p in model.parameters() if p.grad is not None)
+
+
+def test_partial_layers_use_torch_convnd_and_the_model_initialization():
+    """Partial layers come from torch-convnd and get the model's Xavier initialization."""
+    model = Bit2Bit(small_config(architecture_version=2, partial_conv=True))
+    layers = [layer for layer in model.modules() if isinstance(layer, PartialConv3d)]
+
+    assert layers
+    assert all(isinstance(layer, torch_convnd.PartialConv3d) for layer in layers)
+    assert all(layer.multi_channel for layer in layers)
+    assert all(torch.count_nonzero(layer.bias) == 0 for layer in layers)
 
 
 @pytest.mark.parametrize("block", ["tri", "dual", "LK"])

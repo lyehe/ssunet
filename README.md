@@ -11,10 +11,16 @@ Install the package and development tools, configure the data paths in a YAML
 configuration, and run the pipeline:
 
 ```sh
+python -m pip install -e ../torch-convnd
 python -m pip install -e ".[dev]"
 python run.py --config config.yml
 python -m pytest tests
 ```
+
+Partial convolutions and the 4D models use
+[torch-convnd](https://github.com/lyehe/torch-convnd), which is not on PyPI. `uv sync`
+installs it from a sibling checkout at `../torch-convnd`. Without one, install it with
+`python -m pip install "torch-convnd @ git+https://github.com/lyehe/torch-convnd"`.
 
 `forward(batch)` returns unrestricted photon-location logits in `(B, C, Z, H, W)`
 layout. Use the explicit distribution API when normalized probabilities are needed:
@@ -64,6 +70,7 @@ Architecture options use an explicit compatibility version:
   the saved configuration contained previously ignored flags.
 - `MODEL.architecture_version: 2` honors `partial_conv` and `merge_mode` for a new
   model. Checkpoints record these effective options and reject incompatible overrides.
+  Partial convolutions use torch-convnd's `PartialConv3d` (NVIDIA's border rescaling).
 
 The checkpoint loader handles both installed `ssunet` and historical `src.ssunet`
 configuration paths. End-of-training saving is controlled by the training callbacks;
