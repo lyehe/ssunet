@@ -133,7 +133,7 @@ def set_file_cache(max_gb: float | None = None) -> None:
     Args:
         max_gb: maximum cache size in GB. None = unlimited (cache everything).
     """
-    global _FILE_CACHE  # noqa: PLW0603
+    global _FILE_CACHE
     _FILE_CACHE = NpyFileCache(max_bytes=int(max_gb * (1024**3)) if max_gb is not None else None)
 
 
@@ -175,9 +175,7 @@ class SPADScene:
         """
         return _FILE_CACHE.load(self.npy_paths[file_idx])
 
-    def get_packed_patch(
-        self, t_start: int, t_size: int, h_start: int, h_size: int
-    ) -> np.ndarray:
+    def get_packed_patch(self, t_start: int, t_size: int, h_start: int, h_size: int) -> np.ndarray:
         """Extract a bit-packed patch, handling cross-file boundaries.
 
         Args:
@@ -275,9 +273,11 @@ class SPADValDataset(Dataset):
         self.z_size = z_size
 
     def __len__(self) -> int:
+        """Number of validation windows, one per npy file."""
         return len(self.pairs)
 
     def __getitem__(self, idx: int) -> dict:
+        """Middle z_size packed frames, the sample index and any PNG reference."""
         npy_path, png_path = self.pairs[idx]
         # Load and accumulate npy frames → noisy image
         npy = _FILE_CACHE.load(npy_path)  # (T, H, W_packed, C)
@@ -310,22 +310,24 @@ def _shuffle_1x1x8(data: torch.Tensor) -> torch.Tensor:
     Returns:
         Shuffled tensor of same shape.
     """
-    B, C, Z, H, W = data.shape
-    G = Z // 8
+    b, c, z, h, w = data.shape
+    g = z // 8
 
     # Reshape to (B, C, G, 8, H, W)
-    data = data.reshape(B, C, G, 8, H, W)
+    data = data.reshape(b, c, g, 8, h, w)
 
     # Per-pixel random permutation via argsort of uniform random
-    rand_keys = torch.rand(B, C, G, 8, H, W, device=data.device)
+    rand_keys = torch.rand(b, c, g, 8, h, w, device=data.device)
     perm = rand_keys.argsort(dim=3)
 
     data = data.gather(3, perm)
 
-    return data.reshape(B, C, Z, H, W)
+    return data.reshape(b, c, z, h, w)
 
 
-def _cross_group_split(data: torch.Tensor, num_workers: int = 4) -> tuple[torch.Tensor, torch.Tensor]:
+def _cross_group_split(
+    data: torch.Tensor, num_workers: int = 4
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Split data by t%4 RNG groups to guarantee independent noise/target pairs.
 
     Due to the RNG bug, DataLoader workers 0-3 each used the same threshold
@@ -358,13 +360,13 @@ def _cross_group_split(data: torch.Tensor, num_workers: int = 4) -> tuple[torch.
     Returns:
         (target, noise) each of shape (B, C, Z, H, W).
     """
-    B, C, Z, H, W = data.shape
-    frames_per_group = Z // num_workers  # 32 // 4 = 8
+    b, c, z, h, w = data.shape
+    frames_per_group = z // num_workers  # 32 // 4 = 8
 
     # Reshape to separate the 4 residue groups:
     # data[:, :, i, :, :] has residue (i % 4). Reshape to (B, C, 8, 4, H, W)
     # by deinterleaving: group g gets frames [g, g+4, g+8, ..., g+28]
-    data_groups = data.reshape(B, C, frames_per_group, num_workers, H, W)
+    data_groups = data.reshape(b, c, frames_per_group, num_workers, h, w)
     # data_groups[:, :, :, g, :, :] = all frames from residue group g
 
     # Average across the 8 identical frames per group -> (B, C, 1, 4, H, W)
@@ -380,12 +382,12 @@ def _cross_group_split(data: torch.Tensor, num_workers: int = 4) -> tuple[torch.
 
     # Extract and sum the group means for input and target
     # group_means shape: (B, C, 1, 4, H, W)
-    input_signal = group_means[:, :, :, input_groups, :, :].sum(dim=3)   # (B, C, 1, H, W)
+    input_signal = group_means[:, :, :, input_groups, :, :].sum(dim=3)  # (B, C, 1, H, W)
     target_signal = group_means[:, :, :, target_groups, :, :].sum(dim=3)  # (B, C, 1, H, W)
 
     # Tile back to Z=32 frames for the 3D U-Net
-    noise = input_signal.expand(B, C, Z, H, W)
-    target = target_signal.expand(B, C, Z, H, W)
+    noise = input_signal.expand(b, c, z, h, w)
+    target = target_signal.expand(b, c, z, h, w)
 
     return target, noise
 
@@ -412,29 +414,24 @@ def _cross_group_split_interleaved(
     Returns:
         (target, noise) each of shape (B, C, Z, H, W).
     """
-    B, C, Z, H, W = data.shape
+    b, c, z, h, w = data.shape
 
-    # Random 2-vs-2 split of the 4 groups
+    # Random 2-vs-2 split of the 4 groups; the target takes the other two
     perm = torch.randperm(num_workers, device=data.device)
     input_groups = perm[:2]
-    target_groups = perm[2:]
 
     # Build group assignment for each frame position: frame i belongs to group (i % 4)
-    frame_groups = torch.arange(Z, device=data.device) % num_workers  # (Z,)
+    frame_groups = torch.arange(z, device=data.device) % num_workers  # (Z,)
 
     # Build masks: which frames belong to input vs target
     input_mask = (frame_groups.unsqueeze(0) == input_groups.unsqueeze(1)).any(dim=0)  # (Z,)
     target_mask = ~input_mask  # (Z,)
 
-    # Reshape mask to broadcast: (1, 1, Z, 1, 1)
-    input_mask_5d = input_mask.reshape(1, 1, Z, 1, 1).float()
-    target_mask_5d = target_mask.reshape(1, 1, Z, 1, 1).float()
-
     # For the input tensor: keep input-group frames as-is, fill target-group
     # positions with the average of adjacent input-group frames (interpolation).
     # For binary SPAD data, simply repeating the nearest input-group frame works.
     # Use gather-based nearest-neighbor fill along Z.
-    input_indices = torch.where(input_mask)[0]   # positions of input frames
+    input_indices = torch.where(input_mask)[0]  # positions of input frames
     target_indices = torch.where(target_mask)[0]  # positions of target frames
 
     # Build nearest-neighbor lookup: for each of 32 positions, find the
@@ -447,12 +444,12 @@ def _cross_group_split_interleaved(
         nearest_owned_idx = dists.argmin(dim=1)  # index into owned_positions
         return owned_positions[nearest_owned_idx]  # actual frame index
 
-    noise_fill = _nearest_fill_indices(input_indices, Z)   # (Z,) frame indices
-    target_fill = _nearest_fill_indices(target_indices, Z)  # (Z,) frame indices
+    noise_fill = _nearest_fill_indices(input_indices, z)  # (Z,) frame indices
+    target_fill = _nearest_fill_indices(target_indices, z)  # (Z,) frame indices
 
     # Gather along Z dimension
-    noise_fill_5d = noise_fill.reshape(1, 1, Z, 1, 1).expand(B, C, Z, H, W)
-    target_fill_5d = target_fill.reshape(1, 1, Z, 1, 1).expand(B, C, Z, H, W)
+    noise_fill_5d = noise_fill.reshape(1, 1, z, 1, 1).expand(b, c, z, h, w)
+    target_fill_5d = target_fill.reshape(1, 1, z, 1, 1).expand(b, c, z, h, w)
 
     noise = data.gather(2, noise_fill_5d)
     target = data.gather(2, target_fill_5d)
@@ -469,7 +466,10 @@ class SPADUniformDataset(Dataset):
     """
 
     def __init__(
-        self, npy_path: str | Path, config: DataConfig, frames_per_chunk: int = 41,
+        self,
+        npy_path: str | Path,
+        config: DataConfig,
+        frames_per_chunk: int = 41,
     ) -> None:
         self.config = config
         self.frames_per_chunk = frames_per_chunk
@@ -477,15 +477,20 @@ class SPADUniformDataset(Dataset):
         self.n_chunks = self.data.shape[0] // frames_per_chunk
         LOGGER.info(
             "Loaded uniform data '%s': %d chunks x %d frames, shape %s",
-            Path(npy_path).name, self.n_chunks, frames_per_chunk, self.data.shape,
+            Path(npy_path).name,
+            self.n_chunks,
+            frames_per_chunk,
+            self.data.shape,
         )
 
     def __len__(self) -> int:
+        """Samples per epoch: virtual_size when set, otherwise one per chunk."""
         if self.config.virtual_size > 0:
             return self.config.virtual_size
         return self.n_chunks
 
     def __getitem__(self, index: int) -> torch.Tensor:
+        """A random z_size window of a random chunk with a random H crop, bit-packed."""
         chunk_idx = randint(0, self.n_chunks)
         chunk_start = chunk_idx * self.frames_per_chunk
 
@@ -501,7 +506,8 @@ class SPADUniformDataset(Dataset):
         patch = self.data[
             t_start : t_start + self.config.z_size,
             h_start : h_start + self.config.xy_size,
-            :, :,
+            :,
+            :,
         ]
         return torch.from_numpy(patch)
 
@@ -515,7 +521,10 @@ class SPADMultiOffsetDataset(Dataset):
     """
 
     def __init__(
-        self, offset_dir: str | Path, config: DataConfig, frames_per_chunk: int = 41,
+        self,
+        offset_dir: str | Path,
+        config: DataConfig,
+        frames_per_chunk: int = 41,
         n_offsets: int = 25,
     ) -> None:
         self.config = config
@@ -531,17 +540,21 @@ class SPADMultiOffsetDataset(Dataset):
             if off == 0:
                 LOGGER.info(
                     "Loaded offset dir '%s': %d offsets, shape %s each",
-                    offset_dir.name, n_offsets, data.shape,
+                    offset_dir.name,
+                    n_offsets,
+                    data.shape,
                 )
 
         self.n_chunks = self.all_data[0].shape[0] // frames_per_chunk
 
     def __len__(self) -> int:
+        """Samples per epoch: virtual_size when set, otherwise every chunk at every offset."""
         if self.config.virtual_size > 0:
             return self.config.virtual_size
         return self.n_chunks * self.n_offsets
 
     def __getitem__(self, index: int) -> torch.Tensor:
+        """A random window from a random chunk of a randomly chosen offset file."""
         # Randomly pick an offset
         off_idx = randint(0, self.n_offsets)
         data = self.all_data[off_idx]
@@ -562,7 +575,8 @@ class SPADMultiOffsetDataset(Dataset):
         patch = data[
             t_start : t_start + self.config.z_size,
             h_start : h_start + self.config.xy_size,
-            :, :,
+            :,
+            :,
         ]
         return torch.from_numpy(patch)
 
@@ -595,24 +609,32 @@ class SPADUniformDataModule(pl.LightningDataModule):
         self.frames_per_chunk = frames_per_chunk
 
     def setup(self, stage: str | None = None) -> None:
+        """Load the offset directory or the single uniform file for fitting."""
         if stage in ("fit", None):
             if self.npy_path.is_dir():
                 self.train_dataset = SPADMultiOffsetDataset(
-                    self.npy_path, self.data_config, self.frames_per_chunk,
+                    self.npy_path,
+                    self.data_config,
+                    self.frames_per_chunk,
                 )
             else:
                 self.train_dataset = SPADUniformDataset(
-                    self.npy_path, self.data_config, self.frames_per_chunk,
+                    self.npy_path,
+                    self.data_config,
+                    self.frames_per_chunk,
                 )
             self._has_val = False
 
     def train_dataloader(self) -> torch.utils.data.DataLoader:
+        """Loader over the uniform training dataset."""
         return self.loader_config.loader(self.train_dataset)
 
     def val_dataloader(self) -> list[torch.utils.data.DataLoader]:
+        """No validation loaders for uniform data."""
         return []
 
     def on_after_batch_transfer(self, batch: torch.Tensor, dataloader_idx: int) -> list:
+        """Unpack bits on the GPU, crop W, augment, and split into [target, noise]."""
         packed = batch  # (B, Z, H, W_packed, C) uint8
 
         # Unpack bits along W dimension
@@ -700,9 +722,7 @@ class SPADDataModule(pl.LightningDataModule):
         if stage in ("fit", None):
             self.train_dataset = SPADPackedDataset(self.scene_dir, self.data_config)
         if stage in ("fit", "validate", None):
-            self.val_dataset = SPADValDataset(
-                self.scene_dir, z_size=self.data_config.z_size
-            )
+            self.val_dataset = SPADValDataset(self.scene_dir, z_size=self.data_config.z_size)
             self._has_val = bool(len(self.val_dataset))
 
     def train_dataloader(self) -> torch.utils.data.DataLoader:
@@ -713,11 +733,18 @@ class SPADDataModule(pl.LightningDataModule):
         """Create validation dataloader without requiring PNG references."""
         if not getattr(self, "_has_val", False):
             return []
-        return [torch.utils.data.DataLoader(
-            self.val_dataset, batch_size=1, shuffle=False, num_workers=0,
-        )]
+        return [
+            torch.utils.data.DataLoader(
+                self.val_dataset,
+                batch_size=1,
+                shuffle=False,
+                num_workers=0,
+            )
+        ]
 
-    def on_after_batch_transfer(self, batch: torch.Tensor, dataloader_idx: int) -> list:
+    def on_after_batch_transfer(  # noqa: C901 -- validation and training batch paths
+        self, batch: torch.Tensor, dataloader_idx: int
+    ) -> list:
         """Unpack bits on GPU, crop W, augment, and apply binomial split.
 
         Args:
