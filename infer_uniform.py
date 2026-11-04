@@ -22,18 +22,20 @@ from visionsim.utils.color import linearrgb_to_srgb
 
 from src.ssunet.configs.model_config import ModelConfig
 from src.ssunet.datasets.spad import gpu_unpackbits
+from src.ssunet.models import Bit2Bit
 
 torch.serialization.add_safe_globals([ModelConfig])
-from src.ssunet.models import Bit2Bit
 
 
 def frame_to_png(frame_np: np.ndarray, factor: float) -> np.ndarray:
+    """Convert an averaged photon frame to an 8-bit sRGB image."""
     frame_rgb = spc_avg_to_rgb(frame_np, factor=factor)
     frame_srgb = linearrgb_to_srgb(frame_rgb)
     return (np.clip(frame_srgb, 0, 1) * 255).astype(np.uint8)
 
 
 def main() -> None:
+    """Run inference with a model trained on uniform-sampled SPAD data."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
@@ -42,16 +44,26 @@ def main() -> None:
     logger = logging.getLogger(__name__)
 
     parser = argparse.ArgumentParser(description="Inference for uniform-trained SPAD models")
-    parser.add_argument("--scene", type=str, required=True,
-                        help="Scene name (blue-bathroom or train-passby)")
+    parser.add_argument(
+        "--scene", type=str, required=True, help="Scene name (blue-bathroom or train-passby)"
+    )
     parser.add_argument("--config", type=str, default="config_spad.yml")
-    parser.add_argument("--checkpoint", type=str, default=None,
-                        help="Checkpoint path (default: models_spad/<scene>_uniform.ckpt)")
+    parser.add_argument(
+        "--checkpoint",
+        type=str,
+        default=None,
+        help="Checkpoint path (default: models_spad/<scene>_uniform.ckpt)",
+    )
     parser.add_argument("--device", type=int, default=0)
-    parser.add_argument("--output", type=str, default=None,
-                        help="Output dir (default: output/<scene>-uniform-trained)")
-    parser.add_argument("--offset", type=int, default=24,
-                        help="Sampling offset (default: 24 = primary)")
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help="Output dir (default: output/<scene>-uniform-trained)",
+    )
+    parser.add_argument(
+        "--offset", type=int, default=24, help="Sampling offset (default: 24 = primary)"
+    )
     parser.add_argument("--factor", type=float, default=0.5)
     parser.add_argument("--frames-per-chunk", type=int, default=41)
     args = parser.parse_args()
@@ -82,7 +94,11 @@ def main() -> None:
 
     logger.info(
         "Scene: %s, data: %s, shape: %s, %d chunks x %d frames",
-        args.scene, data_path.name, data.shape, n_chunks, fpc,
+        args.scene,
+        data_path.name,
+        data.shape,
+        n_chunks,
+        fpc,
     )
 
     with torch.no_grad():

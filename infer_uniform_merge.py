@@ -25,20 +25,24 @@ from visionsim.utils.color import linearrgb_to_srgb
 
 from src.ssunet.configs.model_config import ModelConfig
 from src.ssunet.datasets.spad import gpu_unpackbits
+from src.ssunet.models import Bit2Bit
 
 torch.serialization.add_safe_globals([ModelConfig])
-from src.ssunet.models import Bit2Bit
 
 
 def frame_to_png(frame_np: np.ndarray, factor: float) -> np.ndarray:
+    """Convert an averaged photon frame to an 8-bit sRGB image."""
     frame_rgb = spc_avg_to_rgb(frame_np, factor=factor)
     frame_srgb = linearrgb_to_srgb(frame_rgb)
     return (np.clip(frame_srgb, 0, 1) * 255).astype(np.uint8)
 
 
 def find_translation_ecc(
-    source: np.ndarray, target: np.ndarray, max_shift: float = 5.0,
+    source: np.ndarray,
+    target: np.ndarray,
+    max_shift: float = 5.0,
 ) -> np.ndarray | None:
+    """ECC translation aligning source to target, or None if ECC fails or exceeds max_shift."""
     src_u8 = (np.clip(source, 0, 1) * 255).astype(np.uint8)
     tgt_u8 = (np.clip(target, 0, 1) * 255).astype(np.uint8)
     src_gray = cv2.cvtColor(cv2.GaussianBlur(src_u8, (0, 0), 5.0), cv2.COLOR_RGB2GRAY)
@@ -47,41 +51,54 @@ def find_translation_ecc(
     src_f = src_gray.astype(np.float32) / 255.0
     tgt_f = tgt_gray.astype(np.float32) / 255.0
 
-    M = np.eye(2, 3, dtype=np.float32)
+    warp = np.eye(2, 3, dtype=np.float32)
     criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 1e-5)
     try:
-        _, M = cv2.findTransformECC(
-            tgt_f, src_f, M, cv2.MOTION_TRANSLATION, criteria,
-            inputMask=None, gaussFiltSize=5,
+        _, warp = cv2.findTransformECC(
+            tgt_f,
+            src_f,
+            warp,
+            cv2.MOTION_TRANSLATION,
+            criteria,
+            inputMask=None,
+            gaussFiltSize=5,
         )
     except cv2.error:
         return None
 
-    tx, ty = M[0, 2], M[1, 2]
+    tx, ty = warp[0, 2], warp[1, 2]
     if abs(tx) > max_shift or abs(ty) > max_shift:
         return None
-    return M
+    return warp
 
 
-def warp_frame(source: np.ndarray, M: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    H, W, C = source.shape
+def warp_frame(source: np.ndarray, warp: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Warp each channel by an affine matrix and return the mask of covered pixels."""
+    height, width, channels = source.shape
     warped = np.zeros_like(source)
-    for c in range(C):
+    for c in range(channels):
         warped[:, :, c] = cv2.warpAffine(
-            source[:, :, c], M, (W, H),
+            source[:, :, c],
+            warp,
+            (width, height),
             flags=cv2.INTER_LINEAR,
-            borderMode=cv2.BORDER_CONSTANT, borderValue=0,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=0,
         )
     mask = cv2.warpAffine(
-        np.ones((H, W), dtype=np.float32), M, (W, H),
+        np.ones((height, width), dtype=np.float32),
+        warp,
+        (width, height),
         flags=cv2.INTER_LINEAR,
-        borderMode=cv2.BORDER_CONSTANT, borderValue=0,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=0,
     )
     mask = (mask > 0.5).astype(np.float32)
     return warped, mask
 
 
 def main() -> None:
+    """Run inference and average predictions registered across offsets."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
@@ -98,10 +115,15 @@ def main() -> None:
     parser.add_argument("--factor", type=float, default=0.5)
     parser.add_argument("--frames-per-chunk", type=int, default=41)
     parser.add_argument("--n-offsets", type=int, default=25)
-    parser.add_argument("--n-merge", type=int, default=16,
-                        help="Number of frames to merge (from off24 backwards)")
-    parser.add_argument("--weight-decay", type=float, default=0.85,
-                        help="Weight decay per frame distance from target")
+    parser.add_argument(
+        "--n-merge", type=int, default=16, help="Number of frames to merge (from off24 backwards)"
+    )
+    parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=0.85,
+        help="Weight decay per frame distance from target",
+    )
     args = parser.parse_args()
 
     with Path(args.config).open() as f:
@@ -137,8 +159,12 @@ def main() -> None:
     target_offset = args.n_offsets - 1  # off24
     logger.info(
         "Merging %d offsets: off%02d-off%02d (orig frames %d-%d), target=off%02d (orig 1023)",
-        args.n_merge, merge_offsets[0], merge_offsets[-1],
-        1024 - args.n_merge, 1023, target_offset,
+        args.n_merge,
+        merge_offsets[0],
+        merge_offsets[-1],
+        1024 - args.n_merge,
+        1023,
+        target_offset,
     )
 
     with torch.no_grad():
@@ -169,10 +195,10 @@ def main() -> None:
 
             # SIFT-register all frames to target (off24)
             target = denoised_frames[target_offset]
-            H, W, C = target.shape
+            height, width, _channels = target.shape
 
             accum = target.astype(np.float64).copy()
-            weight_sum = np.ones((H, W, 1), dtype=np.float64)
+            weight_sum = np.ones((height, width, 1), dtype=np.float64)
 
             for off in merge_offsets:
                 if off == target_offset:
@@ -180,13 +206,13 @@ def main() -> None:
 
                 source = denoised_frames[off]
                 dist = target_offset - off  # distance in original frames
-                w = args.weight_decay ** dist
+                w = args.weight_decay**dist
 
-                M = find_translation_ecc(source, target)
-                if M is not None:
-                    warped, mask = warp_frame(source, M)
+                warp = find_translation_ecc(source, target)
+                if warp is not None:
+                    warped, mask = warp_frame(source, warp)
                 else:
-                    warped, mask = source.copy(), np.ones((H, W), dtype=np.float32)
+                    warped, mask = source.copy(), np.ones((height, width), dtype=np.float32)
 
                 # Skip if warped is much brighter (registration failure)
                 tgt_mean = target.mean()
@@ -205,8 +231,13 @@ def main() -> None:
             Image.fromarray(png).save(output_dir / f"{chunk_idx:06d}.png")
             np.save(str(output_dir / f"{chunk_idx:06d}.npy"), merged)
 
-            logger.info("Saved %06d.png (chunk %d/%d, merged %d frames)",
-                        chunk_idx, chunk_idx + 1, n_chunks, args.n_merge)
+            logger.info(
+                "Saved %06d.png (chunk %d/%d, merged %d frames)",
+                chunk_idx,
+                chunk_idx + 1,
+                n_chunks,
+                args.n_merge,
+            )
 
             torch.cuda.empty_cache()
 

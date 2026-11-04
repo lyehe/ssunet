@@ -34,24 +34,23 @@ from scipy.ndimage import uniform_filter
 
 def compute_local_rates(frames, spatial_radius=7):
     """Compute local spatial firing rate for each pixel, excluding self."""
-    T = frames.shape[0]
+    n_frames = frames.shape[0]
     kernel_size = 2 * spatial_radius + 1
-    N = kernel_size * kernel_size
-    obs_rate = frames.sum(axis=0).astype(np.float64) / T  # (H, W, C)
+    kernel_area = kernel_size * kernel_size
+    obs_rate = frames.sum(axis=0).astype(np.float64) / n_frames  # (H, W, C)
     local_rates = np.zeros_like(obs_rate)
     for ch in range(frames.shape[3]):
         local_mean = uniform_filter(obs_rate[:, :, ch], size=kernel_size, mode="reflect")
         local_rates[:, :, ch] = np.clip(
-            (local_mean * N - obs_rate[:, :, ch]) / (N - 1), 0, 1
+            (local_mean * kernel_area - obs_rate[:, :, ch]) / (kernel_area - 1), 0, 1
         )
     return local_rates
 
 
 @numba.njit(cache=False)
-def thin_outliers(frames, outlier_rows, outlier_cols, outlier_chs,
-                  target_counts, rng_seed):
+def thin_outliers(frames, outlier_rows, outlier_cols, outlier_chs, target_counts, rng_seed):
     """Remove excess firings from outlier pixels (numba-accelerated)."""
-    T = frames.shape[0]
+    n_frames = frames.shape[0]
     np.random.seed(rng_seed)
 
     for idx in range(len(outlier_rows)):
@@ -60,9 +59,9 @@ def thin_outliers(frames, outlier_rows, outlier_cols, outlier_chs,
         ch = outlier_chs[idx]
         target = target_counts[idx]
 
-        firing = np.empty(T, dtype=numba.int32)
+        firing = np.empty(n_frames, dtype=numba.int32)
         n_firing = 0
-        for t in range(T):
+        for t in range(n_frames):
             if frames[t, r, c, ch] == 1:
                 firing[n_firing] = t
                 n_firing += 1
@@ -81,7 +80,7 @@ def thin_outliers(frames, outlier_rows, outlier_cols, outlier_chs,
 
 
 @numba.njit(cache=False)
-def correct_afterpulsing(frames, local_rates, run_prob_threshold, rng_seed):
+def correct_afterpulsing(frames, local_rates, run_prob_threshold, rng_seed):  # noqa: C901
     """Correct afterpulsing by detecting implausible consecutive-firing runs.
 
     For each pixel with local spatial rate p, finds runs of consecutive 1s.
@@ -95,14 +94,14 @@ def correct_afterpulsing(frames, local_rates, run_prob_threshold, rng_seed):
 
     Returns (n_runs_corrected, n_firings_removed).
     """
-    T, H, W, C = frames.shape
+    n_frames, height, width, channels = frames.shape
     np.random.seed(rng_seed)
     total_runs = 0
     total_removed = 0
 
-    for ch in range(C):
-        for r in range(H):
-            for c in range(W):
+    for ch in range(channels):
+        for r in range(height):
+            for c in range(width):
                 p = local_rates[r, c, ch]
                 if p <= 0.0 or p >= 1.0:
                     continue
@@ -119,9 +118,9 @@ def correct_afterpulsing(frames, local_rates, run_prob_threshold, rng_seed):
                 # Scan for runs of consecutive 1s
                 run_start = -1
                 run_len = 0
-                for t in range(T + 1):
+                for t in range(n_frames + 1):
                     is_fire = False
-                    if t < T:
+                    if t < n_frames:
                         is_fire = frames[t, r, c, ch] == 1
                     if is_fire:
                         if run_len == 0:
@@ -152,12 +151,12 @@ def correct_bin(
     rng_seed: int = 0,
 ) -> tuple[np.ndarray, int]:
     """Correct spatial hot pixels in a single temporal bin."""
-    T = frames.shape[0]
+    n_frames = frames.shape[0]
     kernel_size = 2 * spatial_radius + 1
-    N = kernel_size * kernel_size
+    kernel_area = kernel_size * kernel_size
 
     obs_count = frames.sum(axis=0).astype(np.float64)
-    obs_rate = obs_count / T
+    obs_rate = obs_count / n_frames
 
     all_rows = []
     all_cols = []
@@ -167,10 +166,10 @@ def correct_bin(
     for ch in range(frames.shape[3]):
         rate_ch = obs_rate[:, :, ch]
         local_mean = uniform_filter(rate_ch, size=kernel_size, mode="reflect")
-        neighbor_mean = np.clip((local_mean * N - rate_ch) / (N - 1), 0, 1)
+        neighbor_mean = np.clip((local_mean * kernel_area - rate_ch) / (kernel_area - 1), 0, 1)
 
-        expected_count = neighbor_mean * T
-        expected_std = np.sqrt(T * neighbor_mean * (1 - neighbor_mean) + 1e-10)
+        expected_count = neighbor_mean * n_frames
+        expected_std = np.sqrt(n_frames * neighbor_mean * (1 - neighbor_mean) + 1e-10)
 
         excess = obs_count[:, :, ch] - expected_count
         is_outlier = (excess > sigma_threshold * expected_std) & (rate_ch > neighbor_mean)
@@ -179,7 +178,7 @@ def correct_bin(
         if len(rows) == 0:
             continue
 
-        targets = np.round(neighbor_mean[rows, cols] * T).astype(np.int32)
+        targets = np.round(neighbor_mean[rows, cols] * n_frames).astype(np.int32)
         all_rows.append(rows)
         all_cols.append(cols)
         all_chs.append(np.full(len(rows), ch, dtype=np.int32))
@@ -194,8 +193,7 @@ def correct_bin(
     target_counts = np.concatenate(all_targets).astype(np.int32)
 
     n_corrected = len(outlier_rows)
-    thin_outliers(frames, outlier_rows, outlier_cols, outlier_chs,
-                  target_counts, rng_seed)
+    thin_outliers(frames, outlier_rows, outlier_cols, outlier_chs, target_counts, rng_seed)
 
     return frames, n_corrected
 
@@ -215,7 +213,7 @@ def fix_chunk(
     Returns (fixed_packed, n_hotpixel_corrected, n_ap_runs, n_ap_removed).
     """
     unpacked = np.unpackbits(packed, axis=2)[:, :, :800, :]
-    T = unpacked.shape[0]
+    n_frames = unpacked.shape[0]
     total_hp = 0
     n_ap_runs = 0
     n_ap_removed = 0
@@ -230,10 +228,12 @@ def fix_chunk(
 
     # Stage 2: Hot pixel correction (spatial, per temporal bin)
     if do_hotpixel:
-        for bin_idx, t_start in enumerate(range(0, T, bin_size)):
-            t_end = min(t_start + bin_size, T)
+        for bin_idx, t_start in enumerate(range(0, n_frames, bin_size)):
+            t_end = min(t_start + bin_size, n_frames)
             unpacked[t_start:t_end], n = correct_bin(
-                unpacked[t_start:t_end], spatial_radius, sigma_threshold,
+                unpacked[t_start:t_end],
+                spatial_radius,
+                sigma_threshold,
                 rng_seed=base_seed + bin_idx,
             )
             total_hp += n
@@ -242,34 +242,49 @@ def fix_chunk(
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Fix hot pixels and afterpulsing in SPAD data"
-    )
+    """Fix hot pixels and afterpulsing in the SPAD data named on the command line."""
+    parser = argparse.ArgumentParser(description="Fix hot pixels and afterpulsing in SPAD data")
     parser.add_argument("scene_dir", type=str, help="Path to scene directory")
-    parser.add_argument("--bin-size", type=int, default=32,
-                        help="Temporal bin size for hot pixel detection (default: 32)")
-    parser.add_argument("--spatial-radius", type=int, default=7,
-                        help="Spatial neighborhood radius (default: 7)")
-    parser.add_argument("--sigma", type=float, default=5.0,
-                        help="Hot pixel detection threshold in sigma (default: 5.0)")
-    parser.add_argument("--ap-threshold", type=float, default=1e-6,
-                        help="Afterpulsing run probability threshold (default: 1e-6)")
-    parser.add_argument("--no-hotpixel", action="store_true",
-                        help="Skip hot pixel correction")
-    parser.add_argument("--no-afterpulse", action="store_true",
-                        help="Skip afterpulsing correction")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Only count corrections, don't write output")
+    parser.add_argument(
+        "--bin-size",
+        type=int,
+        default=32,
+        help="Temporal bin size for hot pixel detection (default: 32)",
+    )
+    parser.add_argument(
+        "--spatial-radius", type=int, default=7, help="Spatial neighborhood radius (default: 7)"
+    )
+    parser.add_argument(
+        "--sigma",
+        type=float,
+        default=5.0,
+        help="Hot pixel detection threshold in sigma (default: 5.0)",
+    )
+    parser.add_argument(
+        "--ap-threshold",
+        type=float,
+        default=1e-6,
+        help="Afterpulsing run probability threshold (default: 1e-6)",
+    )
+    parser.add_argument("--no-hotpixel", action="store_true", help="Skip hot pixel correction")
+    parser.add_argument("--no-afterpulse", action="store_true", help="Skip afterpulsing correction")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Only count corrections, don't write output"
+    )
     args = parser.parse_args()
 
     scene_dir = Path(args.scene_dir)
     scene_name = scene_dir.name
     npy_files = sorted(scene_dir.glob("*.npy"))
     print(f"Scene: {scene_name} ({len(npy_files)} chunks)")
-    print(f"Params: bin_size={args.bin_size}, spatial_radius={args.spatial_radius}, "
-          f"sigma={args.sigma}, ap_threshold={args.ap_threshold}")
-    print(f"Stages: afterpulse={'ON' if not args.no_afterpulse else 'OFF'}, "
-          f"hotpixel={'ON' if not args.no_hotpixel else 'OFF'}")
+    print(
+        f"Params: bin_size={args.bin_size}, spatial_radius={args.spatial_radius}, "
+        f"sigma={args.sigma}, ap_threshold={args.ap_threshold}"
+    )
+    print(
+        f"Stages: afterpulse={'ON' if not args.no_afterpulse else 'OFF'}, "
+        f"hotpixel={'ON' if not args.no_hotpixel else 'OFF'}"
+    )
 
     out_dir = scene_dir.parent / f"{scene_name}_corrected"
     if not args.dry_run:
@@ -286,7 +301,10 @@ def main():
     for i, npy_path in enumerate(npy_files):
         packed = np.load(str(npy_path))
         fixed, n_hp, n_ap_runs, n_ap_removed = fix_chunk(
-            packed, args.bin_size, args.spatial_radius, args.sigma,
+            packed,
+            args.bin_size,
+            args.spatial_radius,
+            args.sigma,
             ap_threshold=args.ap_threshold,
             base_seed=(i * 1000),
             do_hotpixel=not args.no_hotpixel,

@@ -1,7 +1,8 @@
 """Analyze train-passby scene: compare first 11 frames (affected) vs later frames (good)."""
 
-import numpy as np
 from pathlib import Path
+
+import numpy as np
 
 # Paths
 output_dir = Path("C:/Users/jenkinslab/project/ssunet/output/train-passby")
@@ -28,7 +29,10 @@ for name in ["train-passby.ckpt", "train-passby-affected.ckpt", "train-passby_co
 print("\n--- INPUT DATA (test chunks) ---")
 print(f"  train-passby: {len(list(input_dir.glob('*.npy')))} chunks")
 if affected_dir.exists():
-    print(f"  train-passby-affected: {len(list(affected_dir.glob('*.npy')))} chunks (first 12, indices 0-11)")
+    print(
+        f"  train-passby-affected: {len(list(affected_dir.glob('*.npy')))} chunks "
+        "(first 12, indices 0-11)"
+    )
 if corrected_dir.exists():
     print(f"  train-passby_corrected: {len(list(corrected_dir.glob('*.npy')))} chunks")
 
@@ -54,14 +58,21 @@ print("\n--- OUTPUT IMAGE QUALITY (Laplacian variance + stats) ---")
 
 try:
     import cv2
+
     has_cv2 = True
 except ImportError:
     has_cv2 = False
     print("  [cv2 not available, using numpy gradient as proxy for sharpness]")
 
 output_files = sorted(output_dir.glob("*.npy"))
-print(f"\n  {'Chunk':>6s}  {'Mean':>10s}  {'Std':>10s}  {'Min':>8s}  {'Max':>10s}  {'Sharpness':>12s}  {'NegFrac':>8s}")
-print(f"  {'-----':>6s}  {'----':>10s}  {'---':>10s}  {'---':>8s}  {'---':>10s}  {'---------':>12s}  {'-------':>8s}")
+print(
+    f"\n  {'Chunk':>6s}  {'Mean':>10s}  {'Std':>10s}  {'Min':>8s}  "
+    f"{'Max':>10s}  {'Sharpness':>12s}  {'NegFrac':>8s}"
+)
+print(
+    f"  {'-----':>6s}  {'----':>10s}  {'---':>10s}  {'---':>8s}  "
+    f"{'---':>10s}  {'---------':>12s}  {'-------':>8s}"
+)
 
 affected_sharpness = []
 good_sharpness = []
@@ -84,7 +95,11 @@ for fpath in output_files:
     elif len(data.shape) == 2:
         mid = data
     else:
-        mid = data[0, :, :, 0] if len(data.shape) == 4 else data.reshape(-1)[:256*256].reshape(256,256)
+        mid = (
+            data[0, :, :, 0]
+            if len(data.shape) == 4
+            else data.reshape(-1)[: 256 * 256].reshape(256, 256)
+        )
 
     mid_f32 = mid.astype(np.float32) if mid.dtype != np.float32 else mid
 
@@ -100,7 +115,10 @@ for fpath in output_files:
             sharpness = 0.0
 
     marker = " <-- AFFECTED" if idx < 12 else ""
-    print(f"  {idx:6d}  {mean_val:10.4f}  {std_val:10.4f}  {min_val:8.4f}  {max_val:10.4f}  {sharpness:12.4f}  {neg_frac:8.4f}{marker}")
+    print(
+        f"  {idx:6d}  {mean_val:10.4f}  {std_val:10.4f}  {min_val:8.4f}  "
+        f"{max_val:10.4f}  {sharpness:12.4f}  {neg_frac:8.4f}{marker}"
+    )
 
     if idx < 12:
         affected_sharpness.append(sharpness)
@@ -111,14 +129,17 @@ for fpath in output_files:
 
 print("\n--- SUMMARY ---")
 if affected_sharpness and good_sharpness:
-    print(f"  Affected chunks (0-11):")
+    print("  Affected chunks (0-11):")
     print(f"    Avg sharpness: {np.mean(affected_sharpness):.4f}")
     print(f"    Avg mean pixel: {np.mean(affected_means):.4f}")
-    print(f"  Good chunks (12-36):")
+    print("  Good chunks (12-36):")
     print(f"    Avg sharpness: {np.mean(good_sharpness):.4f}")
     print(f"    Avg mean pixel: {np.mean(good_means):.4f}")
-    print(f"  Sharpness ratio (affected/good): {np.mean(affected_sharpness)/np.mean(good_sharpness):.4f}")
-    print(f"  Mean ratio (affected/good): {np.mean(affected_means)/np.mean(good_means):.4f}")
+    print(
+        "  Sharpness ratio (affected/good): "
+        f"{np.mean(affected_sharpness) / np.mean(good_sharpness):.4f}"
+    )
+    print(f"  Mean ratio (affected/good): {np.mean(affected_means) / np.mean(good_means):.4f}")
 
 # 5. Compare affected input chunks vs corrected input chunks
 print("\n--- CORRECTION ANALYSIS (original vs corrected input) ---")
@@ -133,7 +154,10 @@ if corrected_dir.exists():
             orig_sum = int(orig.sum())
             corr_sum = int(corr.sum())
             diffs.append((i, diff_count, orig_sum, corr_sum))
-            print(f"  Chunk {i:3d}: {diff_count:>10d} pixels differ, orig_sum={orig_sum:>12d}, corr_sum={corr_sum:>12d}, delta={corr_sum-orig_sum:>10d}")
+            print(
+                f"  Chunk {i:3d}: {diff_count:>10d} pixels differ, orig_sum={orig_sum:>12d}, "
+                f"corr_sum={corr_sum:>12d}, delta={corr_sum - orig_sum:>10d}"
+            )
 
     # Also check if chunks 12+ have corrections
     for i in range(12, 37):
@@ -146,7 +170,7 @@ if corrected_dir.exists():
                 print(f"  Chunk {i:3d}: {diff_count:>10d} pixels differ (UNEXPECTED)")
             else:
                 pass  # no diff, skip printing for clean output
-    print(f"  Chunks 12-36: checking for corrections...")
+    print("  Chunks 12-36: checking for corrections...")
     any_diff = False
     for i in range(12, 37):
         corr_path = corrected_dir / f"{i:06d}.npy"
@@ -157,7 +181,7 @@ if corrected_dir.exists():
             if diff_count > 0:
                 any_diff = True
     if not any_diff:
-        print(f"  Chunks 12-36: all have corrections too (from fix log)")
+        print("  Chunks 12-36: all have corrections too (from fix log)")
 
 # 6. Side-by-side frame 5 vs frame 15 from output
 print("\n--- FRAME 5 vs FRAME 15 COMPARISON ---")
@@ -166,10 +190,13 @@ for idx in [5, 15]:
     if npy_path.exists():
         data = np.load(str(npy_path))
         print(f"  Frame {idx}: shape={data.shape}, dtype={data.dtype}")
-        print(f"    mean={data.mean():.4f}, std={data.std():.4f}, min={data.min():.4f}, max={data.max():.4f}")
+        print(
+            f"    mean={data.mean():.4f}, std={data.std():.4f}, "
+            f"min={data.min():.4f}, max={data.max():.4f}"
+        )
         # Per-channel stats if RGB
         if len(data.shape) >= 3:
-            c_axis = -1 if data.shape[-1] in [1,3] else 0
+            c_axis = -1 if data.shape[-1] in [1, 3] else 0
             if data.shape[-1] == 3:
                 for c, cname in enumerate(["R", "G", "B"]):
                     ch = data[..., c]

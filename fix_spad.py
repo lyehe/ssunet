@@ -75,22 +75,22 @@ def compute_anchor_rates(
             anchor_rates: shape (n_windows, H, W, C), smoothed rate at each anchor.
             window_centers: shape (n_windows,), frame index of each anchor.
     """
-    T, H, W, C = unpacked.shape
+    n_frames, height, width, channels = unpacked.shape
 
-    if n_temporal_windows >= T // 4:
-        n_temporal_windows = max(1, T // 8)
+    if n_temporal_windows >= n_frames // 4:
+        n_temporal_windows = max(1, n_frames // 8)
 
-    window_centers = np.linspace(0, T - 1, n_temporal_windows + 2)[1:-1]
-    window_half = T / (2 * n_temporal_windows)
+    window_centers = np.linspace(0, n_frames - 1, n_temporal_windows + 2)[1:-1]
+    window_half = n_frames / (2 * n_temporal_windows)
 
-    anchor_rates = np.zeros((n_temporal_windows, H, W, C), dtype=np.float32)
+    anchor_rates = np.zeros((n_temporal_windows, height, width, channels), dtype=np.float32)
 
     for i, center in enumerate(window_centers):
         t_start = max(0, int(center - window_half))
-        t_end = min(T, int(center + window_half))
+        t_end = min(n_frames, int(center + window_half))
         window_mean = unpacked[t_start:t_end].mean(axis=0).astype(np.float32)
 
-        for c in range(C):
+        for c in range(channels):
             anchor_rates[i, :, :, c] = gaussian_filter(window_mean[:, :, c], sigma=sigma)
 
     np.clip(anchor_rates, 0.0, 1.0, out=anchor_rates)
@@ -98,10 +98,13 @@ def compute_anchor_rates(
 
 
 def interpolate_rate(
-    t: int, T: int, anchor_rates: np.ndarray, n_windows: int,
+    t: int,
+    n_frames: int,
+    anchor_rates: np.ndarray,
+    n_windows: int,
 ) -> np.ndarray:
     """Linearly interpolate rate for frame t from anchor points."""
-    frac = t / max(T - 1, 1) * (n_windows - 1)
+    frac = t / max(n_frames - 1, 1) * (n_windows - 1)
     idx_lo = int(np.floor(frac))
     idx_hi = min(idx_lo + 1, n_windows - 1)
     alpha = frac - idx_lo
@@ -132,36 +135,47 @@ def fix_chunk(
 
     # Unpack to binary
     unpacked = np.unpackbits(packed, axis=2)[:, :, :800, :]
-    T, H, W, C = unpacked.shape
+    n_frames, height, width, channels = unpacked.shape
 
     # Estimate spatially-smoothed, temporally-varying rates at anchor points
     anchor_rates, window_centers = compute_anchor_rates(
-        unpacked, sigma=sigma, n_temporal_windows=n_temporal_windows,
+        unpacked,
+        sigma=sigma,
+        n_temporal_windows=n_temporal_windows,
     )
     n_windows = len(window_centers)
 
     # Resample all frames as independent Bernoulli(rate_t)
     rng = np.random.RandomState(seed)
-    for t in range(T):
-        rate_t = interpolate_rate(t, T, anchor_rates, n_windows)
-        unpacked[t] = (rng.random((H, W, C)).astype(np.float32) < rate_t).astype(np.uint8)
+    for t in range(n_frames):
+        rate_t = interpolate_rate(t, n_frames, anchor_rates, n_windows)
+        unpacked[t] = (rng.random((height, width, channels)).astype(np.float32) < rate_t).astype(
+            np.uint8
+        )
 
     return np.packbits(unpacked, axis=2), True, ratio4, ratio8
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Fix period-4 temporal repetition in SPAD data"
-    )
+    """Fix period-4 temporal repetition in the SPAD data named on the command line."""
+    parser = argparse.ArgumentParser(description="Fix period-4 temporal repetition in SPAD data")
     parser.add_argument("scene_dir", type=str, help="Path to scene directory")
-    parser.add_argument("--threshold", type=float, default=0.9,
-                        help="Period-4 detection threshold (ratio, default: 0.9)")
-    parser.add_argument("--sigma", type=float, default=2.0,
-                        help="Spatial Gaussian smoothing sigma (default: 2.0)")
-    parser.add_argument("--n-temporal-windows", type=int, default=8,
-                        help="Number of temporal windows for rate estimation (default: 8)")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Only detect, don't write output")
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.9,
+        help="Period-4 detection threshold (ratio, default: 0.9)",
+    )
+    parser.add_argument(
+        "--sigma", type=float, default=2.0, help="Spatial Gaussian smoothing sigma (default: 2.0)"
+    )
+    parser.add_argument(
+        "--n-temporal-windows",
+        type=int,
+        default=8,
+        help="Number of temporal windows for rate estimation (default: 8)",
+    )
+    parser.add_argument("--dry-run", action="store_true", help="Only detect, don't write output")
     args = parser.parse_args()
 
     scene_dir = Path(args.scene_dir)
@@ -185,11 +199,18 @@ def main():
     for i, npy_path in enumerate(npy_files):
         packed = np.load(str(npy_path))
         fixed, was_fixed, ratio4, ratio8 = fix_chunk(
-            packed, threshold=args.threshold, seed=i * 12345,
-            sigma=args.sigma, n_temporal_windows=args.n_temporal_windows,
+            packed,
+            threshold=args.threshold,
+            seed=i * 12345,
+            sigma=args.sigma,
+            n_temporal_windows=args.n_temporal_windows,
         )
 
-        status = f"FIXED (r4={ratio4:.4f}, r8={ratio8:.4f})" if was_fixed else f"clean (r4={ratio4:.4f}, r8={ratio8:.4f})"
+        status = (
+            f"FIXED (r4={ratio4:.4f}, r8={ratio8:.4f})"
+            if was_fixed
+            else f"clean (r4={ratio4:.4f}, r8={ratio8:.4f})"
+        )
         if was_fixed:
             n_fixed += 1
         else:

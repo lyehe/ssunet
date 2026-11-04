@@ -84,6 +84,8 @@ convention = "google"
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 "tests/*" = ["S101"]
+# Top-level research scripts report progress with print.
+"!{src,tests}/**" = ["T201"]
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu130" }

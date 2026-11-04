@@ -12,19 +12,19 @@ from pathlib import Path
 import torch
 import yaml
 
-torch.backends.cudnn.benchmark = True
-
 from src.ssunet.configs.data_config import DataConfig
 from src.ssunet.configs.file_config import SplitParams
 from src.ssunet.configs.model_config import ModelConfig
 from src.ssunet.configs.train_config import LoaderConfig, TrainConfig
-
-torch.serialization.add_safe_globals([ModelConfig])
 from src.ssunet.datasets.spad import SPADUniformDataModule
 from src.ssunet.models import Bit2Bit
 
+torch.backends.cudnn.benchmark = True
+torch.serialization.add_safe_globals([ModelConfig])
+
 
 def setup_logging() -> None:
+    """Log INFO messages with timestamps to the console."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
@@ -33,21 +33,27 @@ def setup_logging() -> None:
 
 
 def main() -> None:
+    """Train Bit2Bit on uniform-sampled SPAD data."""
     setup_logging()
     logger = logging.getLogger(__name__)
 
     parser = argparse.ArgumentParser(description="Train Bit2Bit on uniform-sampled SPAD data")
     parser.add_argument("--config", type=str, default="config_spad.yml")
-    parser.add_argument("--scene", type=str, required=True,
-                        help="Scene name (blue-bathroom or train-passby)")
+    parser.add_argument(
+        "--scene", type=str, required=True, help="Scene name (blue-bathroom or train-passby)"
+    )
     parser.add_argument("--device", type=int, default=0)
-    parser.add_argument("--offset", type=int, default=24,
-                        help="Sampling offset (default: 24 = primary). Use -1 for all offsets.")
-    parser.add_argument("--resume", type=str, default=None,
-                        help="Checkpoint to resume/finetune from")
+    parser.add_argument(
+        "--offset",
+        type=int,
+        default=24,
+        help="Sampling offset (default: 24 = primary). Use -1 for all offsets.",
+    )
+    parser.add_argument(
+        "--resume", type=str, default=None, help="Checkpoint to resume/finetune from"
+    )
     parser.add_argument("--max-epochs", type=int, default=200)
-    parser.add_argument("--precision", type=str, default="32",
-                        help="Precision (default: 32)")
+    parser.add_argument("--precision", type=str, default="32", help="Precision (default: 32)")
     args = parser.parse_args()
 
     # Load config
@@ -83,8 +89,13 @@ def main() -> None:
     train_config = TrainConfig(**cfg["TRAIN"])
 
     logger.info("Scene: %s, data: %s", args.scene, npy_path)
-    logger.info("GPU: %d, precision: %s, epochs: %d, resume: %s",
-                args.device, args.precision, args.max_epochs, args.resume)
+    logger.info(
+        "GPU: %d, precision: %s, epochs: %d, resume: %s",
+        args.device,
+        args.precision,
+        args.max_epochs,
+        args.resume,
+    )
 
     # Data module (accepts file or directory)
     dm = SPADUniformDataModule(
@@ -99,6 +110,7 @@ def main() -> None:
     model = Bit2Bit(model_config)
 
     import os
+
     os.environ["TORCHINDUCTOR_CACHE_DIR"] = f"C:/tc{args.device}"
     os.environ["TRITON_CACHE_DIR"] = f"C:/tr{args.device}"
     model = torch.compile(model)

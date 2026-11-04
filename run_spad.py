@@ -16,17 +16,16 @@ import torch
 import yaml
 from pytorch_lightning.callbacks import Callback
 
-torch.backends.cudnn.benchmark = True
-
 from src.ssunet.configs.data_config import DataConfig
 from src.ssunet.configs.file_config import SplitParams
 from src.ssunet.configs.model_config import ModelConfig
 from src.ssunet.configs.train_config import LoaderConfig, TrainConfig
-
-# Allow checkpoint loading with weights_only=True (PyTorch 2.6+)
-torch.serialization.add_safe_globals([ModelConfig])
 from src.ssunet.datasets.spad import SPADDataModule, set_file_cache
 from src.ssunet.models import Bit2Bit
+
+torch.backends.cudnn.benchmark = True
+# Allow checkpoint loading with weights_only=True (PyTorch 2.6+)
+torch.serialization.add_safe_globals([ModelConfig])
 
 
 def setup_logging() -> None:
@@ -49,8 +48,12 @@ def main() -> None:
     parser.add_argument("--scene-dir", type=str, default=None, help="Full path to scene directory")
     parser.add_argument("--device", type=int, default=0, help="GPU device index")
     parser.add_argument("--profile", action="store_true", help="Run 1 epoch with PyTorch profiler")
-    parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume from")
-    parser.add_argument("--precision", type=str, default=None, help="Override precision (e.g. 32, bf16-mixed)")
+    parser.add_argument(
+        "--resume", type=str, default=None, help="Path to checkpoint to resume from"
+    )
+    parser.add_argument(
+        "--precision", type=str, default=None, help="Override precision (e.g. 32, bf16-mixed)"
+    )
     parser.add_argument("--max-epochs", type=int, default=None, help="Override max epochs")
     parser.add_argument("--z-size", type=int, default=None, help="Override temporal depth (z_size)")
     args = parser.parse_args()
@@ -71,7 +74,9 @@ def main() -> None:
     cfg["TRAIN"]["devices"] = [args.device]
     cfg["TRAIN"]["logger_name"] = scene_name
     if args.precision:
-        cfg["TRAIN"]["precision"] = int(args.precision) if args.precision.isdigit() else args.precision
+        cfg["TRAIN"]["precision"] = (
+            int(args.precision) if args.precision.isdigit() else args.precision
+        )
     if args.max_epochs:
         cfg["TRAIN"]["max_epochs"] = args.max_epochs
     if args.z_size:
@@ -105,6 +110,7 @@ def main() -> None:
     # torch.compile fuses kernels and optimizes layouts automatically
     if not args.profile:
         import os
+
         os.environ["TORCHINDUCTOR_CACHE_DIR"] = f"C:/tc{args.device}"
         os.environ["TRITON_CACHE_DIR"] = f"C:/tr{args.device}"
         model = torch.compile(model)
@@ -144,9 +150,7 @@ def main() -> None:
             def on_train_end(self, trainer, pl_module):
                 profiler.stop()
                 logger.info("Profile saved to %s", profile_dir)
-                logger.info(
-                    profiler.key_averages().table(sort_by="cuda_time_total", row_limit=20)
-                )
+                logger.info(profiler.key_averages().table(sort_by="cuda_time_total", row_limit=20))
 
         trainer = train_config.trainer
         trainer.callbacks.append(ProfilerCallback())

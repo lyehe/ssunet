@@ -21,18 +21,20 @@ from visionsim.utils.color import linearrgb_to_srgb
 
 from src.ssunet.configs.model_config import ModelConfig
 from src.ssunet.datasets.spad import SPADScene, gpu_unpackbits
+from src.ssunet.models import Bit2Bit
 
 torch.serialization.add_safe_globals([ModelConfig])
-from src.ssunet.models import Bit2Bit
 
 
 def frame_to_png(frame_np: np.ndarray, factor: float) -> np.ndarray:
+    """Convert an averaged photon frame to an 8-bit sRGB image."""
     frame_rgb = spc_avg_to_rgb(frame_np, factor=factor)
     frame_srgb = linearrgb_to_srgb(frame_rgb)
     return (np.clip(frame_srgb, 0, 1) * 255).astype(np.uint8)
 
 
-def main() -> None:
+def main() -> None:  # noqa: C901
+    """Reconstruct every frame of a scene with sliding-window inference."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
@@ -74,7 +76,12 @@ def main() -> None:
 
     logger.info(
         "Scene: %s, total_frames=%d, z_size=%d, keep=%d, stride=%d, margin=%d",
-        scene.name, total_frames, z_size, keep, stride, margin,
+        scene.name,
+        total_frames,
+        z_size,
+        keep,
+        stride,
+        margin,
     )
 
     # Compute all window positions
@@ -131,9 +138,7 @@ def main() -> None:
             next_t = windows[wi + 1] if wi + 1 < len(windows) else total_frames
             flush_up_to = next_t + margin  # next window's first kept frame
 
-            frames_to_flush = sorted(
-                idx for idx in accum if idx < flush_up_to
-            )
+            frames_to_flush = sorted(idx for idx in accum if idx < flush_up_to)
 
             for idx in frames_to_flush:
                 s, c = accum.pop(idx)
@@ -148,7 +153,10 @@ def main() -> None:
             if (wi + 1) % 100 == 0 or wi == len(windows) - 1:
                 logger.info(
                     "Window %d/%d, saved %d frames, accum buffer: %d",
-                    wi + 1, len(windows), n_saved, len(accum),
+                    wi + 1,
+                    len(windows),
+                    n_saved,
+                    len(accum),
                 )
 
     # Flush remaining

@@ -4,13 +4,14 @@ Analyzes output PNGs for noise/quality indicators and compares
 input data statistics between blue-bathroom (problematic) and other scenes.
 """
 
-import os
+from pathlib import Path
+
 import numpy as np
 from PIL import Image
-from pathlib import Path
 
 try:
     from scipy.ndimage import laplace
+
     HAS_SCIPY = True
 except ImportError:
     HAS_SCIPY = False
@@ -21,8 +22,12 @@ TEST_DIR = Path("D:/Yehe/PC/reconstruction/test")
 
 # Scenes to analyze (main output dirs that have PNGs)
 SCENE_DIRS = [
-    "attic", "basement", "bedroom-interior", "blue-bathroom",
-    "coffee-office-bar", "train-passby",
+    "attic",
+    "basement",
+    "bedroom-interior",
+    "blue-bathroom",
+    "coffee-office-bar",
+    "train-passby",
 ]
 
 # Frames to sample
@@ -36,7 +41,6 @@ def compute_laplacian_energy(img_gray: np.ndarray) -> float:
         return float(np.mean(np.abs(lap)))
     else:
         # Manual 2D Laplacian kernel convolution
-        from numpy.lib.stride_tricks import as_strided
         k = np.array([[0, 1, 0], [1, -4, 1], [0, 1, 0]], dtype=np.float64)
         g = img_gray.astype(np.float64)
         # Simple convolution via correlation
@@ -44,7 +48,7 @@ def compute_laplacian_energy(img_gray: np.ndarray) -> float:
         out = np.zeros((h - 2, w - 2), dtype=np.float64)
         for di in range(3):
             for dj in range(3):
-                out += k[di, dj] * g[di:di + h - 2, dj:dj + w - 2]
+                out += k[di, dj] * g[di : di + h - 2, dj : dj + w - 2]
         return float(np.mean(np.abs(out)))
 
 
@@ -106,13 +110,17 @@ def analyze_scene_outputs():
             stats = analyze_png(fpath)
             frame_stats.append(stats)
 
-            print(f"\n  Frame {frame_idx:3d}: mean={stats['mean']:7.2f}  std={stats['std']:6.2f}  "
-                  f"min={stats['min']:3d}  max={stats['max']:3d}  "
-                  f"laplacian={stats['laplacian_energy']:6.2f}")
+            print(
+                f"\n  Frame {frame_idx:3d}: mean={stats['mean']:7.2f}  std={stats['std']:6.2f}  "
+                f"min={stats['min']:3d}  max={stats['max']:3d}  "
+                f"laplacian={stats['laplacian_energy']:6.2f}"
+            )
             if "R_mean" in stats:
-                print(f"             R={stats['R_mean']:6.2f}({stats['R_std']:5.2f})  "
-                      f"G={stats['G_mean']:6.2f}({stats['G_std']:5.2f})  "
-                      f"B={stats['B_mean']:6.2f}({stats['B_std']:5.2f})")
+                print(
+                    f"             R={stats['R_mean']:6.2f}({stats['R_std']:5.2f})  "
+                    f"G={stats['G_mean']:6.2f}({stats['G_std']:5.2f})  "
+                    f"B={stats['B_mean']:6.2f}({stats['B_std']:5.2f})"
+                )
 
         if frame_stats:
             avg_mean = np.mean([s["mean"] for s in frame_stats])
@@ -133,8 +141,10 @@ def analyze_scene_outputs():
     print("-" * 70)
     for scene, s in sorted(scene_summaries.items()):
         marker = " *** PROBLEMATIC" if scene == "blue-bathroom" else ""
-        print(f"{scene:<25} {s['avg_mean']:10.2f} {s['avg_std']:10.2f} "
-              f"{s['avg_laplacian']:15.2f} {s['n_frames']:8d}{marker}")
+        print(
+            f"{scene:<25} {s['avg_mean']:10.2f} {s['avg_std']:10.2f} "
+            f"{s['avg_laplacian']:15.2f} {s['n_frames']:8d}{marker}"
+        )
 
 
 def analyze_input_data():
@@ -175,14 +185,18 @@ def analyze_input_data():
                 print(f"  Spatial: {h}x{w}, Temporal: {t} frames, Channels: {c}")
                 for ch_idx, ch_name in enumerate(["R", "G", "B"]):
                     ch_data = data[:, :, :, ch_idx].astype(np.float64)
-                    print(f"    {ch_name}: mean={ch_data.mean():.6f}  std={ch_data.std():.6f}  "
-                          f"nonzero_frac={np.count_nonzero(ch_data) / ch_data.size:.6f}")
+                    print(
+                        f"    {ch_name}: mean={ch_data.mean():.6f}  std={ch_data.std():.6f}  "
+                        f"nonzero_frac={np.count_nonzero(ch_data) / ch_data.size:.6f}"
+                    )
 
                 # Frame-by-frame mean (temporal variation)
                 frame_means = [data[:, :, t_i, :].mean() for t_i in range(min(t, 10))]
                 print(f"  First 10 frame means: {[f'{m:.4f}' for m in frame_means]}")
                 all_frame_means = [data[:, :, t_i, :].mean() for t_i in range(t)]
-                print(f"  Frame mean range: [{min(all_frame_means):.4f}, {max(all_frame_means):.4f}]")
+                print(
+                    f"  Frame mean range: [{min(all_frame_means):.4f}, {max(all_frame_means):.4f}]"
+                )
                 print(f"  Frame mean variance: {np.var(all_frame_means):.6f}")
 
             # Also check a few more npy files for consistency
@@ -216,16 +230,18 @@ def compare_output_npys():
         if data.ndim == 3 and data.shape[2] == 3:
             for ch_idx, ch_name in enumerate(["R", "G", "B"]):
                 ch = data[:, :, ch_idx]
-                print(f"    {ch_name}: mean={ch.mean():.6f}  std={ch.std():.6f}  "
-                      f"min={ch.min():.6f}  max={ch.max():.6f}")
+                print(
+                    f"    {ch_name}: mean={ch.mean():.6f}  std={ch.std():.6f}  "
+                    f"min={ch.min():.6f}  max={ch.max():.6f}"
+                )
         elif data.ndim == 2:
-            print(f"    (grayscale)")
+            print("    (grayscale)")
 
         # Check for negative values or NaN
         if np.any(np.isnan(data)):
-            print(f"    WARNING: contains NaN values!")
+            print("    WARNING: contains NaN values!")
         if np.any(np.isinf(data)):
-            print(f"    WARNING: contains Inf values!")
+            print("    WARNING: contains Inf values!")
         if data.min() < 0:
             print(f"    NOTE: contains negative values (min={data.min():.6f})")
 
@@ -247,12 +263,16 @@ def cross_scene_laplacian_profile():
         energies = []
         for p in pngs:
             img = np.array(Image.open(p))
-            gray = np.mean(img.astype(np.float64), axis=2) if img.ndim == 3 else img.astype(np.float64)
+            gray = (
+                np.mean(img.astype(np.float64), axis=2) if img.ndim == 3 else img.astype(np.float64)
+            )
             energies.append(compute_laplacian_energy(gray))
 
         print(f"\n  {scene}: ({len(energies)} frames)")
-        print(f"    Laplacian energy: mean={np.mean(energies):.2f}  std={np.std(energies):.2f}  "
-              f"min={np.min(energies):.2f}  max={np.max(energies):.2f}")
+        print(
+            f"    Laplacian energy: mean={np.mean(energies):.2f}  std={np.std(energies):.2f}  "
+            f"min={np.min(energies):.2f}  max={np.max(energies):.2f}"
+        )
         # Show per-frame if few enough
         if len(energies) <= 40:
             # Show in compact form

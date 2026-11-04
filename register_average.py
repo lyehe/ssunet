@@ -1,11 +1,12 @@
-"""Register nearby inference frames to the target frame and average.
+r"""Register nearby inference frames to the target frame and average.
 
 For each target PNG, loads neighboring frames, estimates optical flow to
 warp them onto the target, then averages in the overlapping region.
 
 Usage:
     python register_average.py --input-dir output/basement --neighbors 2
-    python register_average.py --input-dir output/blue-bathroom --neighbors 3 --output-dir output/blue-bathroom-avg
+    python register_average.py --input-dir output/blue-bathroom --neighbors 3 \
+        --output-dir output/blue-bathroom-avg
 """
 
 import argparse
@@ -28,7 +29,7 @@ def register_and_warp(target: np.ndarray, source: np.ndarray) -> tuple[np.ndarra
     Returns:
         (warped, mask): warped source image and float32 validity mask [0,1].
     """
-    H, W = target.shape[:2]
+    height, width = target.shape[:2]
 
     # Convert to grayscale for flow estimation
     gray_target = cv2.cvtColor(target, cv2.COLOR_RGB2GRAY)
@@ -36,7 +37,8 @@ def register_and_warp(target: np.ndarray, source: np.ndarray) -> tuple[np.ndarra
 
     # Dense optical flow: source -> target
     flow = cv2.calcOpticalFlowFarneback(
-        gray_source, gray_target,
+        gray_source,
+        gray_target,
         None,
         pyr_scale=0.5,
         levels=5,
@@ -48,32 +50,52 @@ def register_and_warp(target: np.ndarray, source: np.ndarray) -> tuple[np.ndarra
     )
 
     # Build remap coordinates
-    coords_x, coords_y = np.meshgrid(np.arange(W, dtype=np.float32),
-                                       np.arange(H, dtype=np.float32))
+    coords_x, coords_y = np.meshgrid(
+        np.arange(width, dtype=np.float32), np.arange(height, dtype=np.float32)
+    )
     map_x = coords_x + flow[:, :, 0]
     map_y = coords_y + flow[:, :, 1]
 
     # Warp source to target space
-    warped = cv2.remap(source, map_x, map_y, cv2.INTER_LINEAR,
-                       borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
+    warped = cv2.remap(
+        source,
+        map_x,
+        map_y,
+        cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=(0, 0, 0),
+    )
 
     # Validity mask: 1 where remapped coordinates are within bounds
-    mask = ((map_x >= 0) & (map_x < W) & (map_y >= 0) & (map_y < H)).astype(np.float32)
+    mask = ((map_x >= 0) & (map_x < width) & (map_y >= 0) & (map_y < height)).astype(np.float32)
 
     return warped, mask
 
 
 def main():
+    """Register and average nearby inference frames."""
     parser = argparse.ArgumentParser(description="Register and average nearby frames")
-    parser.add_argument("--input-dir", type=str, required=True, help="Directory with inference PNGs")
-    parser.add_argument("--output-dir", type=str, default=None,
-                        help="Output directory (default: <input-dir>-registered)")
-    parser.add_argument("--before", type=int, default=8,
-                        help="Number of frames before target (default: 8)")
-    parser.add_argument("--after", type=int, default=7,
-                        help="Number of frames after target (default: 7)")
-    parser.add_argument("--weight-decay", type=float, default=0.7,
-                        help="Weight decay per frame distance (default: 0.7)")
+    parser.add_argument(
+        "--input-dir", type=str, required=True, help="Directory with inference PNGs"
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Output directory (default: <input-dir>-registered)",
+    )
+    parser.add_argument(
+        "--before", type=int, default=8, help="Number of frames before target (default: 8)"
+    )
+    parser.add_argument(
+        "--after", type=int, default=7, help="Number of frames after target (default: 7)"
+    )
+    parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=0.7,
+        help="Weight decay per frame distance (default: 0.7)",
+    )
     args = parser.parse_args()
 
     input_dir = Path(args.input_dir)
@@ -93,9 +115,9 @@ def main():
             print(f"  Skipping {target_path.name}: failed to read")
             continue
 
-        H, W, C = target.shape
+        height, width, _channels = target.shape
         accum = target.astype(np.float64)
-        weight_sum = np.ones((H, W, 1), dtype=np.float64)
+        weight_sum = np.ones((height, width, 1), dtype=np.float64)
 
         # Register neighbors: -before to +after
         count = 0

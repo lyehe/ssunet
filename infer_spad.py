@@ -30,14 +30,16 @@ from visionsim.utils.color import linearrgb_to_srgb
 
 from src.ssunet.configs.model_config import ModelConfig
 from src.ssunet.datasets.spad import SPADScene, gpu_unpackbits
+from src.ssunet.models import Bit2Bit
 
 torch.serialization.add_safe_globals([ModelConfig])
-from src.ssunet.models import Bit2Bit
 
 
 def _find_ecc_transform(
-    source: np.ndarray, target: np.ndarray,
-    max_shift: float = 10.0, max_rotation_deg: float = 2.0,
+    source: np.ndarray,
+    target: np.ndarray,
+    max_shift: float = 10.0,
+    max_rotation_deg: float = 2.0,
 ) -> np.ndarray | None:
     """Find transform from source to target using cascade ECC.
 
@@ -58,29 +60,39 @@ def _find_ecc_transform(
     criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 1e-5)
 
     # Try Euclidean first (3 DOF: rotation + translation)
-    M_euc = np.eye(2, 3, dtype=np.float32)
+    warp_euclidean = np.eye(2, 3, dtype=np.float32)
     try:
-        _, M_euc = cv2.findTransformECC(
-            tgt_f, src_f, M_euc, cv2.MOTION_EUCLIDEAN, criteria,
-            inputMask=None, gaussFiltSize=5,
+        _, warp_euclidean = cv2.findTransformECC(
+            tgt_f,
+            src_f,
+            warp_euclidean,
+            cv2.MOTION_EUCLIDEAN,
+            criteria,
+            inputMask=None,
+            gaussFiltSize=5,
         )
-        angle = np.degrees(np.arctan2(M_euc[1, 0], M_euc[0, 0]))
-        tx, ty = M_euc[0, 2], M_euc[1, 2]
+        angle = np.degrees(np.arctan2(warp_euclidean[1, 0], warp_euclidean[0, 0]))
+        tx, ty = warp_euclidean[0, 2], warp_euclidean[1, 2]
         if abs(angle) <= max_rotation_deg and abs(tx) <= max_shift and abs(ty) <= max_shift:
-            return M_euc
+            return warp_euclidean
     except cv2.error:
         pass
 
     # Fall back to translation-only (2 DOF)
-    M_tr = np.eye(2, 3, dtype=np.float32)
+    warp_translation = np.eye(2, 3, dtype=np.float32)
     try:
-        _, M_tr = cv2.findTransformECC(
-            tgt_f, src_f, M_tr, cv2.MOTION_TRANSLATION, criteria,
-            inputMask=None, gaussFiltSize=5,
+        _, warp_translation = cv2.findTransformECC(
+            tgt_f,
+            src_f,
+            warp_translation,
+            cv2.MOTION_TRANSLATION,
+            criteria,
+            inputMask=None,
+            gaussFiltSize=5,
         )
-        tx, ty = M_tr[0, 2], M_tr[1, 2]
+        tx, ty = warp_translation[0, 2], warp_translation[1, 2]
         if abs(tx) <= max_shift and abs(ty) <= max_shift:
-            return M_tr
+            return warp_translation
     except cv2.error:
         pass
 
@@ -88,7 +100,8 @@ def _find_ecc_transform(
 
 
 def warp_with_ecc(
-    source: np.ndarray, target: np.ndarray,
+    source: np.ndarray,
+    target: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Warp source to target using cascade ECC (Euclidean → translation).
 
@@ -99,24 +112,30 @@ def warp_with_ecc(
     Returns:
         (warped, mask) or (None, None) if registration failed.
     """
-    H, W, C = target.shape
+    height, width, channels = target.shape
 
-    M = _find_ecc_transform(source, target)
-    if M is None:
+    warp = _find_ecc_transform(source, target)
+    if warp is None:
         return None, None
 
     warped = np.zeros_like(source)
-    for c in range(C):
+    for c in range(channels):
         warped[:, :, c] = cv2.warpAffine(
-            source[:, :, c], M, (W, H),
+            source[:, :, c],
+            warp,
+            (width, height),
             flags=cv2.INTER_LINEAR,
-            borderMode=cv2.BORDER_CONSTANT, borderValue=0,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=0,
         )
 
     mask = cv2.warpAffine(
-        np.ones((H, W), dtype=np.float32), M, (W, H),
+        np.ones((height, width), dtype=np.float32),
+        warp,
+        (width, height),
         flags=cv2.INTER_LINEAR,
-        borderMode=cv2.BORDER_CONSTANT, borderValue=0,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=0,
     )
     mask = (mask > 0.5).astype(np.float32)
 
@@ -128,8 +147,10 @@ warp_with_homography = warp_with_ecc
 
 
 def warp_with_raft(
-    source: np.ndarray, target: np.ndarray,
-    raft_model: torch.nn.Module, device: torch.device,
+    source: np.ndarray,
+    target: np.ndarray,
+    raft_model: torch.nn.Module,
+    device: torch.device,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Warp source to target using RAFT optical flow.
 
@@ -142,12 +163,12 @@ def warp_with_raft(
     Returns:
         (warped, mask): warped source and validity mask.
     """
-    H, W, C = target.shape
+    height, width, channels = target.shape
 
     # RAFT expects (B, 3, H, W) float32 in [0, 1], images must be
     # divisible by 8 — pad if needed
-    pad_h = (8 - H % 8) % 8
-    pad_w = (8 - W % 8) % 8
+    pad_h = (8 - height % 8) % 8
+    pad_w = (8 - width % 8) % 8
 
     src_t = torch.from_numpy(source.transpose(2, 0, 1)).unsqueeze(0).to(device)
     tgt_t = torch.from_numpy(target.transpose(2, 0, 1)).unsqueeze(0).to(device)
@@ -162,26 +183,30 @@ def warp_with_raft(
     flow = flow_list[-1][0].cpu().numpy()  # (2, H_pad, W_pad)
 
     # Crop padding
-    flow = flow[:, :H, :W]  # (2, H, W)
+    flow = flow[:, :height, :width]  # (2, H, W)
     flow = flow.transpose(1, 2, 0)  # (H, W, 2)
 
     # Build remap coordinates
     coords_x, coords_y = np.meshgrid(
-        np.arange(W, dtype=np.float32),
-        np.arange(H, dtype=np.float32),
+        np.arange(width, dtype=np.float32),
+        np.arange(height, dtype=np.float32),
     )
     map_x = coords_x + flow[:, :, 0]
     map_y = coords_y + flow[:, :, 1]
 
     # Warp float32 source per channel
     warped = np.zeros_like(source)
-    for c in range(C):
+    for c in range(channels):
         warped[:, :, c] = cv2.remap(
-            source[:, :, c], map_x, map_y,
-            cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0,
+            source[:, :, c],
+            map_x,
+            map_y,
+            cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=0,
         )
 
-    mask = ((map_x >= 0) & (map_x < W) & (map_y >= 0) & (map_y < H)).astype(np.float32)
+    mask = ((map_x >= 0) & (map_x < width) & (map_y >= 0) & (map_y < height)).astype(np.float32)
     return warped, mask
 
 
@@ -216,11 +241,11 @@ def register_and_average(
     Returns:
         (H, W, C) float32 averaged frame.
     """
-    Z, H, W, C = volume.shape
+    depth, height, width, channels = volume.shape
     target = volume[target_idx]
 
     lo = max(0, target_idx - before)
-    hi = min(Z, target_idx + after + 1)
+    hi = min(depth, target_idx + after + 1)
 
     # Pass 1: register all frames
     registered = []  # list of (fi, warped, mask)
@@ -235,7 +260,7 @@ def register_and_average(
         elif method == "raft":
             warped, mask = warp_with_raft(source, target, raft_model, device)
         else:
-            warped, mask = source.copy(), np.ones((H, W), dtype=np.float32)
+            warped, mask = source.copy(), np.ones((height, width), dtype=np.float32)
 
         if warped is None:
             continue
@@ -248,28 +273,28 @@ def register_and_average(
     # Pass 2: per-pixel outlier rejection
     # Stack all registered frames + target
     n = len(registered)
-    stack = np.zeros((n + 1, H, W, C), dtype=np.float32)
+    stack = np.zeros((n + 1, height, width, channels), dtype=np.float32)
     stack[0] = target
-    for i, (fi, warped, mask) in enumerate(registered):
+    for i, (_fi, warped, _mask) in enumerate(registered):
         stack[i + 1] = warped
 
     # Per-pixel median and MAD across frames
     median_img = np.median(stack, axis=0)  # (H, W, C)
-    abs_dev = np.abs(stack - median_img)   # (N+1, H, W, C)
-    mad = np.median(abs_dev, axis=0)       # (H, W, C)
+    abs_dev = np.abs(stack - median_img)  # (N+1, H, W, C)
+    mad = np.median(abs_dev, axis=0)  # (H, W, C)
     threshold = outlier_sigma * np.maximum(mad, 1e-4)  # (H, W, C)
 
     # Pass 3: weighted average with per-pixel rejection
     accum = target.astype(np.float64).copy()
-    weight_sum = np.ones((H, W, C), dtype=np.float64)
+    weight_sum = np.ones((height, width, channels), dtype=np.float64)
 
     for i, (fi, warped, mask) in enumerate(registered):
         dist = abs(fi - target_idx)
-        w = weight_decay ** dist
+        w = weight_decay**dist
 
         # Per-pixel validity: spatial mask AND within outlier threshold
         pixel_ok = (abs_dev[i + 1] < threshold).astype(np.float64)  # (H, W, C)
-        mask_3c = np.broadcast_to(mask[:, :, None], (H, W, C)).astype(np.float64)
+        mask_3c = np.broadcast_to(mask[:, :, None], (height, width, channels)).astype(np.float64)
         combined = pixel_ok * mask_3c * w
 
         accum += warped.astype(np.float64) * combined
@@ -294,6 +319,7 @@ def frame_to_png(frame_np: np.ndarray, factor: float) -> np.ndarray:
 
 
 def setup_logging() -> None:
+    """Log INFO messages with timestamps to the console."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
@@ -301,7 +327,8 @@ def setup_logging() -> None:
     )
 
 
-def main() -> None:
+def main() -> None:  # noqa: C901
+    """Run inference on the SPAD scenes named on the command line."""
     setup_logging()
     logger = logging.getLogger(__name__)
 
@@ -311,18 +338,28 @@ def main() -> None:
     parser.add_argument("--config", type=str, default="config_spad.yml")
     parser.add_argument("--device", type=int, default=0)
     parser.add_argument("--output", type=str, required=True)
-    parser.add_argument("--factor", type=float, default=0.5,
-                        help="SPC response function factor (default: 0.5)")
-    parser.add_argument("--reg-before", type=int, default=8,
-                        help="Register N frames before target (default: 8)")
-    parser.add_argument("--reg-after", type=int, default=7,
-                        help="Register N frames after target (default: 7)")
-    parser.add_argument("--method", type=str, nargs="+", default=["sift", "raft"],
-                        choices=["none", "sift", "raft"],
-                        help="Registration method(s) (default: sift raft)")
-    parser.add_argument("--uniform-sample", action="store_true",
-                        help="Uniformly sample z_size frames across each chunk "
-                             "(for period-4 corrupted data)")
+    parser.add_argument(
+        "--factor", type=float, default=0.5, help="SPC response function factor (default: 0.5)"
+    )
+    parser.add_argument(
+        "--reg-before", type=int, default=8, help="Register N frames before target (default: 8)"
+    )
+    parser.add_argument(
+        "--reg-after", type=int, default=7, help="Register N frames after target (default: 7)"
+    )
+    parser.add_argument(
+        "--method",
+        type=str,
+        nargs="+",
+        default=["sift", "raft"],
+        choices=["none", "sift", "raft"],
+        help="Registration method(s) (default: sift raft)",
+    )
+    parser.add_argument(
+        "--uniform-sample",
+        action="store_true",
+        help="Uniformly sample z_size frames across each chunk (for period-4 corrupted data)",
+    )
     args = parser.parse_args()
 
     # Load config for model settings
@@ -342,6 +379,7 @@ def main() -> None:
     raft_model = None
     if "raft" in args.method:
         from torchvision.models.optical_flow import Raft_Large_Weights, raft_large
+
         raft_model = raft_large(weights=Raft_Large_Weights.DEFAULT).to(device).eval()
         logger.info("RAFT model loaded")
 
@@ -368,7 +406,12 @@ def main() -> None:
 
     logger.info(
         "Scene: %s (%d chunks, %d frames/chunk, z_size=%d, methods=%s, uniform=%s)",
-        scene.name, n_chunks, fpf, z_size, args.method, args.uniform_sample,
+        scene.name,
+        n_chunks,
+        fpf,
+        z_size,
+        args.method,
+        args.uniform_sample,
     )
 
     half_z = z_size // 2
@@ -376,7 +419,6 @@ def main() -> None:
     with torch.no_grad():
         for chunk_idx in range(n_chunks):
             target_frame = (chunk_idx + 1) * fpf - 1
-            chunk_start = chunk_idx * fpf
 
             if args.uniform_sample:
                 # All chunks conceptually padded to 1025 = 25*41 and concatenated.
@@ -388,9 +430,7 @@ def main() -> None:
                 target_padded = chunk_idx * padded_fpf + (padded_fpf - 1)
 
                 # z_size frames ending at target, step 25
-                padded_indices = np.arange(
-                    target_padded, target_padded - z_size * 25, -25
-                )[::-1]
+                padded_indices = np.arange(target_padded, target_padded - z_size * 25, -25)[::-1]
 
                 # Map padded indices back to real frame indices
                 # padded pos p -> chunk = p // 1025, local = p % 1025
@@ -412,7 +452,9 @@ def main() -> None:
                 packed = np.concatenate(parts, axis=0)
 
                 frame_idx = len(global_indices) - 1  # target is last
-                frame_desc = f"uniform step-25, {len(global_indices)} frames, target={global_indices[-1]}"
+                frame_desc = (
+                    f"uniform step-25, {len(global_indices)} frames, target={global_indices[-1]}"
+                )
             else:
                 t_start = target_frame - half_z
                 t_end = target_frame + half_z
@@ -454,7 +496,8 @@ def main() -> None:
                     continue
 
                 avg_frame = register_and_average(
-                    volume_np, frame_idx,
+                    volume_np,
+                    frame_idx,
                     method=m,
                     before=args.reg_before,
                     after=args.reg_after,
@@ -466,13 +509,17 @@ def main() -> None:
 
             logger.info(
                 "Saved %06d.png (%s, target=%d)",
-                chunk_idx, frame_desc, target_frame,
+                chunk_idx,
+                frame_desc,
+                target_frame,
             )
 
             del packed_t, unpacked, data, output
             torch.cuda.empty_cache()
 
-    logger.info("Done. %d chunks saved to %s (+%s)", n_chunks, output_base, list(output_dirs.keys()))
+    logger.info(
+        "Done. %d chunks saved to %s (+%s)", n_chunks, output_base, list(output_dirs.keys())
+    )
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 
 For each scene, prepends an empty frame to each chunk (making 1025 frames),
 then samples at step 25 with 25 different offsets (0..24). Each offset
-produces a separate .npy file with 41 frames per chunk × 37 chunks = 1517 frames.
+produces a separate .npy file with 41 frames per chunk x 37 chunks = 1517 frames.
 
 Primary offset = 24: indices 24,49,...,999,1024 = original frames 23,48,...,998,1023
   - Skips the empty frame
@@ -13,8 +13,9 @@ Usage:
     python prepare_uniform_data.py
 """
 
-import numpy as np
 from pathlib import Path
+
+import numpy as np
 
 STEP = 25
 PADDED_SIZE = 1025  # 1024 + 1 empty frame at start
@@ -25,6 +26,7 @@ SCENES = [
 
 
 def prepare_scene(scene_dir: Path) -> None:
+    """Write a scene's step-25 uniform-sampled training files."""
     scene_name = scene_dir.name
     out_dir = scene_dir.parent / f"{scene_name}_step25"
     out_dir.mkdir(exist_ok=True)
@@ -41,19 +43,18 @@ def prepare_scene(scene_dir: Path) -> None:
         if i == 0:
             print(f"  Chunk shape: {data.shape}, dtype: {data.dtype}")
 
-    _, H, W_packed, C = chunks[0].shape
-    empty_frame = np.zeros((1, H, W_packed, C), dtype=chunks[0].dtype)
+    _, height, w_packed, channels = chunks[0].shape
+    empty_frame = np.zeros((1, height, w_packed, channels), dtype=chunks[0].dtype)
 
     # For each offset, sample and save
     for offset in range(STEP):
         # Sample indices in padded (1025-frame) chunk
         padded_indices = np.arange(offset, PADDED_SIZE, STEP)
-        n_per_chunk = len(padded_indices)
 
         # Collect sampled frames from all chunks
         all_frames = []
         for chunk_data in chunks:
-            # Conceptually: padded = [empty, chunk_data]
+            # Conceptually, the padded chunk is the empty frame followed by chunk_data
             # padded[0] = zeros, padded[1..1024] = chunk_data[0..1023]
             # So real_idx = padded_idx - 1, and padded_idx=0 -> empty
             for pi in padded_indices:
@@ -61,7 +62,7 @@ def prepare_scene(scene_dir: Path) -> None:
                     all_frames.append(empty_frame)
                 else:
                     real_idx = pi - 1  # map padded -> original
-                    all_frames.append(chunk_data[real_idx:real_idx + 1])
+                    all_frames.append(chunk_data[real_idx : real_idx + 1])
 
         result = np.concatenate(all_frames, axis=0)  # (n_chunks * n_per_chunk, H, W_packed, C)
 
@@ -82,6 +83,7 @@ def prepare_scene(scene_dir: Path) -> None:
 
 
 def main():
+    """Prepare uniform-sampled training data for each listed scene."""
     for scene_path in SCENES:
         scene_dir = Path(scene_path)
         if not scene_dir.exists():

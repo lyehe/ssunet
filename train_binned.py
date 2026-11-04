@@ -16,13 +16,11 @@ import logging
 import os
 from pathlib import Path
 
+import pytorch_lightning as pl
 import torch
 import yaml
-import pytorch_lightning as pl
 from numpy.random import choice, rand, randint
 from torch.utils.data import Dataset
-
-torch.backends.cudnn.benchmark = True
 
 from src.ssunet.configs.data_config import DataConfig
 from src.ssunet.configs.file_config import SplitParams
@@ -30,12 +28,14 @@ from src.ssunet.configs.model_config import ModelConfig
 from src.ssunet.configs.train_config import LoaderConfig, TrainConfig
 from src.ssunet.constants import EPSILON, LOGGER
 from src.ssunet.datasets.spad import SPADScene, gpu_unpackbits, set_file_cache
-
-torch.serialization.add_safe_globals([ModelConfig])
 from src.ssunet.models import Bit2Bit
+
+torch.backends.cudnn.benchmark = True
+torch.serialization.add_safe_globals([ModelConfig])
 
 
 def setup_logging() -> None:
+    """Log INFO messages with timestamps to the console."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
@@ -62,16 +62,21 @@ class SPADBinnedDataset(Dataset):
 
         LOGGER.info(
             "Binned dataset '%s': %d files (%d frames), bin_factor=%d, z_raw=%d",
-            self.scene.name, self.scene.n_files, self.scene.total_frames,
-            bin_factor, self.z_raw,
+            self.scene.name,
+            self.scene.n_files,
+            self.scene.total_frames,
+            bin_factor,
+            self.z_raw,
         )
 
     def __len__(self) -> int:
+        """Samples per epoch: virtual_size when set, otherwise every start frame."""
         if self.config.virtual_size > 0:
             return self.config.virtual_size
         return self.scene.total_frames - self.z_raw
 
     def __getitem__(self, index: int) -> torch.Tensor:
+        """Bit-packed z_size * bin_factor frames from a random start, with a random H crop."""
         t_max = self.scene.total_frames - self.z_raw
         t_start = randint(0, max(1, t_max))
 
@@ -79,7 +84,10 @@ class SPADBinnedDataset(Dataset):
         h_start = randint(0, max(1, h_max)) if h_max > 0 else 0
 
         packed = self.scene.get_packed_patch(
-            t_start, self.z_raw, h_start, self.config.xy_size,
+            t_start,
+            self.z_raw,
+            h_start,
+            self.config.xy_size,
         )
         return torch.from_numpy(packed)
 
@@ -111,16 +119,20 @@ class SPADBinnedDataModule(pl.LightningDataModule):
         self.bin_factor = bin_factor
 
     def setup(self, stage: str | None = None) -> None:
+        """Build the binned training dataset for fitting."""
         if stage in ("fit", None):
             self.train_dataset = SPADBinnedDataset(
-                self.scene_dir, self.data_config,
+                self.scene_dir,
+                self.data_config,
                 bin_factor=self.bin_factor,
             )
 
     def train_dataloader(self) -> torch.utils.data.DataLoader:
+        """Loader over the binned training dataset."""
         return self.loader_config.loader(self.train_dataset)
 
     def val_dataloader(self) -> list[torch.utils.data.DataLoader]:
+        """No validation loaders for binned data."""
         return []
 
     def on_after_batch_transfer(self, batch: torch.Tensor, dataloader_idx: int) -> list:
@@ -153,21 +165,25 @@ class SPADBinnedDataModule(pl.LightningDataModule):
             if torch.rand(1).item() > 0.5:
                 data = data.flip(-2)
 
-        B, C, Zbin, H, W = data.shape
-        Z = Zbin // self.bin_factor
+        batch_size, channels, z_binned, height, width = data.shape
+        depth = z_binned // self.bin_factor
 
         # Bernoulli split at binary level, then bin.
         # Memory-efficient: compute noise = sum(data * mask) per bin group,
         # then target = binned_data - noise (avoids holding 3 full binary tensors).
         p = self._sample_p()
-        mask = (torch.rand_like(data) < p)
+        mask = torch.rand_like(data) < p
         noise_binary = data * mask.float()
         del mask
 
         # Bin both: reshape and sum groups of bin_factor
-        binned_data = data.reshape(B, C, Z, self.bin_factor, H, W).sum(dim=3)
+        binned_data = data.reshape(batch_size, channels, depth, self.bin_factor, height, width).sum(
+            dim=3
+        )
         del data
-        noise = noise_binary.reshape(B, C, Z, self.bin_factor, H, W).sum(dim=3)
+        noise = noise_binary.reshape(
+            batch_size, channels, depth, self.bin_factor, height, width
+        ).sum(dim=3)
         del noise_binary
         target = binned_data - noise
 
@@ -191,6 +207,7 @@ class SPADBinnedDataModule(pl.LightningDataModule):
 
 
 def main() -> None:
+    """Train Bit2Bit on binned SPAD data."""
     setup_logging()
     logger = logging.getLogger(__name__)
 
@@ -214,7 +231,9 @@ def main() -> None:
     cfg["TRAIN"]["devices"] = [args.device]
     cfg["TRAIN"]["logger_name"] = f"{scene_name}-bin{args.bin_factor}"
     if args.precision:
-        cfg["TRAIN"]["precision"] = int(args.precision) if args.precision.isdigit() else args.precision
+        cfg["TRAIN"]["precision"] = (
+            int(args.precision) if args.precision.isdigit() else args.precision
+        )
     if args.max_epochs:
         cfg["TRAIN"]["max_epochs"] = args.max_epochs
     if args.z_size:
@@ -237,7 +256,11 @@ def main() -> None:
     set_file_cache(max_gb=cache_max_gb)
 
     logger.info("Scene: %s, bin_factor=%d", scene_name, args.bin_factor)
-    logger.info("z_size=%d (loads %d binary frames per sample)", data_config.z_size, data_config.z_size * args.bin_factor)
+    logger.info(
+        "z_size=%d (loads %d binary frames per sample)",
+        data_config.z_size,
+        data_config.z_size * args.bin_factor,
+    )
     logger.info("GPU: %d", args.device)
 
     dm = SPADBinnedDataModule(

@@ -34,18 +34,20 @@ from visionsim.utils.color import linearrgb_to_srgb
 
 from src.ssunet.configs.model_config import ModelConfig
 from src.ssunet.datasets.spad import SPADScene, gpu_unpackbits
+from src.ssunet.models import Bit2Bit
 
 torch.serialization.add_safe_globals([ModelConfig])
-from src.ssunet.models import Bit2Bit
 
 
 def frame_to_png(frame_np: np.ndarray, factor: float) -> np.ndarray:
+    """Convert an averaged photon frame to an 8-bit sRGB image."""
     frame_rgb = spc_avg_to_rgb(frame_np, factor=factor)
     frame_srgb = linearrgb_to_srgb(frame_rgb)
     return (np.clip(frame_srgb, 0, 1) * 255).astype(np.uint8)
 
 
 def main() -> None:
+    """Denoise the last binned frame of each 1024-frame chunk."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
@@ -86,7 +88,12 @@ def main() -> None:
 
     logger.info(
         "Scene: %s, %d chunks (%d frames each), bin_factor=%d, z_size=%d, z_raw=%d",
-        scene.name, scene.n_files, scene.frames_per_file, bin_factor, z_size, z_raw,
+        scene.name,
+        scene.n_files,
+        scene.frames_per_file,
+        bin_factor,
+        z_size,
+        z_raw,
     )
 
     with torch.no_grad():

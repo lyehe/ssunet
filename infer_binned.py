@@ -26,9 +26,9 @@ from visionsim.utils.color import linearrgb_to_srgb
 
 from src.ssunet.configs.model_config import ModelConfig
 from src.ssunet.datasets.spad import SPADScene, gpu_unpackbits
+from src.ssunet.models import Bit2Bit
 
 torch.serialization.add_safe_globals([ModelConfig])
-from src.ssunet.models import Bit2Bit
 
 
 def frame_to_png(frame_np: np.ndarray, factor: float) -> np.ndarray:
@@ -39,7 +39,11 @@ def frame_to_png(frame_np: np.ndarray, factor: float) -> np.ndarray:
 
 
 def save_target_frames(
-    scene: SPADScene, bin_factor: int, factor: float, output_dir: Path, device: torch.device,
+    scene: SPADScene,
+    bin_factor: int,
+    factor: float,
+    output_dir: Path,
+    device: torch.device,
 ) -> None:
     """Bin the last 1024 frames and save as target PNGs."""
     logger = logging.getLogger(__name__)
@@ -52,7 +56,9 @@ def save_target_frames(
 
     logger.info(
         "Saving %d target frames (last %d binary frames binned by %d)",
-        n_binned, n_frames, bin_factor,
+        n_binned,
+        n_frames,
+        bin_factor,
     )
 
     # Process in chunks to avoid OOM
@@ -63,12 +69,15 @@ def save_target_frames(
         n_out = actual // bin_factor
 
         packed = scene.get_packed_patch(
-            last_file_start + start, actual, 0, scene.height,
+            last_file_start + start,
+            actual,
+            0,
+            scene.height,
         )
         packed_t = torch.from_numpy(packed).to(device)
         unpacked = gpu_unpackbits(packed_t, dim=2)[:, :, :800, :]  # (Z, H, W, C)
 
-        # Bin: reshape (n_out, bin_factor, H, W, C) and sum
+        # Bin: reshape to n_out x bin_factor x H x W x C, then sum each bin
         binned = unpacked.reshape(n_out, bin_factor, scene.height, 800, scene.channels)
         binned = binned.sum(dim=1).cpu().numpy().astype(np.float32) / bin_factor
 
@@ -84,6 +93,7 @@ def save_target_frames(
 
 
 def main() -> None:
+    """Run sliding-window inference on binned SPAD data."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - %(message)s",
@@ -100,10 +110,16 @@ def main() -> None:
     parser.add_argument("--bin-factor", type=int, default=8)
     parser.add_argument("--factor", type=float, default=0.5)
     parser.add_argument("--z-size", type=int, default=32, help="Model z_size (binned frames)")
-    parser.add_argument("--keep", type=int, default=16, help="Keep center N binned frames per window")
+    parser.add_argument(
+        "--keep", type=int, default=16, help="Keep center N binned frames per window"
+    )
     parser.add_argument("--stride", type=int, default=8, help="Stride in binned frames")
-    parser.add_argument("--save-target", action="store_true", default=True,
-                        help="Save last-file binned frames as target PNGs")
+    parser.add_argument(
+        "--save-target",
+        action="store_true",
+        default=True,
+        help="Save last-file binned frames as target PNGs",
+    )
     args = parser.parse_args()
 
     with Path(args.config).open() as f:
@@ -132,11 +148,18 @@ def main() -> None:
 
     logger.info(
         "Scene: %s, total_frames=%d, total_binned=%d, bin_factor=%d",
-        scene.name, scene.total_frames, total_binned, bin_factor,
+        scene.name,
+        scene.total_frames,
+        total_binned,
+        bin_factor,
     )
     logger.info(
         "z_size=%d, z_raw=%d, keep=%d, stride=%d, margin=%d",
-        z_size, z_raw, keep, stride, margin,
+        z_size,
+        z_raw,
+        keep,
+        stride,
+        margin,
     )
 
     # Save target frames from last file
@@ -207,7 +230,10 @@ def main() -> None:
             if (wi + 1) % 50 == 0 or wi == len(windows) - 1:
                 logger.info(
                     "Window %d/%d, saved %d frames, accum buffer: %d",
-                    wi + 1, len(windows), n_saved, len(accum),
+                    wi + 1,
+                    len(windows),
+                    n_saved,
+                    len(accum),
                 )
 
     # Flush remaining

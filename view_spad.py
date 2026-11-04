@@ -13,10 +13,18 @@ import numpy as np
 
 
 def main():
+    """View raw SPAD data in napari."""
     parser = argparse.ArgumentParser(description="View raw SPAD data in napari")
     parser.add_argument("scene_dir", type=str, help="Path to scene directory")
-    parser.add_argument("--chunk", type=int, default=None, help="Chunk (npy file) index (default: all)")
-    parser.add_argument("--frames", type=int, default=None, help="Number of frames to load per chunk (default: all 1024)")
+    parser.add_argument(
+        "--chunk", type=int, default=None, help="Chunk (npy file) index (default: all)"
+    )
+    parser.add_argument(
+        "--frames",
+        type=int,
+        default=None,
+        help="Number of frames to load per chunk (default: all 1024)",
+    )
     args = parser.parse_args()
 
     scene_dir = Path(args.scene_dir)
@@ -43,7 +51,9 @@ def main():
     # Temporal sum for overview
     temporal_sum = unpacked.sum(axis=0).astype(np.float32)
 
-    viewer = napari.Viewer(title=f"SPAD: {scene_name} ({len(npy_files)} chunks, {total_frames} frames)")
+    viewer = napari.Viewer(
+        title=f"SPAD: {scene_name} ({len(npy_files)} chunks, {total_frames} frames)"
+    )
 
     # Add binary frames as image layer (T, H, W, C)
     viewer.add_image(
@@ -65,6 +75,7 @@ def main():
     png_path = scene_dir / f"{args.chunk:06d}.png"
     if png_path.exists():
         from PIL import Image
+
         gt = np.array(Image.open(str(png_path)))
         viewer.add_image(gt, name="ground truth", rgb=True, visible=False)
 

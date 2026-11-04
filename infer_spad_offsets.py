@@ -127,7 +127,7 @@ def main():
     chunk_path = scene_dir / f"{args.chunk:06d}.npy"
 
     def log(msg, **kwargs):
-        print(msg, **kwargs)  # noqa: T201 -- CLI progress output
+        print(msg, **kwargs)
         sys.stdout.flush()
 
     log(f"Scene: {scene_name}, chunk: {args.chunk}, device: {device}")
