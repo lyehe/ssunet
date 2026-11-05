@@ -1,0 +1,119 @@
+Prospective independent photon self-splitting study protocol
+Frozen initial protocol: 2026-10-25
+Configuration: config/neutrino_study.yml
+Parent plan: plans/neutrino_phased_plan.txt
+
+Objective and population
+------------------------
+Test low-count photon-arrival prediction using the unchanged dense model on a
+new 100,000-event cohort of the locally acquired P-ONE simulation. Exclude the
+entire pilot and all known exact-configuration relatives. Include catalogue
+events with zero photon rows. Group by documented family identifiers where
+available and otherwise by exact stored initial-state configurations, recording
+that the archived table may not expose every latent family relation.
+
+This is a qualified curated predictive-thinning study unless the source audit
+establishes a stronger contract. Distinct event IDs, a photon table name and a
+missing weight column do not certify physical conditional Poisson statistics.
+The exact analytic generator is the reference for that statistical theorem.
+
+No photon-count, target-count, nonemptiness or prediction-quality filter is used
+to choose the cohort. Persistent source-group partition and selection hashes
+are independent of photon detections. A nested 10k engineering cohort inherits
+the same assignments. Test observations have their own file and are excluded
+from all model/baseline-fitting and engineering-performance commands.
+
+Fixed prediction and supervision
+--------------------------------
+Use all 60 fixed P-ONE water sensors and the original source time convention,
+initially [0,6400) ns with 256 bins. A training-only clock/tail audit may require
+a versioned correction before validation selection; no per-event target-derived
+clock alignment or active-sensor selection is allowed. Retain live zero-hit
+sensors and the original photon timestamps.
+
+For p=0.5, draw A~Binomial(Y,p), B=Y-A from true integer observed counts. Preserve
+multi-count/shared occupied bins, empty inputs and empty targets. Refresh
+training splits each epoch using stable source event IDs. Freeze validation and
+test splits independently of model initialization/shuffle. Train on mean over
+events of -sum(B*log(q)); never divide each event by its realized target total.
+The forward arguments are A, geometry/live support and p only. Physics truth
+stays in evaluation-only files and never becomes a photon-learning target.
+
+Model and compute
+------------------
+Use DensePhotonReference channels=16 (3,585 parameters), AdamW lr=0.001,
+weight_decay=0.01, gradient clipping at 1 and BF16 updates with FP32 probability
+normalization. Seeds are 42/43/44. Default batch 16 and ten complete passes,
+approximately 50,000 updates/800,000 examples per seed for an 80k training fold.
+
+Engineering profiling uses training observations only and at least 500 warm
+updates. Any batch or whole-epoch budget correction needed to fit the measured
+limits is recorded as a prospective configuration revision before the full
+study's validation scores are used. The baseline search grids are fixed in the
+configuration; do not weaken controls in response to their performance.
+
+One explicitly selected RTX 4090: at most 1,800 update seconds per seed plus
+600 evaluation/control seconds per seed, below 12 GiB peak tensor allocation
+and a 4 GiB process-RSS target. Setup/import/baseline fitting are timed separately.
+Budget exhaustion is reported as such, never as convergence. Read counts,
+controls and bootstrap resamples in bounded batches.
+
+Selection and primary analysis
+------------------------------
+Validate at epoch 0/1/2/5/final. Select each seed's checkpoint with the lowest
+retained-input-count 1--10 validation photon NLL, breaking ties by earlier step.
+Keep every seed and also report final-budget checkpoints. The primary test
+score averages the three selected models' NLLs, not their probability ensemble.
+
+Fit all prior counts on training observations. Choose the strongest simple
+baseline by the SAME low-count validation metric from uniform, prior, fixed
+50/50 mixture, frozen pilot 75/25 mixture and the prespecified smoothing/mixture
+grid. Break ties by fixed candidate order and archive all candidate scores.
+No baseline/test hyperparameter tuning follows test opening.
+
+Generate 20 frozen training-donor views matched on retained counts, exposure,
+geometry and p. Require exact count matches for interpreting the primary
+conditioning control. Save donor IDs, not dense cohort-sized input arrays.
+
+On untouched test events, in the predeclared 1--10 retained-photon stratum, define
+  D = (sum mean_seed_NLL_model - sum NLL_control) / sum target_photons.
+Compute paired 95% intervals using 10,000 whole-configuration bootstrap draws
+in chunks of 64. Group any repeated realizations or p views together. Do not
+resample photons or count model seeds as new test events. Report seed variation
+separately from event-sampling uncertainty.
+
+Support the restricted claim only if BOTH the model-minus-strongest-baseline
+and model-minus-matched-donor upper interval endpoints are below zero, the point
+improvement over the strongest baseline is at least 0.10 nats/photon, and the
+resource/data checks pass. This practical margin is a study choice, not a
+physical standard. Other baseline/stratum contrasts are secondary exploratory
+results, with their multiplicity and source qualifications reported.
+
+Publish all-event and retained-count 0/1--5/6--10/11--30/>30 scores, event and
+photon denominators, empty-target rates, exact donor coverage, concentration by
+event and full resource costs. Secondary p=0.25/0.75 views are distribution-shift
+diagnostics of the p=0.5-trained model, not additional independent test samples.
+An all-event disadvantage remains visible even if the low-count claim passes.
+
+Test lock and continuation
+--------------------------
+Before scoring, seal a manifest of data/config/code/baseline/checkpoint hashes
+and analysis settings. A separate test command requires that lock and refuses
+to overwrite its first complete test record. Training and validation never
+accept the test-shard path as a fitting source. A failed/inconclusive test is
+preserved; revised models need a newly reserved independent test population.
+
+Phase-6 ablations compare fine temporal output, prior/count residual heads,
+fixed/fresh splits and response perturbations under matched budgets, when the
+development evidence motivates them. Exact analytic rate diagnostics require
+an analytic-data model, not unlabelled cross-domain P-ONE-to-toy comparison.
+Phase 7 retains the real pulse/ADC detector contract and separates labelled
+downstream probes from self-supervised pretraining. Empty triggered records are
+not physical no-event labels. No image PSNR or clean-photon target is required.
+
+Evidence freeze
+---------------
+Current reference artifacts are indexed in study/evidence_index.json with their
+hashes. The 1k pilot, its three-seed 5k-step runs and the visualization bundle
+remain exploratory development history. They are not retroactively registered
+as independent confirmation of this protocol.

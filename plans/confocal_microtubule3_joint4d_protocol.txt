@@ -1,0 +1,89 @@
+Microtubule 3: fixed joint-channel 4D trial
+========================================
+
+Declared before full fitting on 2026-10-28.
+Configuration: config/confocal_microtubule3_joint4d.yml
+Output: data/confocal_microtubule3_joint4d_v1/
+
+Source is XYT cell microtuble 3.lif, Series003 (index 1), both physical
+detectors [HyD 2, HyD 4]. All 1024 times and all 64 Z planes enter the
+central 256x256 XY crop, including the nearly dark final frames. Source
+files remain read-only. Values are unaveraged integer photon counts;
+recorded HyD gain is not a multiplier to undo in photon-counting mode.
+
+Fit one joint 4D model, widths 32/64/128/256, depth four, 17,974,018
+parameters, using 16x16x128x128 TZYX patches. Physical batch 2, gradient
+accumulation 2, effective batch 4, 500 Adam updates, learning rate 1e-4,
+gradient clipping 0.5, FP32, TF32 disabled, physical GPU 0 only. No early
+stopping or checkpoint selection. Canonical example indices preserve the
+same draws across equivalent microbatch grouping.
+
+Photon isolation, without an acquisition holdout
+-----------------------------------------------
+One deterministic binomial thinning permanently assigns 80% of the
+observed photons to the training pool. All remaining photons are reserved
+for evaluation and never enter any optimization input or target, even if
+the same coordinates are sampled again. Each training patch is split
+50:50 within that training pool, independently per detector. Each network
+input therefore has about 40% of the original acquisition's count level;
+the training target has about 40% and the reserved evaluation target 20%.
+There is no intensity rescaling, binarization, or assumed clean image.
+
+All retained input detectors provide joint context. GAP supervision and
+Barron log-softmax normalization are independent per detector over TZYX,
+with equal detector weight in the objective. Outputs are conditional
+photon-arrival distributions. Count maps are for display and multiply
+each probability distribution by its own detector's observed patch total.
+This calibration does not affect probability likelihood scoring.
+
+Fixed evaluation
+----------------
+T starts: early 0, middle 504, late 1008 (16-time patches).
+Local ZYX starts within the cache: (0,0,0), (16,0,128), (32,128,0),
+(48,128,128). This gives four cases per phase, twelve total, both detectors.
+Evaluation inputs are independently thinned halves of the training pool;
+targets are always the permanent raw-minus-training complement.
+
+Evaluate at steps 0,100,200,300,400,500. Record photon-weighted NLL in
+nats/photon, equal-detector NLL, per-detector scores, phase-specific scores,
+target photon totals, empty cases and probability sums. Lower NLL is better.
+The final 500-update endpoint is primary. No PSNR against observed photons.
+
+Controls use exactly the same retained input counts and reserved targets:
+uniform; spatial Gaussian with sigma(T,Z,Y,X)=(0,0.5,1.5,1.5); and 4D Gaussian
+with sigma=(1,0.5,1.5,1.5). Gaussian probabilities have a fixed 1% uniform
+mixture, reflect boundary mode and 3-sigma support. No target-driven tuning.
+The network has cross-detector context; these controls alone cannot isolate
+the contribution of temporal convolution from architecture or detector context.
+
+Predeclared visuals use the first spatial case in each phase, both channels.
+Show a single time/Z slice and 16-time means, with a common display scale
+per detector across phases and methods. Observations and temporal means are
+noisy data. Late near-dark measurements have few target photons and do not
+provide a biological no-event label or proof of previously undetectable signal.
+Do not interpret these patches as independent biological replicates.
+
+Verification and replay
+-----------------------
+The raw 8-GiB CTZYX cache is byte-checked against readlif at multiple times.
+The separate 8-GiB training pool has a content hash, partition identity and
+per-detector/per-time count totals. Checkpoints include optimizer, RNG,
+step and complete local source/data/config identity. Sources are archived
+before fitting. Training is locked to prevent duplicate workers.
+
+Twenty-two relevant CPU tests passed before fitting, including registered
+photon splits, independent detector normalization/loss gradients, exact C=1
+parity and exact interrupted/resumed optimizer trajectory. Run the separate
+three-update GPU readiness test, then the fixed full trial, then independently
+replay the final checkpoint before reporting comparisons:
+
+  .venv/Scripts/python.exe -m src.tools.confocal_joint_train --smoke-test
+  .venv/Scripts/python.exe -m src.tools.confocal_joint_train --train
+  .venv/Scripts/python.exe -m src.tools.confocal_joint_train --train --resume
+  .venv/Scripts/python.exe -m src.tools.confocal_joint_report
+
+Progress/checkpoints: training/progress.json, training/last.pt.
+Results: training/result.json, comparison.json, index.html and comparison PNGs.
+This study is separate from the previous HyD4-only acquisition-held-out trial;
+its scores do not directly compare model quality across those different data
+and photon-count conditions.

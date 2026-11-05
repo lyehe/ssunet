@@ -1,0 +1,166 @@
+Controlled photon reference: execution record
+Date: 2026-10-25
+Status: initial 1,000-event data/likelihood milestone complete.
+The 100,000-event, three-seed comparison remains pending.
+Short-run evaluation: plans/neutrino_pilot_evaluation.txt. Stronger input-based
+controls outperform the 110-step model. The subsequent three-seed 5,000-step
+pilot improves low-count validation over those controls; see
+plans/neutrino_longer_pilot.txt. The larger independent-test gate remains pending.
+
+Implemented
+-----------
+src/ssunet/datasets/neutrino.py provides event-based ragged photon storage,
+fixed-clock binning, integer binomial thinning, configuration-group partitions,
+fresh training draws per epoch and frozen evaluation draws. Empty observations
+and empty input/target splits are preserved. Counts above one remain counts.
+
+src/ssunet/photon_reference.py implements a raw-count categorical likelihood,
+physical live-support normalization and an exact Poisson thinning audit. The
+loss averages -sum(B * log(q)) over events, without dividing each event by its
+realized target count. Its prediction is a normalized photon-location
+distribution. No clean photon image, event label or intensity is a training
+target. Simulation truth is stored in separate evaluation-only sidecars.
+
+src/ssunet/models/neutrino_dense.py implements a 3,585-parameter dense model
+with shared per-sensor temporal convolutions, sensor coordinates and pooled
+event context. It uses no graph construction or sparse kernels. The runner is
+src/tools/neutrino_reference.py; settings are config/neutrino_reference.yml.
+
+Data and provenance
+-------------------
+The exact analytic reference contains 1,000 events on the planned 256-sensor
+geometry. Signal levels are 0, 2, 5, 10, 30 and 100 expected photons plus one
+expected background photon. Source-position families stay in one partition.
+It contains 25,208 photons, 68 empty observations and 503 observations with
+1--10 photons. Train/validation/test sizes are 796/102/102 because whole latent
+families, including their intensity variants, stay together.
+
+A public GraphNeT/Prometheus P-ONE archive was successfully downloaded from
+ERDA and inspected. This avoids needing a local Prometheus installation.
+The compressed archive is 272,601,469 bytes; its sole merged_cut.db member is
+5,190,877,184 bytes and contains 994,074 mc_truth event records. The photons
+table has individual photon positions, identities and times; it has no charge,
+waveform or explicit weight column. Source URLs and file SHA-256 hashes are in
+data/neutrino/controlled_reference/source/download_manifest.json. Hashes were
+checked again after the run.
+
+The physical pilot samples 1,000 distinct event IDs uniformly from the full
+truth-event table, including IDs with no photon rows. Selection in this pilot
+does not depend on photon count. The source archive is curated (merged_cut);
+its complete upstream selection and conditional counting statistics have not
+been certified. No claim of an unbiased trigger sample or exact physical
+Poisson thinning is made from this file.
+
+The available physical geometry is P-ONE in water: 3 strings, 60 sensors.
+This is an availability-driven change from the proposed reduced ice geometry.
+All geometry sensors are included, including those with zero observed hits.
+The photon table uses sensor IDs local to a string, while the geometry uses
+global IDs. Import matches fixed coordinates and string identity, checks every
+photon position, and persists the explicit identity mapping.
+
+Both shards use a fixed [0, 6400) ns window and 256 bins of 25 ns. Original
+source times are retained; no event alignment is derived from A+B. The physical
+pilot has 12,801 photons, zero outside the window, 268 empty observations,
+595 observations with 1--10 detections, and a maximum bin count of 638. Its
+train/validation/test sizes are 800/100/100. At p=0.5 it has 424 empty retained
+inputs and 412 empty targets across all partitions. These empty simulated
+observations are not real detector noise-only examples.
+
+Physical event IDs currently serve as configuration IDs. Before a larger
+scientific comparison, verify whether upstream repeated realizations or shared
+latent configurations require additional grouping across partitions.
+
+Statistical and software checks
+-------------------------------
+The thinning audit regenerates Poisson observations at each fixed latent rate;
+it does not repeatedly split one frozen observation to claim independence.
+Rates: 0, 0.05, 0.5, 2, 10, 30; retained probabilities: 0.25, 0.5, 0.75;
+100,000 realizations per rate/probability check. Means, variances and conditional
+covariance passed the predeclared six-standard-error bounds (maximum absolute
+z score 3.014943). A fixed-total negative control exhibits the expected negative
+covariance. This verifies the constructed statistical reference, not the
+curated physical simulation's generative or selection assumptions.
+
+Both shards pass integer count conservation, frozen evaluation draws and event
+boundary checks. Input and target can occupy the same bin. Independent artifact
+inspection confirmed no truth/latent-rate datasets inside either HDF5 shard.
+The profile report and inspection reports match the current shard hashes.
+
+Full suite: python -m pytest tests -q -> 129 passed, 8 existing warnings.
+Ruff check and formatting checks passed for the five new Python files.
+The source CLI and installed-style tools.neutrino_reference CLI both load.
+
+Bounded GPU training/profile
+---------------------------
+Report: data/neutrino/controlled_reference/pone_smoke_profile.json
+Device: cuda:0, NVIDIA GeForce RTX 4090 (one GPU).
+Model: 3,585 parameters, 16 channels, batch size 16.
+Precision: BF16 with FP32 probability normalization.
+Optimizer: AdamW, learning rate 0.001, gradient norm clipping at 1.
+Training: 10 warmup steps plus 100 profiled optimizer steps, seed 42.
+All losses and gradients remained finite.
+
+The final measured profile processed 1,600 training examples in 1.6750 seconds:
+955.2 events/second, including batch loading/binning, transfer and optimization.
+Peak PyTorch allocation was 0.07925 GiB; peak reserved memory was 0.09766 GiB.
+This is tensor allocator memory, not total device/process memory. The planned
+12 GiB allocation ceiling was met. This short pilot supports the feasibility
+of this small dense model; throughput at larger geometries, model widths and
+data volumes still requires measurement. These are repeated training examples
+from the 800-event training partition, not 1,600 distinct physical events.
+
+Frozen validation used 100 events, with 907 target photons in 55 nonempty
+targets. Photon-weighted negative log likelihood (nats/photon, lower is better):
+  model                       4.685729
+  training-only arrival prior 8.451976
+  uniform support             9.639522
+These are the original preliminary diagnostics after a bounded training run.
+The follow-up evaluation reproduces the model, evaluates input-based mixtures
+and count-matched donor controls, and provides exploratory bootstrap intervals.
+It finds event-specific information but a stronger simple estimator beats the
+110-step model, including at low counts. See plans/neutrino_pilot_evaluation.txt.
+The subsequent fixed 5,000-step run across three seeds gives low-count NLL
+4.126 versus 4.696 for that estimator, with overall NLL 2.960 versus 2.689.
+See plans/neutrino_longer_pilot.txt for uncertainty and saved learning curves.
+The 100,000-event comparison remains pending; the test partition was not scored.
+Image PSNR is not used.
+
+Artifacts
+---------
+data/neutrino/controlled_reference/README.txt contains reproduction commands.
+analytic_reference_1000.h5 SHA-256:
+  928e5a309200e62ebd8d535a3cd1ba056e94840017432c8b49084a99087387ff
+prometheus_pone_reference_1000.h5 SHA-256:
+  1f927ea60a8327546c958f5bc5740d0f872ea0f38d1470271eb08f83958f2209
+Both HDF5 files have companion inspection JSON and evaluation-only sidecars.
+poisson_audit.json records all statistical checks. Large acquired data remain
+under the repository's ignored data directory. No trained checkpoint is saved
+by the bounded profile command. The follow-up evaluation saves a reproduced
+pilot checkpoint for diagnostic reuse; full training checkpoint management
+remains part of the next runner.
+
+Next execution stage
+--------------------
+1. Resolve the public simulation's selection, clock convention, unit-photon
+   interpretation and repeated-configuration provenance sufficiently for the
+   intended scientific claim. If exact conditional Poisson behavior cannot be
+   established, retain that qualification and use the analytic generator for
+   exact statistical comparisons. The physical pilot remains useful for cost
+   and predictive-likelihood checks.
+2. Build the 100,000-event shard with frozen configuration partitions and record
+   acquisition/import cost separately from model training cost.
+3. Complete the bounded training/evaluation runner: save checkpoints and curves,
+   promote the exploratory mixture and matched-strata donor controls into fixed
+   comparisons, and address the baseline deficit on the pilot before scaling.
+   Run three seeds within the planned time budget.
+4. Score the untouched test partition once settings are fixed. Report paired
+   configuration-bootstrap intervals, retained-count strata including zero,
+   scored photon counts, empty-target rates, throughput and memory. Use the
+   predeclared 1--10 retained-photon comparison for the low-count claim.
+
+Primary source definitions
+--------------------------
+https://graphnet-team.github.io/graphnet/api/graphnet.datasets.prometheus_datasets.html
+https://github.com/graphnet-team/graphnet/blob/main/src/graphnet/datasets/prometheus_datasets.py
+https://sid.erda.dk/share_redirect/GIt0hlG9qI
+https://github.com/graphnet-team/graphnet/blob/main/data/geometry_tables/prometheus/pone_triangle.parquet

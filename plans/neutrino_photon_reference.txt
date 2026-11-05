@@ -1,0 +1,217 @@
+Controlled photon-splitting reference experiment
+Plan date: 2026-10-25
+Scope: controlled data/likelihood milestone implemented; full comparison pending.
+Execution record: plans/neutrino_photon_reference_status.txt.
+
+Objective
+---------
+Determine whether an affordable dense model can learn event-dependent photon
+arrival probabilities from randomly partitioned photon detections. Establish
+the data and statistical checks required before interpreting a real-detector
+pulse experiment as photon splitting.
+
+The proposed contribution is the supervision principle in the neutrino-detector
+setting. Architecture is an implementation choice. Training uses observed
+integer photon detections only. Simulated event parameters and any known
+intensity are reserved for generation, diagnostic checks, and evaluation.
+
+The predicted quantity is a normalized distribution over live sensor/time bins,
+q(sensor, time | retained detections, splitting probability). This experiment
+does not infer a full posterior over physical events, identify neutrinos, or
+estimate total event intensity from the normalization alone.
+
+1. Establish the exact statistical reference
+--------------------------------------------
+For an event with latent parameters theta, define a nonnegative expected photon
+count lambda_j(theta) for each fixed live sensor/time bin j. Draw
+
+  Y_j ~ Poisson(lambda_j)
+  A_j | Y_j ~ Binomial(Y_j, p)
+  B_j = Y_j - A_j
+
+Then A and B are independent conditional on the underlying intensity, with
+means p*lambda and (1-p)*lambda. This independence does not hold when conditioning
+on a fixed realized total Y, and it must not be tested by repeatedly splitting
+only one frozen observation. Variation of theta also creates marginal
+correlations; checks must hold theta fixed and regenerate Y.
+
+Build an explicitly labelled analytic toy generator first. Use simple spatial
+light patterns and time-of-flight peaks with scattering tails on a fixed sensor
+geometry. This supplies exact Poisson statistics and known diagnostic rates;
+it is a software/statistical reference, not a physical neutrino simulation.
+
+Before any network training, verify:
+  - Integer, nonnegative counts; A+B=Y exactly in every bin.
+  - Means and variances of regenerated A/B agree with thinning predictions.
+  - Conditional A/B covariance is consistent with zero within Monte Carlo error.
+  - Poisson bins may have counts above one; no clipping to binary occupancy.
+  - Empty observations are preserved; splits are not redrawn until nonempty.
+
+2. Obtain a photon-level neutrino reference
+------------------------------------------
+Preferred source: an accessible, versioned Prometheus photon-level release with
+documented geometry, clocks, weights and detector response. The om2vec release
+points to a Harvard Dataverse collection, but its listing previously returned
+HTTP 403 here. Acquisition is not considered solved until a shard is downloaded
+and its schema is inspected.
+
+Execution update (2026-10-25): an alternative public GraphNeT/Prometheus P-ONE
+archive was downloaded from ERDA and inspected. Its photon table and geometry
+support a 1,000-event pilot. The available geometry is 60 sensors in water,
+replacing the reduced ice geometry for this pilot. Complete upstream selection
+and conditional counting statistics remain qualified. See the execution record
+for measured results, source hashes and requirements before scaling.
+
+If an accessible suitable shard cannot be verified, generate a sample with a
+pinned Prometheus version and its ice/PPC example in an isolated Linux/WSL or
+container environment. First check the available runtime and run the upstream
+few-event example. Do not change the project's main Python environment for this.
+Measure simulation throughput and storage on a small batch before selecting
+the production sample size. A published MC photon record may carry a weight or
+stand for several photons; inspect this explicitly before interpreting rows as
+unit detections.
+
+Acceptance of the source requires documented individual detected photons or
+exact integer counts before pulse merging, gain fluctuations, saturation and
+dead time. Do not convert fractional PMT charge or voltage samples into counts
+by rounding. The current NuBench pulse shard, IceCube ODF pulse files, FACT
+waveforms, and laboratory PMT ADC samples do not meet this ideal-count contract.
+They remain useful for subsequent detector-response and real-data studies.
+
+If physical simulation or acquisition is too expensive, report the measured
+constraint and complete only the analytic smoke test. Do not describe that
+partial result as completion of the neutrino reference experiment.
+
+3. Fix the data contract and evaluation partition
+------------------------------------------------
+Initial capacity target: 100,000 distinct physical/latent event configurations,
+with an earlier 1,000-event smoke test. Use one fixed reduced ice geometry;
+default design is 8 strings x 32 sensors. Any reduction of an existing geometry
+must be chosen from geometry metadata before looking at event photon hits.
+
+Use a fixed acquisition clock and an initial 6.4 microsecond window with 256
+time bins (25 ns each). Retain the raw times so this can be changed later.
+Record the number of detections outside the window. Review the window using
+training data only; enlarge it before finalizing splits if substantial tails
+are lost. Do not choose the clock, crop, active sensors or input normalization
+using held-out photons. In particular, do not subtract the earliest time of
+the full A+B observation. Keep live zero-hit sensors in the output support.
+
+Store ragged photon lists plus event offsets, sensor IDs, geometry, live masks,
+acquisition/exposure metadata, generator version/configuration and RNG seeds.
+Build dense count tensors only for a batch. Physics labels live in a separate
+evaluation table and are excluded from training batches.
+
+Split event configurations into 80% train, 10% validation and 10% test before
+making photon splits or repeated simulations. All copies, intensity variants,
+and independent realizations of the same underlying configuration stay in the
+same partition. Persist IDs and seeds in a manifest.
+
+For the exact analytic reference, choose expected total detected signal levels
+before photon sampling: 0, 2, 5, 10, 30 and 100. Use a known weak Poisson
+background and include a predefined background-only component. These are
+controlled regimes, not statements about real detector background. Do not
+force realized total photon counts or select only nonempty events; doing so
+changes the reference distribution. For Prometheus, document physical source
+generation and any independent efficiency thinning separately.
+
+4. Implement a separate event-based loader and objective
+--------------------------------------------------------
+Proposed files:
+  src/ssunet/datasets/neutrino.py       Event-based count loader and splitting.
+  src/ssunet/models/neutrino_dense.py   Compact dense reference backbone.
+  src/tools/neutrino_reference.py      Acquisition/import, inspection and runner.
+  config/neutrino_reference.yml        Fixed initial experiment settings.
+  tests/test_neutrino_reference.py     Statistical and event-boundary checks.
+
+The existing image loader samples sliding windows and can cross event
+boundaries; it should not be used for this dataset. Retain raw integer target
+counts and input photons. Start at p=0.5, with a fresh training partition of
+photons each epoch and frozen validation/test split seeds. A=0 is a valid input;
+B=0 contributes zero to photon-location training loss and is tracked separately.
+
+Use a count-weighted categorical objective:
+
+  L = mean_over_batch[-sum_j B_j * log q_j(A, p)]
+
+Do not divide each event's training target by its realized photon total. With
+this loss, the ideal optimum is proportional to E[lambda_j | A, p]. It is not
+the full posterior distribution of lambda. Report total held-out negative log
+likelihood divided by total held-out photons as the primary score, alongside
+event-normalized diagnostics, with the weighting convention clearly recorded.
+
+Reuse distributions.py for stable log normalization. A physical live/padding
+mask must exclude invalid bins from probability normalization; multiplying
+logits by a zero mask does not do that. Disable the Bit2Bit input-hit mask
+(masked=False): bins with input photons can also contain target photons for
+Poisson count data. Do not change the historical image training objective or
+checkpoint behavior while adding this explicit experiment objective.
+
+5. Use one small, geometry-aware dense model
+-------------------------------------------
+Use shared temporal convolutions per sensor, explicit sensor-coordinate
+features, a compact pooled event context, and a per-sensor temporal decoder.
+All computation uses ordinary dense tensors; no graph construction or sparse
+kernels. Do not impose physical adjacency by convolving across arbitrary sensor
+or string indices. Start with 16/32 feature channels and fewer than 1 million
+parameters. Represent counts as log1p(A) for the encoder while retaining the
+untransformed counts for splitting/loss; include retained count and p as inputs.
+
+There are two RTX 4090 GPUs with about 24 GB each on this workstation. The pilot
+uses one GPU. Target peak allocation below 12 GB, determined by measurement.
+First profile 100--500 warm training steps for batch-size selection. Use mixed
+precision with FP32 probability normalization. Allow up to 30 minutes of model
+training per seed for three seeds; save performance versus optimizer steps and
+wall time. Simulation/setup costs are measured and reported separately.
+
+6. Compare against simple controls and define completion
+--------------------------------------------------------
+Baselines, fitted/tuned on training and validation data only:
+  - Uniform probability over the same valid sensor/time support.
+  - Unconditional mean arrival distribution learned from training counts.
+  - A smoothed retained-photon estimator with a validation-selected bandwidth.
+  - A shuffled-input control using mismatched event inputs within matched count
+    and exposure strata to check for event-specific information beyond brightness.
+
+Primary evaluation uses untouched test events at p=0.5. Report photon-weighted
+NLL and model-minus-baseline differences with paired event-bootstrap confidence
+intervals, resampling whole underlying configurations together with all their
+variants and realizations. Stratify by retained input counts (including 0, 1--5, 6--10 and
+11--30), and report empty-target rates and numbers of scored photons. Include
+background-only strata as controlled diagnostics. Additional p=0.25/0.75 views
+are secondary distribution-shift checks, not a replacement for the primary test.
+
+Also report events/second, peak GPU memory, model training time and setup/data
+costs. Check normalization on live support, finite gradients/loss, reproducible
+evaluation, preservation of event boundaries, and exclusion of truth/target
+information from preprocessing. Analytic known rates can support oracle and
+distribution diagnostics; they are never supervised targets for the network.
+Image PSNR is not an acceptance metric for photon-distribution prediction.
+
+Success means the model improves held-out photon prediction over the strongest
+simple baseline and the shuffled-input control, with a favorable confidence
+interval in the predeclared low-count comparison (1--10 retained photons),
+within the measured memory/time budget. If it fails, preserve and report the
+result and diagnose data, conditioning, model capacity and statistical
+assumptions before collecting a larger dataset or tuning against the test set.
+
+Deliverables and first milestone
+--------------------------------
+Deliver a versioned dataset manifest, reproducible configuration and commands,
+statistical-check output, trained checkpoints, baseline/model score table,
+learning and throughput curves, and a short interpretation of the limits.
+The immediate milestone is a 1,000-event photon-level shard plus passing data
+and thinning checks. Scale to 100,000 only after that milestone and the cost
+measurement pass. Detector-response perturbations and real-data fitting are
+the next study, outside this first-step plan.
+
+Primary sources inspected
+-------------------------
+https://github.com/Harvard-Neutrino/prometheus
+https://github.com/Harvard-Neutrino/prometheus/blob/main/examples/02_basic_ice.py
+https://github.com/felixyu7/om2vec
+https://arxiv.org/abs/2307.06607
+https://graphnet-team.github.io/graphnet/api/graphnet.datasets.prometheus_datasets.html
+https://sid.erda.dk/share_redirect/GIt0hlG9qI
+Local interfaces: src/ssunet/distributions.py, src/ssunet/losses.py,
+src/ssunet/datasets/binomial.py, src/ssunet/datasets/validation.py.

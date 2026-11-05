@@ -1,0 +1,23 @@
+study_id: neutrino_development_diagnostics_v2
+output: data/neutrino/development_diagnostics_v2
+source: data/neutrino/detection_probe_v1
+protocol: plans/neutrino_development_diagnostics_protocol.txt
+seed: 2026102605
+selection:
+  calibration_partitions: 20
+  false_positive_rates: [0.01, 0.001]
+  primary_expected_signal: 2
+timing:
+  ridge_penalties: [0.01, 0.1, 1.0]
+  primary_penalty: 0.1
+  targets: [signal_mean_ns, signal_q10_ns, signal_median_ns, signal_q90_ns]
+coupling:
+  validation_windows: 2048
+  preserve_each_half_marginals: true
+  source_reference_mixture_fraction: 0.5
+runtime:
+  cpu_threads: 4
+  batch_size: 24
+  max_seconds: 1200
+  max_process_rss_gib: 4
+  max_gpu_allocated_gib: 4

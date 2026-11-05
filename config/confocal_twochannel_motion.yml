@@ -1,0 +1,29 @@
+output: data/confocal_twochannel_motion_v1
+model_study: data/confocal_microtubule3_joint4d_v1
+core_time_start: 256
+core_frames: 128
+temporal_halo: 14
+temporal_core: 16
+split_seed: 29431
+training_pool_probability: 0.8
+input_probability_within_pool: 0.5
+recordings:
+  microtubule3:
+    title: Microtubule 3
+    path: '\\jnas2\Yehe\Confocal data\XYT cell microtuble 3.lif'
+    series_index: 1
+    cached_raw: data/confocal_microtubule3_joint4d_v1/counts.npy
+    cached_pool: data/confocal_microtubule3_joint4d_v1/training_counts.npy
+    cache_offset_tzyx: [0, 0, 128, 128]
+    regions:
+      - {name: lower_left, start_zyx: [32, 256, 128], shape_zyx: [16, 128, 128]}
+      - {name: lower_right, start_zyx: [48, 256, 256], shape_zyx: [16, 128, 128]}
+  microtubule4:
+    title: Microtubule 4 (transfer from microtubule 3)
+    path: '\\jnas2\Yehe\Confocal data\XYT cell microtuble 4.lif'
+    series_index: 1
+    crop_tzyx: [[242, 398], [25, 50], [256, 384], [128, 384]]
+    cache_offset_tzyx: [242, 25, 256, 128]
+    regions:
+      - {name: lower_left, start_zyx: [25, 256, 128], shape_zyx: [16, 128, 128]}
+      - {name: lower_right, start_zyx: [34, 256, 256], shape_zyx: [16, 128, 128]}

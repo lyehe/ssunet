@@ -346,7 +346,7 @@ class StackMetricsGroups:
         **kwargs,
     ):
         """Class constructor."""
-        self.group_names = group_names or [f"G{i+1:>02}" for i in range(len(metrics_list))]
+        self.group_names = group_names or [f"G{i + 1:>02}" for i in range(len(metrics_list))]
         self.length = len(self.group_names)
         self.data = {self.group_names[i]: metrics_list[i] for i in range(self.length)}
         self.metric_list = metric_list or metrics_list[0].metric_list

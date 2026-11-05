@@ -79,6 +79,7 @@ class TrainConfig:
     mc_mode: str = "min"
     mc_monitor: str = "val_loss"
     mc_save_top_k: int = 2
+    mc_every_n_epochs: int | None = None
 
     # learning rate monitor
     callbacks_learning_rate_monitor: bool = True
@@ -99,6 +100,7 @@ class TrainConfig:
     profiler: str = "simple"
     limit_val_batches: int = 20
     log_every_n_steps: int = 20
+    check_val_every_n_epoch: int = 5
     note: str = ""
 
     matmul_precision: Literal["highest", "high", "medium"] = "high"
@@ -124,12 +126,19 @@ class TrainConfig:
     @property
     def model_checkpoint(self) -> ModelCheckpoint:
         """Create a model checkpoint callback."""
-        return ModelCheckpoint(
-            save_weights_only=self.mc_save_weights_only,
-            mode=self.mc_mode,
-            monitor=self.mc_monitor,
-            save_top_k=self.mc_save_top_k,
-        )
+        kwargs = {
+            "save_weights_only": self.mc_save_weights_only,
+            "mode": self.mc_mode,
+            "save_top_k": self.mc_save_top_k,
+        }
+        if self.mc_every_n_epochs is not None:
+            kwargs["every_n_epochs"] = self.mc_every_n_epochs
+            kwargs["monitor"] = None
+            kwargs["save_top_k"] = -1
+            kwargs["save_on_train_epoch_end"] = True
+        else:
+            kwargs["monitor"] = self.mc_monitor
+        return ModelCheckpoint(**kwargs)
 
     @property
     def learning_rate_monitor(self) -> LearningRateMonitor:
@@ -220,6 +229,7 @@ class TrainConfig:
             gradient_clip_val=self.gradient_clip_val,
             limit_val_batches=self.limit_val_batches,
             log_every_n_steps=self.log_every_n_steps,
+            check_val_every_n_epoch=self.check_val_every_n_epoch,
             profiler=self.profiler,
             enable_checkpointing=self.callbacks_model_checkpoint,
             enable_progress_bar=True,

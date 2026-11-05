@@ -1,0 +1,125 @@
+Two-channel motion review: microtubule 3 and microtubule 4
+======================================================
+
+Completed 2026-10-28. Both recordings were reconstructed with the same final
+17,974,018-parameter two-detector 4D GAP checkpoint trained on microtubule 3.
+HyD 2 and HyD 4 are joint network inputs and separate probability outputs.
+Microtubule 4 is a transfer test; this work did not train a separate model
+on microtubule 4. No single-channel checkpoint was used for these comparisons.
+
+Bounded review data
+-------------------
+Two regions per recording, each 16 Z planes by 128x128 XY, cover continuous
+T=256..383. Each region has 128 output time points and 14 real context times
+on either side. The input range is T=242..397. Source files remain read-only.
+
+  Recording       Source ZYX starts                     Core duration
+  Microtubule 3   (32,256,128), (48,256,256)              320.13 seconds
+  Microtubule 4   (25,256,128), (34,256,256)              249.79 seconds
+
+Microtubule 3 interval: 2.5207136 s/volume, XY spacing 0.1421844 um.
+Microtubule 4 interval: 1.9668201 s/volume, XY spacing 0.1263864 um.
+Both have approximately 0.4239086 um Z spacing.
+
+These are selected continuous regions, not whole-acquisition reconstructions.
+The selection and model were fixed before examining the motion estimates.
+
+Inference and artifact controls
+-------------------------------
+Raw integer photon counts use GAP without gain division or binarization.
+The existing 80% training photon pool is reused for microtubule 3. A fixed
+80% pool was created for the microtubule 4 clips. Each pool is split into
+two disjoint complementary halves. Both detectors of each half are supplied
+jointly to the network; the input count level is about 40% of observed counts,
+matching training. The remaining 20% photons never enter network inputs or
+optimization and provide an independent noisy comparison.
+
+Each inference window has a 16-time core and two real 14-time halos. Valid
+center logits are stitched, followed by one full-clip normalization per
+detector. Complementary-half probability predictions are averaged. Count
+maps multiply each PDF by that detector's total observed core photon count.
+This includes the known observed count total, but does not supply withheld
+photon locations to the network. No per-frame photon totals are forced.
+
+All four clips passed overlapping-core and static-input checks. Maximum
+overlapping-core logit disagreement was 1.55e-6; maximum static-core logit
+variation with real halos was 1.91e-6. In contrast, static 16-time inputs
+without halos produced spatial-shape logit variation of 1.29--1.97. This
+shows why the old short patch previews alone were unsuitable as motion tests;
+it does not imply that all apparent changes in them were artificial.
+
+Peak GPU allocation was 9.957 GiB, using physical GPU 0 in FP32 with TF32
+disabled. There was no new training. Global per-detector PDF mass and count
+calibration errors were at most 5.66e-9 in exported clips. Pointwise count
+maps exactly match the float64 q*N product rounded to float32. The original
+trained model's 12 implementation hashes remain unchanged.
+
+The inference procedure differs from the original scored 16-time patches.
+Their NLL values are not reused as scores for these longer motion clips.
+
+Motion measurement and interpretation
+------------------------------------
+Whole projected XY patterns were registered in consecutive 16-time blocks.
+Each image is a Z mean. A fixed 1.5-pixel Gaussian smoothing and mean removal
+reduce shot noise and global brightness changes before subpixel correlation.
+The same calculation is applied to full observations, denoised expectations
+and independent reserved photon observations. The estimated net displacement
+compares the first and last blocks; their centers are 282.32 s apart for
+microtubule 3 and 220.28 s apart for microtubule 4.
+
+Apparent HyD 4 bulk XY displacement magnitudes, in um:
+
+  Recording / region        Reserved photons    Denoised expectation
+  Microtubule 3 lower left        1.820                  0.883
+  Microtubule 3 lower right       0.768                  0.080
+  Microtubule 4 lower left        0.424                  0.028
+  Microtubule 4 lower right       0.018                  0.000
+
+Full observed-photon estimates generally agree with the independent reserve
+in these HyD 4 examples. The current model often yields much smaller apparent
+HyD 4 displacements. Some HyD 2 pattern estimates also disagree between the
+network and observations. Broad structures change, but fine filament
+identities remain unresolved and strongly smoothed in the reconstructed data.
+
+This is evidence of a motion-preservation concern in this checkpoint/inference
+version, rather than validated individual microtubule tracking. Registration
+of changing intensity patterns can also reflect whole-cell or stage drift,
+focus changes and spatially varying fading. The estimates are not ground
+truth trajectories, registration errors are not confidence intervals, and no
+biological motion significance test was performed. Microtubule 4 transfer
+performance cannot replace evaluation of a model trained on that acquisition.
+
+Seven correctness tests passed: direct-versus-chunked temporal convolution,
+halo/static controls, insufficient-context rejection, count-conserving fixed
+photon splits, global independent detector PDFs, displacement sign and
+invariance to uniform brightness changes. Scoped Ruff checks passed.
+
+Artifacts and viewing
+---------------------
+Output: data/confocal_twochannel_motion_v1/
+  index.html                   Movies, trajectory figures and per-detector values
+  motion_displacements.png     Observed/reserved/denoised bulk XY trajectories
+  hyd4_space_time.png          X and Y profiles over time, with brightness removed
+  motion_endpoints.png         First/last 16-time and Z means, matched contrast
+  review/*.gif                 Both detectors, observed versus denoised
+  motion_summary.json          Complete exploratory displacement measurements
+  examples/<clip>/             Counts, held-out photons, PDFs, count maps, metadata
+  verification.json            Probability/calibration/source checks
+
+GIF playback is accelerated to 5 fps. True acquisition times are shown.
+HyD 2 is blue and HyD 4 green. The same detector contrast is used for observed
+and predicted data throughout each clip. Movies and means are visual context,
+not clean references. No PSNR against photon observations is reported.
+
+Napari opens all four continuous clips with additive overlays and physical
+spacing/timestamps. Observations and predictions occupy separate panels.
+Use the recording/region selector to switch between the two datasets.
+
+  .venv/Scripts/python.exe -m src.tools.confocal_motion_napari --clip 2
+
+Replay preparation/inference and reporting:
+  .venv/Scripts/python.exe -m src.tools.confocal_motion_review
+  .venv/Scripts/python.exe -m src.tools.confocal_motion_report
+  .venv/Scripts/python.exe -m pytest -q tests/test_confocal_motion.py
+
+Configuration: config/confocal_twochannel_motion.yml

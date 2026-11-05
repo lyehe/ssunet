@@ -1,0 +1,96 @@
+Confocal 4D training test: original small preset
+===============================================
+
+The CLI now defaults to the four-level, 32-channel, effective-batch-four preset
+described in plans/confocal_gap4d_batch4_usage.txt. Use the config argument below
+to reproduce this original small test.
+
+The first model is a three-resolution residual U-Net with 12, 24 and 48
+channels and 619,981 parameters. Its unrestricted 3x3x3x3 kernels operate on
+T, Z, Y and X. Downsampling and nearest-neighbour upsampling affect XYZ only.
+The output retains the original TZYX resolution. There is no FlexGlue module.
+
+The XYZ-only control uses 20, 40 and 80 channels and 598,421 parameters, 3.5%
+fewer than the 4D model. It moves time into the batch before any convolution.
+No operation in its backbone mixes information between time points. Both
+networks use the same ten-level GAP sine encoding of retained raw counts.
+This is a small adapted network, not the unchanged published GAP architecture.
+
+The model accepts [N, 1, T, Z, Y, X] and returns logits of that same shape.
+The configured patch is [8, 8, 64, 64]. A microbatch contains one patch;
+two accumulated microbatches make one optimizer update. Training uses FP32,
+Adam at 1e-4 and gradient clipping at 0.5. The pilot has 500 optimizer updates,
+with fixed validation every 100 updates, and a final fixed-step endpoint.
+The 12 GiB allocation and 1,200-second training limits bound each model run.
+
+Data and count units
+-------------------
+
+Training: \\jnas2\Yehe\Confocal data\double snr data 2.lif
+Series001, index 0, channel index 1 (HyD 4), first 64 volumes, all 40 Z slices,
+central 256x256 XY crop. Cache shape [64,40,256,256], 160 MiB of uint8 counts.
+
+Validation: \\jnas2\Yehe\Confocal data\XYT cell microtuble 4.lif
+Series013, index 1, channel index 1 (HyD 4), first 32 volumes, all 50 Z slices,
+central 256x256 XY crop. Cache shape [32,50,256,256], 100 MiB of uint8 counts.
+
+The files are distinct acquisitions; independent biological replicates have
+not been established. This is an exploratory acquisition holdout. No other
+channel is used as a clean target, and no clean ground-truth image is assumed.
+
+Source metadata must declare PhotonCounting, 8-bit storage, and line/frame
+averaging and accumulation all equal to one. Copy native integer counts
+without dividing by Gain=10, min-max normalization, clipping or interpolation.
+Local NPY crops have metadata manifests and SHA-256 hashes. Reuse verifies
+both the source/crop identity and cached file contents. Original NAS files
+are read only. The prepared train and validation crops both contain 0..6,
+with no missing integer levels and no 255-valued pixels.
+
+Every training patch is split into A~Binomial(C,0.5) and B=C-A. Sampling is
+deterministic by index, and both model arms receive identical patch locations
+and photon draws. Validation has a separate frozen RNG stream and source file.
+Keep integer A/B for splitting and targets; sine encoding happens inside the
+model. The shared, previously verified GAP objective normalizes targets to
+unit mean over each complete TZYX patch, identically in both model arms.
+Output arrival probabilities normalize over that same real support after
+network padding has been cropped away. Empty targets have zero training loss.
+
+Evaluation uses held-out B-photon NLL and equal-patch cross entropy, alongside
+the uniform-distribution NLL. There is no PSNR criterion. Validation patches
+may overlap: treat their pooled score as a pilot diagnostic, not independent
+sample evidence. The smoke test evaluates only two fixed patches and takes
+three optimizer updates; it establishes training execution, not model quality.
+
+Commands from the project root
+------------------------------
+
+Use the project's .venv Python. The current environment already contains
+readlif==0.6.6 and the editable standalone torch-convnd package. Other setups
+need readlif and torch-convnd, in addition to this project's dependencies.
+The native 4D backend requires the package's working C++/CUDA toolchain.
+
+Prepare or verify local crops:
+  .venv/Scripts/python.exe -m src.tools.confocal_train --config config/confocal_gap4d_test.yml --prepare-only
+
+Smoke-test both modes on physical GPU 0:
+  .venv/Scripts/python.exe -m src.tools.confocal_train --config config/confocal_gap4d_test.yml --smoke-test
+
+Run the configured 500-update test for both modes:
+  .venv/Scripts/python.exe -m src.tools.confocal_train --config config/confocal_gap4d_test.yml --train
+
+Run only the 4D model:
+  .venv/Scripts/python.exe -m src.tools.confocal_train --config config/confocal_gap4d_test.yml --train --model conv4d
+
+All commands accept --config config/confocal_gap4d_test.yml. The GPU selection
+is restricted to physical GPU 0; --device cpu is also supported. No command
+uses GPU 1. CPU 4D execution can use backend: torch in a separate config.
+
+Results go to data/confocal_gap4d_test_v1/training/. Smoke runs use timestamped
+directories. Training uses pilot/<model>/ and refuses to overwrite an existing
+run. Each model saves result.json, learning_curve.json, identity.json and
+last.pt with model/optimizer state. There is no resume command in this initial
+pilot; select a fresh output directory to rerun. Smoke checkpoints are not
+used to initialize the real pilot.
+
+Run correctness checks without the NAS or a GPU:
+  .venv/Scripts/python.exe -m pytest -q tests/test_confocal_gap.py tests/test_photon_methods.py

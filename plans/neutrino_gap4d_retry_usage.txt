@@ -1,0 +1,53 @@
+GAP/Bit2Bit method selection and corrected 4D experiment
+
+Declare the acquisition format; do not infer it from one sparse minibatch.
+  observation_kind: one_bit       -> method: bit2bit
+  observation_kind: photon_counts -> method: gap
+The shared policy/loss lives in src/ssunet/photon_methods.py. Bit2Bit requires
+binary, disjoint A/B splits and applies its input-hit dependence mask. GAP
+uses integer photon counts without that binary mask. Both exclude physically
+inactive sensors and normalize targets per observation inside the loss.
+
+The P-ONE shard contains counts above one, so config/neutrino_gap4d_retry.yml
+selects GAP. Sine encoding and per-event target weighting follow pinned GAP
+code; detector backbones/optimizer and the fixed p=.5 split are adaptations.
+See photon_method_normalization_audit.txt and neutrino_gap4d_retry_protocol.txt.
+
+PowerShell, from the ssunet root (existing environment with torch-convnd):
+  $env:CUDA_VISIBLE_DEVICES='0'
+  $env:MAX_JOBS='2'
+  $env:OMP_NUM_THREADS='4'
+  $env:CUBLAS_WORKSPACE_CONFIG=':4096:8'
+  .venv/Scripts/python.exe -m src.tools.neutrino_gap4d_retry --config config/neutrino_gap4d_retry.yml --device cuda:0
+
+The output directory must be new. If a worker stops, first check that its PID
+is no longer running, then use the identical command with --resume. Saved
+configuration, dataset, source and native-library identities must match.
+Checkpoints include optimizer/RNG states and a deterministic batch cursor.
+Do not modify frozen training sources to resume an existing experiment.
+
+After all nine final checkpoints complete:
+  .venv/Scripts/python.exe -m src.tools.neutrino_gap4d_report --study data/neutrino/gap4d_retry_v1 --device cuda:0
+
+The report replays per-event NLLs, checks joint output probability support,
+adds whole-configuration bootstrap contrasts for equal-event weighting and
+renders plots. The statistical intervals condition on fitted models; they
+do not include training-seed or selection uncertainty. No new fitting occurs.
+Reports compare held-out photon distributions, not PSNR or clean photon GT.
+
+Focused correctness checks:
+  .venv/Scripts/python.exe -m pytest tests/test_photon_methods.py tests/test_neutrino_gap.py -q
+
+Served viewer with the existing local data/neutrino server:
+  http://127.0.0.1:8765/gap4d_retry_v1/index.html
+The older conv4d_retry_v1 remains an archived count-weighted/log1p experiment.
+
+Historical source versions after the Bit2Bit offset correction
+The completed v1 study's replay/resume guard requires its original source
+bytes. The Bit2Bit-only correction changes shared source hashes while GAP
+loss/gradient arithmetic remains bitwise identical. Exact pre-fix originals
+of photon_methods.py, distributions.py and losses.py are preserved under
+data/neutrino/normalization_audit_v1/before_bit2bit_offset_mask/. Historical
+replay uses those originals in the corresponding source environment; fresh
+runs use the current sources and a new output directory. Original study
+identities, scores, checkpoints and audits have been preserved.

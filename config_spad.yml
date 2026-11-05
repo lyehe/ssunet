@@ -1,0 +1,107 @@
+# SPAD Single Photon Challenge configuration
+# Data: bit-packed binary SPAD frames (T, H, W_packed, C) uint8
+# Task: self-supervised denoising via binomial splitting on binary frames
+
+PATH:
+  data_dir: "D:/Yehe/PC/reconstruction/train"
+  scene: "attic"  # scene name (subdirectory), or "all" to train each scene sequentially
+  cache_max_gb: null  # null = unlimited (~9 GB per scene)
+
+# Data configurations
+DATA:
+  xy_size: 256
+  z_size: 32
+  virtual_size: 2000  # samples per epoch
+  augments: True
+  rotation: 0
+  random_crop: True
+  skip_frames: 1
+  normalize_target: True
+  note: "spad"
+
+# Split configurations (binomial splitting for self-supervised training)
+SPLIT:
+  method: "signal"
+  min_p: 0.00001
+  max_p: 0.99999
+  p_list: null
+  normalize_target: True
+  seed: 1
+
+# Model configurations (3-channel RGB, 3D U-Net)
+MODEL:
+  channels: 3
+  depth: 5
+  start_filts: 32
+  depth_scale: 2
+  depth_scale_stop: 10
+  z_conv_stage: 3
+  group_norm: 8
+  skip_depth: 0
+  dropout_p: 0.0
+  partial_conv: True
+  scale_factor: 10.0
+  sin_encoding: False
+  signal_levels: 10
+  masked: True
+  down_checkpointing: True
+  up_checkpointing: False
+  loss_function: "photon"
+  up_mode: "pixelshuffle"
+  merge_mode: "concat"
+  down_mode: "maxpool"
+  activation: "gelu"
+  block_type: "tri"
+  note: "spad"
+  optimizer_config:
+    name: "adamw"
+    lr: 0.0002
+    mode: "min"
+    factor: 0.5
+    patience: 5
+    monitor: "train_loss"
+
+# Loader configurations (optimized for 4090 24GB)
+LOADER:
+  batch_size: 4
+  shuffle: False
+  pin_memory: True
+  drop_last: True
+  num_workers: 4
+  persistent_workers: True
+  prefetch_factor: 2
+
+# Trainer configurations
+TRAIN:
+  default_root_dir: "./models_spad"
+  accelerator: "cuda"
+  gradient_clip_val: 1
+  precision: "bf16-mixed"
+  max_epochs: 150
+  devices: [0]  # override with --device flag
+
+  callbacks_model_checkpoint: True
+  callbacks_save_on_train_end: False
+  callbacks_handle_interrupt: True
+  mc_save_weights_only: False
+  mc_mode: "min"
+  mc_monitor: "train_loss"
+  mc_save_top_k: 2
+  mc_every_n_epochs: 5
+
+  callbacks_learning_rate_monitor: True
+  lrm_logging_interval: "epoch"
+
+  callbacks_early_stopping: False
+  es_monitor: "val_loss"
+  es_patience: 25
+
+  callbacks_device_stats_monitor: False
+
+  logger_name: "logs"
+  profiler: "simple"
+  check_val_every_n_epoch: 5
+  limit_val_batches: 20
+  log_every_n_steps: 20
+  note: "spad_challenge"
+  matmul_precision: "high"

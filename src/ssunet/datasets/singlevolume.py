@@ -25,6 +25,17 @@ class SingleVolumeDataset(Dataset, ABC):
         super().__init__()
         self.input = input
         self.config = config
+        # Keep tensor views on the dataset, leaving the caller's data container intact.
+        self._data = (
+            _to_tensor(input.primary_data)
+            if isinstance(input.primary_data, np.ndarray)
+            else input.primary_data
+        )
+        self._secondary_data = (
+            _to_tensor(input.secondary_data)
+            if isinstance(input.secondary_data, np.ndarray)
+            else input.secondary_data
+        )
         self.crop_idx: tuple[int, int, int, int]
         self.kwargs = kwargs
         self.__post_init__()
@@ -45,16 +56,12 @@ class SingleVolumeDataset(Dataset, ABC):
     @property
     def data(self) -> torch.Tensor:
         """Get the data tensor."""
-        if isinstance(self.input.primary_data, np.ndarray):
-            self.input.primary_data = _to_tensor(self.input.primary_data)
-        return self.input.primary_data
+        return self._data
 
     @property
     def secondary_data(self) -> torch.Tensor | None:
         """Get the reference tensor."""
-        if isinstance(self.input.secondary_data, np.ndarray):
-            self.input.secondary_data = _to_tensor(self.input.secondary_data)
-        return self.input.secondary_data
+        return self._secondary_data
 
     @property
     def x_size(self) -> int:
@@ -80,9 +87,16 @@ class SingleVolumeDataset(Dataset, ABC):
 
     def _new_crop_params(self) -> tuple[int, int, int, int]:
         """Compute the coordinates for the new crop window."""
+        height, width = self.data.shape[-2:]
+        if not (0 < self.x_size <= height and 0 < self.y_size <= width):
+            message = (
+                f"Crop size ({self.x_size}, {self.y_size}) must fit image shape "
+                f"({height}, {width}) and be positive"
+            )
+            raise ValueError(message)
         if self.config.random_crop:  # Random crop
-            xi = randint(self.data.shape[-2] - self.x_size)
-            yi = randint(self.data.shape[-1] - self.y_size)
+            xi = randint(height - self.x_size + 1)
+            yi = randint(width - self.y_size + 1)
             xe = xi + self.x_size
             ye = yi + self.y_size
         else:  # Center crop

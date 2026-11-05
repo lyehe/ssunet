@@ -1,0 +1,5 @@
+study_id: neutrino_full_precision_followup_v1
+mechanism_config: config/neutrino_ablations.yml
+output: data/neutrino/mechanism_precision
+model: unchanged_dense_backbone_autocast_disabled
+reason: development_logit_drift_before_independent_test

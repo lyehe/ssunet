@@ -1,0 +1,91 @@
+Published GAP comparison on P-ONE, declared before fitting, 2026-10-27
+
+Question
+How does our small 4D photon predictor compare with the released GAP U-Net
+transferred to the same photon-count observations?
+
+Sources
+Paper: https://arxiv.org/html/2307.06607v2, sections 3.5 and 4.1.
+Official code: https://github.com/krulllab/GAP
+Immutable commit: 135b8c67ce5a6ab4c44bcdd0fbe756f75526e249.
+Use the released gap/GAP_UNET_ResBlock.py file, unchanged, under its MIT
+license, including its Jackson Huang attribution. SHA256:
+3568742971dec5e83e5ebabfe30de1fb331c75bad47264fa439e58d8c6fca9ed.
+The vendor directory contains the upstream code, license and provenance.
+Runtime refuses upstream bytes that differ from the pinned source.
+
+Architecture
+The paper and released Convallaria notebook use six residual U-Net levels,
+28 initial channels doubled per level, ten raw-count sine channels, additive
+skip merges and transposed-convolution upsampling. This is 33443425 learned
+parameters, not a small substitute. The released class defaults to 64 initial
+channels, so explicitly set the paper's 28. The previously tested engineering
+profile uses this full architecture, unrelated synthetic inputs, FP32/TF32 off,
+batch 16: roughly .0252 seconds/update and .8655 GiB peak allocated GPU.
+These engineering observations were not used to select a validation model.
+
+Detector adaptation
+Map complete A observations to one channel with sensor rows lexicographically
+ordered by x/y/z and time as columns. Each detector string's z neighbors are
+contiguous. Geometry determines row order only; do not add learned geometry,
+count-total or splitting-probability input channels absent from released GAP.
+There are 60 real sensor rows and 256 time bins. Zero pad sensor rows to 64 for
+five pooling stages and crop all artificial output rows/time bins before the
+joint live-support softmax and loss. The loss is the numerically stable but
+gradient-equivalent published unit-mean-target photon objective on that support.
+No Bit2Bit dependence mask is applied to count data.
+
+This is a transfer of the published implementation, not an exact replication
+of its microscopy benchmarks. Whole detector events replace 256x256 random
+image crops; image flips/transposes are omitted because time and sensor axes
+are not exchangeable. The common fixed p=.5 replaces its variable-thinning
+image schedule. Train on training events only, even though the microscopy
+study allowed self-supervised fitting on its low-SNR test images. All domain
+adaptations must remain explicit in the report. Sensor/time row adjacency is
+not the same as 4D physical detector adjacency; no sensor-order sensitivity
+study or optimized detector-specific GAP configuration is claimed.
+
+Data and comparators
+Use exactly the original 800 training / 100 validation events and the same
+source/configuration IDs, time bins, seed-42 validation photon split and fresh
+epoch-level training splits. Validate the IDs and A/B totals against the frozen
+gap4d_retry_v2 comparison. Preserve all earlier files. Reserved test records,
+MC truth and clean photon GT are excluded. No PSNR or GT intensity scaling.
+
+Train two predeclared configurations for seeds 42/43/44:
+  published_gap_paper: Adam lr=1e-4, no weight decay, clipping .5, batch 32,
+    2500 updates (100 full training epochs). ReduceLROnPlateau factor .5,
+    patience 10, once per complete epoch on normalized validation photon loss.
+    Optimizer comes from released code; clipping comes from its notebook.
+  published_gap_matched: AdamW lr=.001, weight decay .01, clipping 1, batch 16,
+    5000 updates, no scheduler, matching the existing 4D training setup.
+Each configuration sees 80000 training examples over 100 epochs, matching
+the 4D reference. The matched setup changes both optimizer and batch size;
+this comparison is not an isolated optimizer ablation. Report both setups,
+without selecting the better one or selecting best validation checkpoints.
+
+GPU 0 only, FP32, TF32 off, four CPU threads, identical paired seeds. Maximum
+training time 1200 seconds per seed and 12 GiB peak allocated GPU. Store full
+optimizer/RNG/batch-cursor/scheduler state with atomic checkpoints every 250
+updates and evaluation points. Record architecture parameter counts, training
+seconds and process/GPU memory. Training cost excludes validation/checkpoint
+overhead and is measured on shared hardware. Plot curves against training
+examples, because the original and matched batch sizes differ.
+
+Outputs and evidence
+Configuration: config/neutrino_published_gap.yml.
+Output: data/neutrino/published_gap_comparison_v1.
+Keep current training/native/published/reference identities and source copies.
+Score joint photon-arrival probabilities against noisy held-out B counts.
+Primary comparison: final retained-A 1-10 photon NLL, lower is better. Also
+report all-photon NLL and cross entropy averaged over nonempty target events.
+Use the same 10000 whole-configuration bootstrap draws for conditional paired
+4D-minus-published differences. Intervals omit seed/selection uncertainty.
+Do not multiply event counts by number of seeds or merge repeated cohorts.
+Replay every final published checkpoint and check PMF support. Link the
+unchanged 4D checkpoint/source audit, export comparable plots and examples,
+and serve the comparison through the existing localhost:8765 viewer.
+
+This small reused simulation cohort supports a pilot transfer comparison.
+It is not a new independent test, proof of real-event detection, a benchmark
+of Bit2Bit on one-bit data, or a universal ranking of published methods.

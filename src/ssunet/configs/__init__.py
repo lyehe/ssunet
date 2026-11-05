@@ -7,12 +7,12 @@ from .model_config import ModelConfig
 from .train_config import LoaderConfig, TrainConfig
 
 __all__ = [
+    "DataConfig",
+    "LoaderConfig",
     "MasterConfig",
     "ModelConfig",
-    "LoaderConfig",
-    "TrainConfig",
-    "DataConfig",
-    "SSUnetData",
     "PathConfig",
+    "SSUnetData",
     "SplitParams",
+    "TrainConfig",
 ]

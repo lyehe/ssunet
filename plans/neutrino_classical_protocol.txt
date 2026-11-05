@@ -1,0 +1,108 @@
+Traditional photon-distribution estimators, declared before fitting, 2026-10-28 UTC
+
+Question
+Do simple count-aware statistical methods match the neural photon-arrival
+predictors on the same P-ONE pilot? The already frozen mixture is a classical
+comparator and is already better on the all-photon score. Do not assume that
+the new traditional estimators will be worse than the neural model.
+
+Method families
+1. Dirichlet-multinomial empirical-prior posterior prediction:
+   q=(A+alpha*pi)/(N_A+alpha).
+2. Temporal Gaussian KDE per detector, with prior shrinkage.
+3. Spatial/time Gaussian KDE using actual Euclidean x/y/z detector distances,
+   with prior shrinkage. No arbitrary sensor-index adjacency is used.
+4. Poisson likelihood plus anisotropic time/vertical TV, followed by shape
+   normalization and prior shrinkage. Vertical differences join physical
+   neighbors on the same detector string, with no edges between strings or
+   across dead sensors. This is not a full Cherenkov track-likelihood fit.
+Also report the independently selected population prior as an input-free control.
+
+For KDE, normalize each source kernel column on the finite live support so
+every photon retains unit mass at spatial/time boundaries. Consider both
+fixed bandwidth and N_A^(-1/(d+4)) sample-size scaling, d=1 for temporal and
+d=4 for joint kernels. Physical base bandwidths are selected on inner data;
+this is not automatic sample-covariance estimation. Every output is one
+joint PMF over live sensor/time bins. Empty A uses the population prior.
+Prior concentration is in observed-photon count units. TV intensity mass is
+restored to N_A before applying the same concentration rule.
+
+Data and selection
+Dataset: controlled_reference/prometheus_pone_reference_1000.h5, SHA256
+1f927ea60a8327546c958f5bc5740d0f872ea0f38d1470271eb08f83958f2209.
+Use only the original 800 training observations for fitting and selection.
+Split their persisted configuration groups into 80% prior-fit and 20% inner
+tuning groups, using seed 20261028. Keep all observations of a group together.
+No tuning-event photons enter population-prior fitting during selection.
+Use the same fixed p=.5, photon split seed 42, 256 time bins and geometry.
+
+Select population-prior temporal bandwidth and photon/event weighting using
+mean target-normalized cross entropy over all nonempty inner-training B
+targets. Select each family’s density settings and concentration by the same
+criterion. This aligns with GAP's per-event target weighting. No outer
+validation photons or scores enter selection. Do not select a family or tune
+for the outer low-count subset after seeing its scores.
+
+After selection, write an immutable selection lock and its SHA256 before
+opening outer validation photon arrays. Refit the population prior on all
+800 training observations with its locked settings. Then evaluate exactly
+the original 100 validation observations and fixed A/B split. Verify IDs,
+configuration IDs, retained totals and target totals against the already
+audited published_gap_comparison_v1 neural evidence. Preserve all old files.
+
+Declared grids in config/neutrino_classical.yml
+Prior time bandwidth: 0,25,50,100,200,400 ns; photon or equal-event weighting.
+Density time bandwidth: 0,12.5,25,50,100,200,400 ns; fixed or count-adaptive.
+Spatial bandwidth: 25,50,100,200 m.
+Prior concentration alpha: .1,.3,1,3,10,30,100 photons.
+TV regularization beta: 0,.03,.1,.3,1,3; vertical strength 0,.25,1.
+Use a single beta=0 null candidate. Do not repeat identical adaptive-null KDEs.
+The complete grid includes 614 prior/family/concentration combinations before
+excluding any nonconverged TV densities. Save every evaluated inner score.
+Population-prior pseudocount is .0001 per live bin. No GT intensity scaling.
+
+Poisson-TV numerical contract
+Minimize sum(u-A log u)+beta*(||D_time u||_1+||weighted D_vertical u||_1), u>=0.
+Use Chambolle-Pock with theta=1 and tau=sigma=.99/sqrt(4*(1+max_weight^2)).
+The Poisson proximal operator is exact and stabilized for negative arguments.
+Check a feasible-dual primal/dual gap every 50 iterations, normalized per
+observed A photon. Tune with at most 2000 iterations and gap tolerance 1e-4;
+explicitly exclude nonconverged candidate densities, without replacing them
+with unreported approximations. For locked inference, numerical refinement
+may use up to 20000 iterations at the same tolerance, independently of B.
+Fail an estimator rather than claiming convergence if refinement still fails.
+
+Metrics and reporting
+Report photon-weighted held-out NLL and mean cross entropy per nonempty target
+for all observations and the retained-A 1-10 count subset. Compare with the
+frozen 4D predictor, released GAP network under both training setups, full-time
+control and the historical frozen mixture. The latter had been validation-
+tuned earlier and is labeled accordingly. Classical estimates are deterministic;
+neural seed scores are averaged before comparisons, without replicating events.
+Use the same 10000 whole-configuration bootstrap draws, seed 20261027, for
+conditional 4D-minus-classical intervals, including equal-event contrasts.
+Intervals omit parameter-selection/seed uncertainty. The outer cohort has
+been explored before; this is not a fresh independent test.
+
+Run on GPU 0 only, float64 for classical estimation, four CPU threads. Record
+tuning and prediction wall times, convergence diagnostics and GPU allocation.
+These times are not directly equivalent to neural training time. Save locked
+settings, split IDs, priors, full prediction fields, event scores and code/
+data/reference identities. Replay predictions to audit scores and probability
+mass on every validation event. Export comparison figures and fixed input-
+stratum examples to the existing localhost:8765 server.
+
+No reserved test photon arrays, MC truth, source labels, clean photon GT, PSNR
+or event-detection labels are used. Outputs are relative arrival probabilities,
+not event-presence probabilities or an absolute photon-rate estimate.
+
+Primary methodological sources
+Dirichlet prediction: MIT 6.438, lecture 20 (2014), page 7:
+https://ocw.mit.edu/courses/6-438-algorithms-for-inference-fall-2014/f4ec8e2913228f8cc644aceba43ff5e4_MIT6_438F14_Lec20.pdf
+Gaussian KDE and bandwidth scaling:
+https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.gaussian_kde.html
+Chambolle/Pock primal-dual algorithm:
+https://www.cmap.polytechnique.fr/preprint/repository/685.pdf
+Poisson-TV model literature (algorithm here is the independently verified
+Chambolle-Pock solver, not a reproduction of that paper's implementation):
+https://arxiv.org/abs/1609.05035

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Two-channel motion controls</title>
+<style>
+body { font:16px/1.5 system-ui; max-width:1150px; margin:30px auto; padding:0 18px }
+.figure { width:100% }
+.movie { width:600px; max-width:100%; image-rendering:pixelated }
+th,td { padding:5px 12px; border-bottom:1px solid #ddd }
+</style>
+<h1>Motion controls: microtubule 3 and 4, both detectors</h1>
+<p>Both detectors enter the same GAP model. HyD2 is blue; HyD4 is green.
+The model was trained on microtubule 3; microtubule 4 tests transfer.
+Four continuous clips retain T=256..383 and real temporal halos.
+No additional training was performed.</p>
+<p>The Gaussian controls reuse the original trial's fixed settings:
+spatial sigma (Z,Y,X)=(0.5,1.5,1.5) pixels; temporal sigma 0 or 1 acquired volume;
+1% uniform mixture. Each control averages predictions from the exact same
+complementary photon inputs as the network (about 40% counts per input).
+The controls use each detector separately; the network has both as context.
+Gaussian spatial borders reflect, whereas the network uses its existing padding.</p>
+<p>NLL scores predicted arrival distributions against the reserved 20% photon
+observations. Lower is better. These observations are noisy, not clean image
+ground truth. No PSNR is used. This is an exploratory follow-up on a previously
+examined reserve; the Gaussian parameters were not tuned against these clips.
+Absolute NLLs for 128 times cannot be compared with the earlier 16-time patch scores.</p>
+<p>The frozen-shape diagnostic replaces the network PDF with the product of its
+temporal and spatial marginals. It preserves the network's changing total intensity
+but removes time-varying spatial shape. A likelihood difference measures predictive
+space-time interactions, not validated microtubule motion. Bulk registration can
+reflect drift, focus or fading, and has no biological confidence interval here.</p>
+<p>Movies use matched detector contrast across methods, Z means and accelerated
+5 fps playback. Count maps use the observed count total only as a display scale.
+Reserved-photon locations never enter any prediction. No fine filament identities
+or previously undetectable events are established.</p>
+$pooled
+$figures
+$sections
+</html>

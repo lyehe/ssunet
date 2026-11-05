@@ -1,0 +1,62 @@
+Confocal count comparison: four-level U-Nets, effective batch four
+================================================================
+
+Locked before the full 500-update training run, 2026-10-28.
+Configuration: config/confocal_gap4d_features32_batch4.yml
+Output: data/confocal_gap4d_features32_batch4_v1/
+
+Compare XYZ-only and full XYZT convolution at similar parameter budgets:
+4D: 32/64/128/256 channels, 17,973,665 parameters, native torch-convnd kernels.
+3D: 54/108/216/432 channels, 17,797,591 parameters, stock PyTorch Conv3d.
+Each has four encoder resolutions and three XYZ downsampling stages. Time
+resolution is preserved; the 3D control processes each time independently.
+Both accept [N,1,T,Z,Y,X] and return full-resolution logits of the same shape.
+
+Data: use the already verified raw, unaveraged HyD PhotonCounting integers.
+Train: double snr data 2.lif, Series001, channel index 1, T0:64, all 40 Z,
+central 256x256 XY. Validate: XYT cell microtuble 4.lif, Series013, channel
+index 1, T0:32, all 50 Z, central 256x256 XY. Cache SHA-256 and source metadata
+are recorded in each run identity. Acquisition holdout does not establish
+independent biological replicates. No clean image is assumed or scored.
+
+For every [16,16,128,128] TZYX training patch, split native integer counts C
+into A~Binomial(C,0.5), B=C-A. Encode A alone with GAP's ten raw-count sine
+features. Preserve the published per-patch unit-mean target weighting in the
+GAP objective. Both architectures see exactly the same individual patches
+and A/B draws, addressed by a canonical example index. Both use effective
+batch 4: 4D physical batch 2 x accumulation 2; 3D batch 1 x accumulation 4.
+The equivalence of draws, loss weighting and accumulated gradients is tested.
+
+Use Barron/Gnanapragasam/Tschannen's fixed log-softmax (2026, equation 5)
+for this new comparison's count loss and evaluation. Select one maximum,
+replace that shifted entry with exact zero, exclude it from log-sum-exp, and
+combine the remaining mass using softplus. GAP's observation model and target
+weights are unchanged. Their distinct teacher-logit cancellation correction
+is not applicable: targets here are observed photon counts, not teacher logits.
+Reference: https://jonbarron.info/softmaxfix/
+Paper: https://arxiv.org/abs/2610.31642v1
+Implementation: src/ssunet/softmax_fix.py
+Earlier normalization implementations and completed results remain archived.
+
+One seed, 42. Both arms run 500 optimizer updates / 2,000 training patches.
+Adam: lr=1e-4, betas=(0.9,0.999), eps=1e-8, no weight decay; clip norm=0.5.
+FP32, TF32 disabled, CPU threads=4, physical GPU 0 only. Limit allocation to
+20 GiB and allocator reserve to 90% of device memory; per-arm optimization
+time limit 7,200 seconds. Checkpoint every 25 steps and at each evaluation;
+resuming restores optimizer, RNG and the canonical data cursor. Never overlap
+duplicate workers. Do not alter frozen training sources during the run.
+
+Score 16 fixed validation patches at steps 0,100,200,300,400,500 using a
+separate fixed RNG stream. Primary score: total held-out B-photon NLL divided
+by total B photons; secondary: equal nonempty-patch mean NLL. Report the
+uniform reference log(4,194,304)=15.2492379723 nats/photon and all learning
+curve points. Use the final fixed-step endpoint; no early stopping or best
+checkpoint selection. The validation patches may overlap. Scores are pilot
+diagnostics rather than independent-replicate statistical evidence.
+
+Three-update GPU checks passed before launch: 4D 18.319 GiB allocated /
+21.566 GiB reserved, median 7.880 seconds/update; 3D 15.285 / 17.910 GiB,
+median 5.032 seconds/update. These are sizing checks, not full-run results.
+All 47 relevant tests pass, including analytic extreme-margin gradients,
+ordinary-regime GAP value/gradient parity, microbatch regrouping and an exact
+CPU checkpoint-resume trajectory. Full-run timings will supersede estimates.

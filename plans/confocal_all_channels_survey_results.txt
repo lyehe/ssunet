@@ -1,0 +1,133 @@
+All-channel 4D confocal survey and joint-channel readiness
+========================================================
+
+Completed 2026-10-28. Source: \\jnas2\Yehe\Confocal data (read-only).
+All genuine XYZ-time acquisitions were checked: six two-detector Leica
+series and four one-detector STED TIFF/XML acquisitions, totaling 16 detector
+channels. XY-time acquisitions with only one Z plane were excluded.
+
+Sampling and count interpretation
+--------------------------------
+The survey reads up to 11 uniformly spaced time points and five Z planes
+per acquisition/channel, using the complete XY plane. It also exports
+early/middle/late raw CTZYX clips: up to 16 times and 16 central Z planes,
+with full XY coverage. Preview averages use eight successive times at a
+central Z plane. They are noisy observations, not clean ground truth.
+
+All ten acquisitions declare 8-bit PhotonCounting with frame/line averaging
+and accumulation equal to one. Sampled values are small integer counts,
+with maxima from 3 to 12; no sampled value reaches the 255 storage ceiling.
+Use these stored counts directly for GAP. HyD signal amplification does not
+justify dividing recorded photon counters by an assumed gain. These checks
+cover bounded samples, not a certification of every voxel in each source.
+
+The TIFF reader handles both XY-page and XZ-page storage and maps them to
+physical ZYX. Both layouts have explicit synthetic coordinate-order tests.
+
+Acquisitions
+------------
+Names below retain the source spelling. All Leica series have 512x512 XY
+and channels [HyD 2, HyD 4]. Means are sampled counts/voxel, in that order.
+
+  Acquisition                    T     Z    Sample means C0 / C1
+  Cell cluster 1 min.lif          512   144   0.00904 / 0.01405
+  double snr data 2.lif          1024    40   0.02305 / 0.02998
+  doublesnr cell cluseter 2.lif   512   128   0.00330 / 0.01333
+  XYT cell microtuble 3.lif      1024    64   0.00876 / 0.01524
+  XYT cell microtuble 4.lif      1024    50   0.01941 / 0.04009
+  XYT cell microtuble.lif         512    64   0.00358 / 0.01092
+
+The three bead STED stacks have 10 times and 512x512x512 ZYX; their sampled
+means are 0.000377, 0.000863 (control), and 0.000204 counts/voxel. The
+"xzt sted+normal" stack has 30 times and 256x256x256 ZYX, with mean 0.001447.
+Each STED export has only one recorded detector (HyD 2). Its filename does
+not establish a second detector or a registered clean reference.
+
+Best next data
+--------------
+Cell cluster 1 min.lif is a useful first joint-channel training case: long
+sequence, thick Z coverage and visible structures in both channels across
+the sampled times. The selected configuration uses this acquisition.
+
+doublesnr cell cluseter 2.lif is a harder low-count case, especially HyD 2.
+It retains visible structures and fairly stable sampled totals. The original
+XYT cell microtuble.lif is another useful lower-count sequence.
+
+Both channels of XYT cell microtuble 3.lif become nearly dark late in the
+recording: last/first sampled means are 0.00102 and 0.00190, respectively.
+The early/middle/late figure confirms this visually. The cause is unknown;
+this does not establish a biological no-event label or undetectable signal.
+The short STED sequences are secondary tests and require a shorter temporal
+patch (for example T=8 for a ten-time stack).
+
+Joint model: use every detector as input context
+----------------------------------------------
+src/ssunet/models/confocal_multichannel.py accepts [N,C,T,Z,Y,X] raw counts
+and returns equally shaped unrestricted logits. C is a detector feature
+axis; convolution operates on the four TZYX dimensions. All retained
+detector channels enter one network together, preserving registration.
+
+Every detector is independently photon-split into input A and target B,
+using the same crop coordinates. Only A from every detector enters the
+network. Each detector has its own GAP target normalization and Barron
+log-softmax over TZYX, and detector losses receive equal weight. Predicted
+probabilities sum to one separately per detector. For expected-count display,
+multiply each distribution by that detector's own observed photon total.
+No other detector is treated as ground truth. These multi-count observations
+use GAP; a genuinely binary acquisition would require Bit2Bit supervision.
+
+The existing 500-update checkpoint and completed full-Series013 inference
+remain HyD4-only. Adding a detector to their input is not supported by that
+checkpoint; joint-channel quality requires new training. The new implementation
+is separate, and the seven historical training-source hashes are unchanged.
+
+Measured readiness, not a quality comparison
+------------------------------------------
+config/confocal_all_channels_test.yml caches both detectors from the first
+64 times, all 144 Z planes and central 256x256 XY of Cell cluster 1 min.lif.
+The resulting 1.125-GiB uint8 CTZYX cache is byte-checked against readlif at
+multiple times and has a content hash and per-detector histogram.
+
+The four-level joint 4D model has widths 32/64/128/256 and 17,974,018
+parameters. Three FP32 optimizer updates passed on physical GPU 0 with
+16x16x128x128 TZYX patches, physical batch 2 and accumulation 2 (effective
+batch 4). Peak allocated memory was 18.786 GiB; reserved memory was 21.535
+GiB. Measured probability sums were 0.99999952 and 1.00000024.
+This is a readiness check, without a trained quality checkpoint or NLL
+comparison. The three short-run loss values do not establish improvement.
+
+Sixteen correctness tests pass: 3D/4D odd-shape gradients, exact C=1 parity,
+independent per-detector normalization and loss-gradient parity, registered
+count-conserving photon splits, cross-detector context use, separate count
+calibration, invalid-count rejection, TIFF orientation and cache integrity.
+Scoped Ruff checks pass. All 30 preview clips contain every recorded channel.
+Six real-data napari checks also pass, covering two-channel and single-channel
+acquisitions, phase switching, raw/mean display and physical Z orientation.
+All nine historical training/inference source hashes remain unchanged.
+
+Artifacts and commands
+----------------------
+data/confocal_all_channels_survey_v2/
+  survey.json / channels.csv              Metadata and per-channel measurements
+  all_channels_overview.png               Every detector's noisy early average
+  all_channels_time_profiles.png          Sampled time courses, separate channels
+  <dataset-id>_detail.png                 Both channels, early/middle/late
+  <dataset-id>_all_channels.npy            Early raw CTZYX clip
+  <dataset-id>_middle.npy / _late.npy       Middle/late raw CTZYX clips
+  <dataset-id>_all_channels.json           Geometry and source-time coordinates
+
+data/confocal_joint_channels32_v1/readiness.json contains the GPU measurements.
+
+From the repository root:
+  .venv/Scripts/python.exe -m src.tools.confocal_survey
+  .venv/Scripts/python.exe -m src.tools.confocal_survey_napari
+  .venv/Scripts/python.exe -m src.tools.confocal_channels_test
+  .venv/Scripts/python.exe -m pytest -q tests/test_confocal_multichannel.py
+
+The napari picker shows every recorded detector side by side in 3D and
+switches acquisitions, early/middle/late ranges, and raw movie/noisy temporal
+mean display. It reads the bounded local clips, not complete NAS movies.
+
+Additional local dependencies: readlif 0.6.6, tifffile 2025.5.10,
+defusedxml 0.7.1, napari 0.6.6 and torch-convnd 0.5.0. Import PyTorch before
+Qt in ad-hoc Windows scripts; running the documented modules does this.

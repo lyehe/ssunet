@@ -1,0 +1,92 @@
+study_id: neutrino_classical_comparison_v1
+output: data/neutrino/classical_comparison_v1
+dataset: data/neutrino/controlled_reference/prometheus_pone_reference_1000.h5
+dataset_sha256: 1f927ea60a8327546c958f5bc5740d0f872ea0f38d1470271eb08f83958f2209
+reference_study: data/neutrino/published_gap_comparison_v1
+scope: classical_photon_probability_estimators_tuned_on_inner_training_groups_then_fixed_exploratory_validation
+observation_kind: photon_counts
+split_probability: 0.5
+photon_split_seed: 42
+inner_split:
+  tuning_fraction: 0.2
+  seed: 20261028
+cpu_threads: 4
+prior_pseudocount: 0.0001
+families:
+- dirichlet
+- temporal_kde
+- spatiotemporal_kde
+- poisson_tv
+grid:
+  prior_time_bandwidth_ns:
+  - 0
+  - 25
+  - 50
+  - 100
+  - 200
+  - 400
+  prior_weighting:
+  - photon
+  - event
+  time_bandwidth_ns:
+  - 0
+  - 12.5
+  - 25
+  - 50
+  - 100
+  - 200
+  - 400
+  space_bandwidth_m:
+  - 25
+  - 50
+  - 100
+  - 200
+  prior_concentration:
+  - 0.1
+  - 0.3
+  - 1
+  - 3
+  - 10
+  - 30
+  - 100
+  tv_regularization:
+  - 0
+  - 0.03
+  - 0.1
+  - 0.3
+  - 1
+  - 3
+  tv_vertical_strength:
+  - 0
+  - 0.25
+  - 1
+tv_solver:
+  max_iterations: 2000
+  tolerance: 0.0001
+  check_interval: 50
+tv_refine_max_iterations: 20000
+bootstrap_seed: 20261027
+bootstrap_draws: 10000
+limitations:
+- Inner fit/tuning groups come only from the original 800 training observations; the
+  population prior excludes tuning groups during selection.
+- Settings are selected by mean cross entropy over nonempty inner-training B targets,
+  then locked before outer validation photons are opened.
+- After selection the population prior is refitted on all 800 training observations;
+  no outer validation data are used for refitting.
+- Count-adaptive Gaussian kernels use Scott-style N^(-1/(d+4)) scaling with grid-selected
+  physical base bandwidths, not automatic sample covariance fitting.
+- Poisson-TV regularizes time and physical vertical detector-string neighbors; it
+  is not a general full-Cherenkov likelihood reconstruction.
+- Numerically nonconverged TV candidates are explicitly excluded from selection; selected
+  evaluation uses the same gap tolerance with a declared refinement ceiling.
+- All estimates use population-prior shrinkage for positive live-support predictive
+  probabilities; empty observations return the prior.
+- Scores compare normalized photon-arrival distributions, not absolute event rates
+  or neutrino detection performance.
+- This reuses the same small 100-event simulation validation cohort. Intervals condition
+  on fitted choices and exclude selection/seed uncertainty.
+- The earlier frozen mixture had been tuned on earlier validation; it is reported
+  as a historical comparator rather than a newly training-selected method.
+- No clean photon ground truth, test observations, MC truth, PSNR or target-derived
+  inference scaling is used.

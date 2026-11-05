@@ -1,0 +1,130 @@
+Subthreshold detection: prospective finite feasibility protocol, 2026-10-26
+
+Question and claim boundary
+---------------------------
+Can the already selected analytic-trained self-splitting models help distinguish
+faint signal-plus-background windows from background-only windows? Improving
+arrival-distribution NLL does not answer this question. An always-normalized
+arrival PDF is not P(event). "Previously undetectable" means missed by a named
+reference at the same declared false-alarm operating point. This experiment
+establishes neither event-specific recovery without recorded information nor
+real neutrino discovery, hardware-trigger recovery, direction or energy decoding.
+
+Stage 1: fixed analytic injection/recovery (implemented first)
+------------------------------------------------------------
+Use the same 256-sensor, 256-time-bin analytic response as the completed analytic
+study, with independent Poisson uniform background of expected total one photon
+per fixed 0--6400 ns window. This is a toy response, not neutrino transport or a
+calibrated IceCube/P-ONE detector. Acquisition time and candidate window are fixed
+before sampling; no event alignment, event selection or stratification uses the
+realized photon count. Retain every sampled window, including empty windows.
+
+Freeze the three validation-selected analytic checkpoints (seeds 42/43/44),
+their previously selected baseline settings and training-only prior. Average
+their predicted probabilities, not their logits or significance values. Use
+FP32 inference and no new training or test-based model selection. Fresh random
+source positions must be distinct from all original analytic source positions.
+No latent source position, signal strength or injection label enters a learned
+prediction or non-oracle detection score.
+
+Generate 10,000 independent background calibration windows and, on a separate
+random stream, 20,000 background test windows. Generate 256 unseen source groups,
+four independent repetitions at each expected signal level .25/.5/1/2/3/5/8/12.
+All 32 observations of one source remain together in uncertainty resampling.
+Different signal levels have independent Poisson observations at a shared source;
+they are repeated measurements, not independent source configurations.
+
+All methods receive the same complete observed photon budget. The learned and
+kernel scores split each observation once into A/B at p=.5, score B using q(A)
+and A using q(B), and average the two shape log scores. Here BOTH halves are
+recorded observations available to the detector; B is not an unrecorded target.
+The relative-shape score is augmented with a shared count statistic:
+
+  C(N) = max_{mu >= 0} [N log(1 + mu/background) - mu]
+  D = C(N) + .5 [sum_B log(q(A)/u) + sum_A log(q(B)/u)]
+
+u is the known uniform background location PDF. D is a detection statistic,
+not a generative likelihood ratio, posterior event probability or new photon
+observation. Empty scored halves contribute exactly zero shape evidence.
+
+Fixed controls:
+* count GLR C(N), with the same known background mean available to every method;
+* static training-only arrival prior, using the same shape-score formula;
+* geometry/time Gaussian kernel + training prior with the previously selected
+  analytic mixture parameters, using the same cross-prediction formula;
+* a physics-template GLR maximizing over a fixed 5x5x5 source lattice and the
+  declared signal-amplitude grid. Every window searches the same lattice and
+  amplitudes. This control knows the analytic response but not the injected
+  source; the background calibration includes its entire search/trial penalty.
+
+Calibrate each method using only its background calibration scores. Smoothed
+empirical tail ranks use one independent uniform tie randomizer per window,
+shared by methods. This handles the count baseline's discrete ties without
+giving continuous model scores an easier operating point. Reject when
+
+  p_tail = (#{calibration > score} + U*(#{calibration = score}+1))/(n_cal+1)
+
+is at most alpha. Primary alpha=.01 per window; .001 is secondary and has limited
+background tail precision. These are prototype rates, not a deployment false
+alarm rate per day. Independent test false-alarm rates and Wilson 95% intervals
+must be reported. Finite calibration uncertainty remains and is not included in
+conditional source-group bootstrap intervals. Do not claim exact equal realized
+false-alarm rates or convert to false alarms per live time without exposure.
+
+Pin configuration, code, protocol, checkpoints, priors/templates and calibration
+scores before opening new test observations. Evaluate once. Preserve all results,
+including failure to beat controls; never tune a score using the opened test.
+
+Report efficiency by EXPECTED injected signal, conditional source-group bootstrap
+intervals, paired model-minus-control intervals, baseline-missed/model-recovered
+AND baseline-found/model-missed fractions, test false positives, and low-FPR ROC.
+Primary descriptive contrast: model minus physics-template efficiency at mu=2,
+alpha=.01. All other levels/contrasts are exploratory; no multiplicity-adjusted
+confirmatory or self-splitting causality claim. Plot every fixed method and
+deterministic examples chosen without inspecting prediction success. Known
+analytic expected arrival PDFs are evaluation-only GT, never clean photon GT.
+
+Stage 2: contribution and robustness, contingent on Stage 1 evidence
+------------------------------------------------------------------
+Compare self-splitting with the same architecture trained by alternative
+objectives (including observed-count reconstruction), and a supervised detector
+with/without self-splitting initialization. Match observations, labelled budget,
+updates, model size and calibration. Include untrained features. Separate encoder
+pretraining from any event-labelled detection head. Use FP32/full temporal
+resolution based on existing development evidence, new independent source/run
+folds, several seeds and finite budgets fixed before opening a fresh test.
+Test background-rate, correlated-noise, geometry, timing and response shifts;
+recalibration rules must be specified before evaluation. A favorable Stage 1
+comparison alone does not isolate the benefit of the splitting objective.
+
+Stage 3: real-background injection/recovery, data contract required
+-----------------------------------------------------------------
+Obtain documented zero-bias/untriggered windows, original times and sensor
+identities, detector state, calibration, trigger logic and live exposure from
+the SAME detector as the signal-response simulation. Audit selection and clocks
+before modelling. Current triggered/filtered ODF samples and their empty records
+do not supply this null population. Do not overlay P-ONE water photon simulation
+onto IceCube spatially quantized marked pulses and call it physical validation.
+
+Inject before relevant response processing when merging/dead time matters, or
+explicitly qualify a pulse-level empirical task. Keep real correlated noise and
+background events. Split complete acquisition runs between fitting, calibration
+and test. Include all scans and overlapping-window dependence in false alarms
+per exposure. If many windows are required to certify a low false-alarm rate,
+obtain that exposure; a short pilot cannot certify an extreme tail probability.
+No messages or requests to external collaborations are authorized by this plan.
+
+Stage 4: decoding and prospective validation
+-------------------------------------------
+For newly recovered events evaluate localization, timing, energy or direction
+against injection parameters, with uncertainty/coverage and selection effects.
+Event presence/parameter labels suffice for evaluation; no clean photon-level
+GT is required. Confirm on an independent real run, externally tagged sample or
+controlled calibration source before claiming real previously missed events.
+Population/transient excess detection is a separate task from individual-event
+identification and requires its own windows, trials and background protocol.
+
+Success would support a bounded statement: at a fixed false-alarm rate and under
+the specified detector/background conditions, self-splitting reduces the signal
+strength required for detection relative to strong reference methods. It would
+not guarantee recovery of every faint observation.

@@ -1,0 +1,51 @@
+Validation-triggered precision diagnostic, 2026-10-25
+
+Trigger observed before the main or mechanism test was opened:
+The unchanged 100k-study seed 43 had validation NLL 2.998 overall / 4.141 low
+count at epoch 2, but 191.032 / 223.771 at epoch 10. Its observed fresh-training
+NLL also diverged. A fixed validation batch had logits around 165,450--167,367
+at epoch 10 versus 45.7--93.0 at epoch 2. BF16 and FP32 inference differed
+substantially on the same final weights. A related late failure occurred in
+the separate analytic seed 43. These are preserved negative results.
+
+This is evidence of numerical/optimization instability; it does not by itself
+prove that BF16 is the sole cause. In particular, normalizing in FP32 cannot
+recover relative logit differences already lost to a BF16 projection.
+
+Finite follow-up, declared before its independent test outcomes:
+- Same unchanged DensePhotonReference architecture and parameter count.
+- Disable autocast inside its forward pass; compute the model in FP32.
+- Same fresh mechanism-cohort train/validation/test families (9594/1221/1185),
+  photon/shuffle/model seeds, ten epochs, batch size, optimizer and time caps.
+- Three seeds 42/43/44. Compare against the already registered dense_fresh
+  BF16 runs. Keep best-validation and final-budget results separately.
+- Test only after both analyses are frozen. No reuse of the main test for
+  changing models. State that the additional mechanism hypothesis arose from
+  development instability, with exploratory inference and no multiplicity claim.
+- Report the actual time and memory cost of FP32 and whether late divergence
+  persists. Do not silently change the running 100k study or its identities.
+
+For the separately specified marked-pulse experiment, use FP32 from the start.
+Its much larger normalized support makes preserving projection precision a
+reasonable implementation choice. This is not evidence of a real-data benefit;
+that experiment retains its independent validation/test selection and limitations.
+
+Failure-regime continuation, declared before its fresh test
+---------------------------------------------------------
+The small mechanism comparison has only 6,000 updates per seed; both BF16 and
+FP32 remain stable there. That comparison cannot reproduce the later 100k-study
+failure and is not sufficient to attribute it to precision.
+
+One further finite diagnostic therefore forks the preidentified main seed 43
+at its saved epoch-2 checkpoint. Preserve its weights, optimizer, RNG, exact
+batch cursor and all prefix counters. Continue through epoch 5 in FP32, keeping
+the same main training records, fresh photon splits, ordering and optimizer.
+Compare against the archived BF16 epoch-5 checkpoint at identical total updates
+(24,930), not against a shorter run. Also retain the two validation-selected
+checkpoints as a separately declared contrast. The original experiment remains
+unmodified; the fork receives its own provenance and identity.
+
+Use the fresh family-disjoint mechanism test for these four checkpoints only
+after their selection is locked. Do not reuse the main test for the changed
+precision method. This is a single preidentified failure diagnostic, not a
+multi-seed causal generalization claim or an additional confirmatory endpoint.

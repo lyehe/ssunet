@@ -1,0 +1,4 @@
+# Preserve the byte-pinned upstream implementation on Windows and Linux.
+src/ssunet/vendor/gap/GAP_UNET_ResBlock.py text eol=lf
+src/ssunet/vendor/gap/LICENSE text eol=lf
+src/ssunet/vendor/gap/provenance.json text eol=lf

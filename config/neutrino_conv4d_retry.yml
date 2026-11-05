@@ -1,0 +1,37 @@
+study_id: neutrino_conv4d_retry_v1
+output: data/neutrino/conv4d_retry_v1
+dataset: data/neutrino/controlled_reference/prometheus_pone_reference_1000.h5
+dataset_sha256: 1f927ea60a8327546c958f5bc5740d0f872ea0f38d1470271eb08f83958f2209
+scope: exploratory_validation_architecture_retry_no_test_or_truth_access
+split_probability: 0.5
+photon_split_seed: 42
+models:
+  - {name: dense_reference, channels: 16}
+  - {name: full_time_reference, channels: 16}
+  - {name: conv4d, channels: 4, backend: native}
+training:
+  seeds: [42, 43, 44]
+  steps: 5000
+  batch_size: 16
+  learning_rate: 0.001
+  weight_decay: 0.01
+  gradient_clip: 1.0
+  precision: fp32
+  cpu_threads: 4
+  max_training_seconds_per_seed: 600
+  max_gpu_allocated_gib: 12
+evaluation:
+  steps: [0, 110, 250, 500, 1000, 2000, 3000, 4000, 5000]
+  primary_selection: final_fixed_step
+  primary_stratum: retained_1_to_10
+  fixed_training_events: 160
+  training_subset_seed: 20261027
+  donor_seed: 914
+  donor_draws: 20
+  bootstrap_seed: 20261027
+  bootstrap_draws: 10000
+baselines:
+  original_prior_pseudocount: 0.5
+  tuned_prior_time_bandwidth_ns: 200
+  tuned_prior_pseudocount: 0.0001
+  tuned_mixture_prior_fraction: 0.25

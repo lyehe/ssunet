@@ -53,6 +53,8 @@ class PathConfig:
     ground_truth_file: FileInput | None = None
     ground_truth_begin_slice: int = 0
     ground_truth_end_slice: int = -1
+    ground_truth_scale: float | None = None
+    _ground_truth_dtype: np.dtype | None = field(init=False, default=None, repr=False)
 
     def __post_init__(self):
         """Initialize and validate paths and files."""
@@ -66,7 +68,7 @@ class PathConfig:
         self.data_file = self._resolve_file(self.data_file, self.data_dir, FileType.DATA)
 
         # Handle reference_file if reference_dir is provided
-        if self.reference_dir and self.reference_file:
+        if self.reference_dir and self.reference_file is not None:
             if not self.reference_dir.exists():
                 raise DirectoryNotFoundError(self.reference_dir)
             self.reference_file = self._resolve_file(
@@ -74,7 +76,7 @@ class PathConfig:
             )
 
         # Handle ground_truth_file if ground_truth_dir is provided
-        if self.ground_truth_dir and self.ground_truth_file:
+        if self.ground_truth_dir and self.ground_truth_file is not None:
             if not self.ground_truth_dir.exists():
                 raise DirectoryNotFoundError(self.ground_truth_dir)
             self.ground_truth_file = self._resolve_file(
@@ -82,6 +84,11 @@ class PathConfig:
             )
 
         self._validate_slices()
+        if self.ground_truth_scale is not None and (
+            not np.isfinite(self.ground_truth_scale) or self.ground_truth_scale <= 0
+        ):
+            message = "ground_truth_scale must be a finite positive value"
+            raise ValueError(message)
 
     def _validate_slices(self) -> None:
         """Validate slice ranges for data, reference, and ground truth."""
@@ -199,12 +206,14 @@ class PathConfig:
         if end is None:
             end = self.ground_truth_end_slice
         if self.ground_truth_is_available and isinstance(self.ground_truth_file, Path):
-            return self._load(
+            ground_truth = self._load(
                 self.ground_truth_file,
                 method,
                 begin,
                 end,
-            ).astype(np.float32)
+            )
+            self._ground_truth_dtype = ground_truth.dtype
+            return ground_truth.astype(np.float32)
         else:
             return self.load_reference(method)
 
@@ -219,26 +228,47 @@ class PathConfig:
         return SSUnetData(primary_data=reference)
 
     def load_data_and_ground_truth(self, method: Callable | None = None) -> SSUnetData:
-        """Load SSUnetData and return a SSUnetData object."""
+        """Load data and an optional explicitly configured evaluation reference."""
         data = self.load_data(method)
-        reference = self.load_ground_truth(method)
-        return SSUnetData(primary_data=data, secondary_data=self._normalize_ground_truth(reference))
+        ground_truth = (
+            self._normalize_ground_truth(self.load_ground_truth(method))
+            if self.ground_truth_is_available
+            else None
+        )
+        return SSUnetData(primary_data=data, secondary_data=ground_truth)
 
     def load_reference_and_ground_truth(self, method: Callable | None = None) -> SSUnetData:
-        """Load SSUnetData and return a SSUnetData object."""
+        """Load validation observations and an optional evaluation reference."""
         reference = self.load_reference(method)
-        ground_truth = self.load_ground_truth(method)
-        return SSUnetData(
-            primary_data=reference, secondary_data=self._normalize_ground_truth(ground_truth)
+        ground_truth = (
+            self._normalize_ground_truth(self.load_ground_truth(method))
+            if self.ground_truth_is_available
+            else None
         )
+        return SSUnetData(primary_data=reference, secondary_data=ground_truth)
 
     def _normalize_ground_truth(self, ground_truth: np.ndarray) -> np.ndarray:
-        """Normalize the ground truth to be between 0 and 1."""
-        gt_max = np.max(ground_truth)
-        if gt_max < 255 and gt_max > 1:
-            return ground_truth.astype(np.float32) / 255
-        elif gt_max > 255:
-            return ground_truth.astype(np.float32) / 65535
+        """Normalize an optional image reference using its source dtype or explicit scale.
+
+        Floating point images already in [0, 1] are preserved. Other floating
+        point reference ranges require ``ground_truth_scale``; their bit depth
+        cannot be inferred reliably from the brightest observed pixel.
+        """
+        reference = ground_truth.astype(np.float32)
+        if not np.all(np.isfinite(reference)) or np.any(reference < 0):
+            message = "Evaluation reference values must be finite and nonnegative"
+            raise ValueError(message)
+        if self.ground_truth_scale is not None:
+            return reference / self.ground_truth_scale
+        source_dtype = self._ground_truth_dtype or ground_truth.dtype
+        if np.issubdtype(source_dtype, np.bool_):
+            return reference
+        if np.issubdtype(source_dtype, np.integer):
+            return reference / np.iinfo(source_dtype).max
+        if np.all(reference <= 1):
+            return reference
+        message = "Floating point references outside [0, 1] require ground_truth_scale"
+        raise ValueError(message)
 
 
 @dataclass

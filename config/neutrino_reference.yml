@@ -1,0 +1,18 @@
+seed: 42
+events: 1000
+time_window_ns: [0.0, 6400.0]
+time_bins: 256
+split_probability: 0.5
+analytic:
+  strings: 8
+  sensors_per_string: 32
+  expected_signal_photons: [0, 2, 5, 10, 30, 100]
+  expected_background_photons: 1.0
+statistics:
+  realizations_per_rate: 100000
+  sigma_limit: 6.0
+model:
+  channels: 16
+  batch_size: 16
+  profile_steps: 100
+  memory_target_gib: 12

@@ -1,0 +1,159 @@
+Development timing/selection diagnosis, completed 2026-10-26
+
+Main finding
+------------
+The learned arrival PDFs contain useful synthetic timing information that is
+largely absent from the pooled hidden features. This is consistent with the
+shared-context architecture averaging its temporal features before mixing
+sensors. A low-false-alarm selection mismatch is also present, but correcting
+that criterion benefits the raw/prior detector more than the learned detector
+on this development cohort. It does not rescue the earlier detection claim.
+
+These are development observations and plausible mechanisms, not a causal
+architecture experiment or a fresh detector test. Earlier test results and
+calibration outcomes are neither opened nor changed by this diagnostic.
+
+Artifacts and access boundary
+-----------------------------
+Config: config/neutrino_development_diagnostics.yml
+Protocol: plans/neutrino_development_diagnostics_protocol.txt
+Output: data/neutrino/development_diagnostics_v2/
+Viewer: http://127.0.0.1:8765/development_diagnostics_v2/index.html
+Next fix: plans/neutrino_next_fix_plan.txt
+
+The data accessor permits only train/validation observations/features/labels,
+frozen references/states and allowed head/config metadata. Its logged 19 input
+paths include no calibration or test data/result files, even for hashing.
+Source inputs match their original head-lock hashes. New fits/perturbations are
+written to a separate directory; original observations and model files remain
+unchanged. Positive injection parameters are diagnostic labels only.
+
+1. Selection criterion
+----------------------
+The original balanced-validation-log-loss rule chooses L2=.1 for every head.
+Reproduce the same grid at the same fitting budget and assess 20 repeated
+two-fold background calibration partitions within validation. At nominal .01
+per window and expected signal two:
+
+Arm               L2=.1 mean eff.   Tail-preferred L2/eff.   Difference
+Raw + prior           46.445%              1 / 49.785%        +3.340 pp
+Added self-split      47.617%              1 / 48.320%         +.703 pp
+Added untrained       47.793%             .1 / 47.793%         .000 pp
+
+The raw/prior L2=1 point ranks first in every partition. The self-split L2=1
+point receives .85 tie-adjusted first-place credit; L2=.1 receives .15.
+The untrained L2=.1 point ranks first in every .01 partition. At nominal .001,
+the self-split .1 choice remains preferred. The repeated partitions reuse the
+same 256 two-photon signals, 128 source groups and 8192 null windows. Their
+ranges are not confidence intervals, repetitions are not additional events,
+and choosing the best validation point produces optimistic development results.
+This is a reason to align future selection with the target metric, not a
+confirmed performance gain. New test data would still be necessary.
+
+2. Synthetic expected-timing retention
+--------------------------------------
+Fixed ridge probes are fit on positive TRAIN injections only and evaluated on
+2048 positive VALIDATION observations from 128 sources. Signal-only expected
+mean/q10/median/q90 times are computed from the known analytic source response.
+Background has no signal-timing target. All 162 positive validation observations
+with zero recorded photons remain included. No clean photon image is supplied
+to encoder pretraining or fitting.
+
+Primary fixed ridge penalty .1, MAE for expected signal mean time:
+
+Input to timing probe                 Validation MAE (ns)
+Constant training-target mean                 70.629
+Raw + prior                                   63.550
+Raw + self-split (full features)               63.006
+Raw + untrained (full features)                63.900
+Self-split PDF summaries only                  62.202
+Untrained PDF summaries only                   70.331
+Self-split pooled hidden features only         70.374
+Untrained pooled hidden features only          70.118
+
+PDF-only and hidden-only probes exclude raw/prior features. The learned PDF
+retains a timing advantage over its untrained counterpart at every fixed
+penalty (.01/.1/1); its mean-time MAE is 62.463/62.202/63.203 ns. Hidden-only
+MAE is 70.219/70.374/70.517 ns, close to the 70.629 ns constant baseline.
+These are point estimates from a limited linear probe, not uncertainty-qualified
+parameter-reconstruction gains or proof of precise measured-timestamp retention.
+
+At expected signal two, PDF-only gives 64.740 ns versus raw/prior 65.107 ns;
+the improvement is small. For recorded counts 1--5, PDF-only is 66.920 ns versus
+raw/prior 68.235 ns; above five it is 52.828 versus 54.649 ns. Empty observations
+show no useful event-specific timing recovery: PDF-only 69.823 ns versus constant
+68.204 ns. Empty-input predictions are priors, not newly observed evidence.
+
+The timing target is a signal-only expected distribution summary under a known
+fixed clock, whereas the original density objective predicts the complete
+signal-plus-background photon location PDF. A timing-probe limitation alone
+therefore does not establish that the density objective is mathematically wrong.
+
+3. Pairing intervention
+----------------------
+Select 2048 validation windows by a fixed random permutation of row IDs, without
+labels/counts/prediction-based selection. Within each recorded A/B half separately
+shuffle the association of sensor IDs with time bins. Integer photon counts,
+A/B membership, and BOTH per-half marginals are conserved exactly.
+
+545 windows can change pairings; 377 actually change their joint count maps
+(235 positive signal, 142 background). The other 1671 give zero PDF/hidden and
+absolute feature-logit response, serving as a negative control.
+
+On the 377 changed windows:
+                                      Self-split             Untrained
+Mean predicted-PDF total variation       .0141628             1.413e-7
+Median relative hidden-feature L2       1.105e-8              2.716e-9
+Mean relative hidden-feature L2         3.377e-5              3.707e-6
+Mean absolute raw logit contribution      .136543              .151396
+Mean absolute added logit contribution    .076109              .000764
+
+The learned predicted distribution responds to joint sensor/time structure,
+while the pooled hidden context is nearly invariant for most cases. The
+learned-feature head does use its added features; it is not simply assigning
+all of them zero weight. Sensitivity is not usefulness: static joint priors,
+local nonlinear responses and response-processing assumptions can also affect
+such logit changes. The intervention is not a physical neutrino injection or
+a newly calibrated false-alarm comparison.
+
+Cached original development features reproduce within numerical precision:
+raw exactly, learned maximum difference 1.264e-5, untrained 1.789e-7. This
+checks the rebuilt reference and saved encoder states before interpreting
+the pairing responses. Numerical replay is distinct from a physical gain.
+
+Execution correction and verification
+-------------------------------------
+The first diagnostic directory (development_diagnostics_v1) is preserved as
+incomplete. Its stop came from reusing a production fitter that applies its
+gradient gate to its selected candidate: the diagnostic inadvertently made
+each candidate a selected one. Original learned/random L2=1e-4 points already
+exhausted 300 iterations, with gradients .0002246/.0002120; neither was selected
+in the completed detector probe. The v2 diagnostic retains all fixed-budget
+points, labels their gate status, and excludes these failed points from tail
+recommendations. No optimizer budget or original detector result was changed.
+
+24 focused tests pass, including test/calibration access rejection, exact
+marginal/count preservation, timing units, logit decomposition and retaining
+unconverged candidates. Scoped Ruff passes. Selected original head scores
+reproduce when refit; all data inputs match source head-lock digests.
+
+Diagnostic computation takes 57.82 seconds before report rendering, peaks at
+1.911 GiB process memory and .313 GiB allocated GPU memory. These are auxiliary
+fits and frozen inference, not a measurement of encoder-training cost.
+
+Interpretation and next action
+------------------------------
+First isolate the useful PDF features in a controlled classifier-head ablation
+on development data. Use the same ablations for the untrained encoders, and
+choose future heads for tail performance with adequate calibration precision.
+The current hidden-only timing diagnostic does not prove that all hidden
+features are useless for event detection; remove them experimentally rather
+than assuming harm from their small timing signal.
+
+Then, if needed, compare a dense global context that remains indexed by time
+against a reference that averages time, at the same temporal resolution and
+parameter budget. This is a candidate architecture change supported by the
+diagnostic pattern, not a proven fix. Keep self-splitting/alternative-objective
+controls matched and freeze a new protocol before fresh held-out evaluation.
+Neither this development analysis nor any later tuning establishes recovery
+of previously undetected real neutrino events.

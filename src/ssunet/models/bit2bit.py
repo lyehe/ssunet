@@ -8,11 +8,14 @@ from torch.nn import init
 from torch.optim import SGD, Adam, AdamW
 from torch.utils.checkpoint import checkpoint
 
+from ..checkpoints import checkpoint_config_imports
 from ..configs.configs import ModelConfig
 from ..constants import EPSILON, LOGGER
+from ..distributions import logits_to_probabilities
 from ..exceptions import InvalidUpModeError
-from ..losses import loss_functions
+from ..losses import loss_functions, photon_nll
 from ..modules import BLOCK, conv111
+from ..modules.partialconv import PartialConv3d
 
 OPTIMIZER = {
     "adam": Adam,
@@ -23,6 +26,12 @@ OPTIMIZER = {
 
 class Bit2Bit(pl.LightningModule):
     """Bit2Bit model."""
+
+    @classmethod
+    def load_from_checkpoint(cls, checkpoint_path, *args, **kwargs):
+        """Load installed and repository-created checkpoints with their original architecture."""
+        with checkpoint_config_imports(ModelConfig):
+            return super().load_from_checkpoint(checkpoint_path, *args, **kwargs)
 
     def __init__(
         self,
@@ -39,11 +48,29 @@ class Bit2Bit(pl.LightningModule):
         """
         super().__init__()
 
+        if isinstance(config, dict):
+            config = ModelConfig(**config)
+
         # Replace pyiqa metrics with torchmetrics
-        self.psnr_metric = tmi.PeakSignalNoiseRatio()
-        self.ssim_metric = tmi.StructuralSimilarityIndexMeasure()
+        self.psnr_metric = tmi.PeakSignalNoiseRatio(data_range=1.0)
+        self.ssim_metric = tmi.StructuralSimilarityIndexMeasure(data_range=1.0)
 
         self.config = config
+        self.architecture_version = getattr(config, "architecture_version", 1)
+        if self.architecture_version not in (1, 2):
+            message = "Unsupported architecture_version; expected 1 or 2"
+            raise ValueError(message)
+        self._architecture_options = {
+            "partial_conv": config.partial_conv if self.architecture_version == 2 else False,
+            "merge_mode": config.merge_mode if self.architecture_version == 2 else "concat",
+        }
+        if self.architecture_version == 1 and (
+            config.partial_conv or config.merge_mode != "concat"
+        ):
+            LOGGER.warning(
+                "Architecture version 1 preserves ordinary convolutions and concatenation. "
+                "Use architecture_version=2 to honor partial_conv and merge_mode for a new model."
+            )
         self.loss_function = loss_functions[config.loss_function]
         self.kwargs = kwargs
         self._check_conflicts()
@@ -82,6 +109,11 @@ class Bit2Bit(pl.LightningModule):
                 group_norm=self.config.group_norm,
                 down_mode=self.config.down_mode,
                 activation=self.config.activation,
+                **(
+                    {"partial_conv": self.config.partial_conv}
+                    if self.architecture_version == 2
+                    else {}
+                ),
             )
             down_convs.append(down_conv)
         return nn.ModuleList(down_convs)
@@ -92,7 +124,11 @@ class Bit2Bit(pl.LightningModule):
         up_conv_function = BLOCK[self.config.block_type][1]
         for i in range(self.config.depth - 1, 0, -1):
             z_conv = (i - 1) < self.config.z_conv_stage
-            skip_out = i >= self.config.skip_depth
+            skip_out = (
+                (i - 1) >= self.config.skip_depth
+                if self.architecture_version == 2
+                else i >= self.config.skip_depth
+            )
             in_channels = self.config.start_filts * (self.config.depth_scale**i)
             out_channels = self.config.start_filts * (self.config.depth_scale ** (i - 1))
             up_conv = up_conv_function(
@@ -104,6 +140,11 @@ class Bit2Bit(pl.LightningModule):
                 group_norm=self.config.group_norm,
                 up_mode=self.config.up_mode,
                 activation=self.config.activation,
+                **(
+                    {"partial_conv": self.config.partial_conv, "merge_mode": self.config.merge_mode}
+                    if self.architecture_version == 2
+                    else {}
+                ),
             )
             up_convs.append(up_conv)
         return nn.ModuleList(up_convs)
@@ -117,7 +158,8 @@ class Bit2Bit(pl.LightningModule):
     @staticmethod
     def _weight_init(module: nn.Module) -> None:
         """Initialize the weights of the model."""
-        if isinstance(module, nn.Conv3d):
+        # torch-convnd's partial layers are not nn.Conv3d subclasses.
+        if isinstance(module, nn.Conv3d | PartialConv3d):
             init.xavier_normal_(module.weight)
             init.constant_(module.bias, 0)  # type: ignore
 
@@ -127,7 +169,7 @@ class Bit2Bit(pl.LightningModule):
             self._weight_init(module)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        """Forward pass of the model."""
+        """Return unnormalized photon-location logits for the input volume."""
         if self.config.sin_encoding:
             scales = [
                 torch.sin(input.clone() * (self.config.scale_factor ** (-i)))
@@ -152,6 +194,22 @@ class Bit2Bit(pl.LightningModule):
                 input = up_conv(input, skip)
         return self.conv_final(input)
 
+    def predict_distribution(self, input: torch.Tensor) -> torch.Tensor:
+        """Return photon probabilities over the same axes as the configured loss."""
+        dimensions = (-1, -2, -4) if self.config.loss_function == "photon_2d" else None
+        return logits_to_probabilities(self(input), dim=dimensions)
+
+    def _batch_loss(self, output: torch.Tensor, target: torch.Tensor, input: torch.Tensor):
+        """Apply the same binary-event masking convention in each training stage."""
+        mask = (input < 1).float() if self.config.masked else None
+        return self.loss_function(output, target, mask)
+
+    def _photon_score(self, output: torch.Tensor, target: torch.Tensor, input: torch.Tensor):
+        """Score observed target events without requiring an intensity reference."""
+        mask = (input < 1).float() if self.config.masked else None
+        dimensions = (-1, -2, -4) if self.config.loss_function == "photon_2d" else None
+        return photon_nll(output, target, mask, dim=dimensions)
+
     def configure_optimizers(self) -> dict:
         """Configure the optimizer and scheduler."""
         config = self.config.optimizer_config
@@ -169,7 +227,7 @@ class Bit2Bit(pl.LightningModule):
         return {
             "optimizer": optimizer,
             "lr_scheduler": scheduler,
-            "monitor": "val_loss",
+            "monitor": config.get("monitor", "train_loss"),
         }
 
     def training_step(
@@ -181,11 +239,7 @@ class Bit2Bit(pl.LightningModule):
         target = batch[0]
         input = batch[1]
         output = self(input)
-        loss = (
-            self.loss_function(output, target, (input < 1).float())
-            if self.config.masked
-            else self.loss_function(output, target)
-        )
+        loss = self._batch_loss(output, target, input)
         self._tb_train_log(loss, output, target, batch_idx)
         return loss
 
@@ -197,7 +251,7 @@ class Bit2Bit(pl.LightningModule):
         batch_idx: int,
     ) -> None:
         """Log the training step."""
-        self.log("train_loss", loss)
+        self.log("train_loss", loss, on_step=True, on_epoch=True)
         self._log_image(output[0], "train_image", batch_idx, frequency=100)
 
     def validation_step(
@@ -210,8 +264,9 @@ class Bit2Bit(pl.LightningModule):
         input = batch[1]
         ground_truth = batch[2] if len(batch) == 3 else None
         output = self(input)
-        loss = self.loss_function(output, target)
-        self._tb_val_log(loss, output, target, ground_truth, batch_idx)
+        loss = self._batch_loss(output, target, input)
+        score = self._photon_score(output, target, input)
+        self._tb_val_log(loss, output, target, ground_truth, batch_idx, photon_score=score)
 
     def _tb_val_log(
         self,
@@ -220,11 +275,15 @@ class Bit2Bit(pl.LightningModule):
         target: torch.Tensor,
         ground_truth: torch.Tensor | None,
         batch_idx: int,
+        photon_score: torch.Tensor | None = None,
     ) -> None:
         """Log the validation step. Can be extended for logging metrics."""
-        if ground_truth is not None:
+        if ground_truth is not None and getattr(self.config, "log_reference_metrics", False):
             self._log_metrics(output, ground_truth, batch_idx)
         self.log("val_loss", loss)
+        if photon_score is not None:
+            name = "val_masked_photon_nll" if self.config.masked else "val_photon_nll"
+            self.log(name, photon_score, on_step=False, on_epoch=True)
         self._log_image(output[0], "val_image", batch_idx, frequency=10)
 
     def _log_metrics(
@@ -239,16 +298,14 @@ class Bit2Bit(pl.LightningModule):
         :param ground_truth: Ground truth tensor
         :param batch_idx: Current batch index
         """
-        size_z = ground_truth.shape[2]
-        index_z = size_z // 2
-
-        # Extract middle slice
-        output_slice = output[:, :, index_z, ...]
-        ground_truth_slice = ground_truth[:, :, index_z, ...]
-
-        # Scale output to match ground truth mean intensity
-        output_mean = torch.mean(output_slice) + EPSILON
-        ground_truth_mean = torch.mean(ground_truth_slice) + EPSILON
+        # Reference comparisons are opt-in diagnostics in matching intensity units.
+        output_slice = logits_to_probabilities(output[:, :, output.shape[2] // 2])
+        ground_truth_slice = ground_truth[:, :, ground_truth.shape[2] // 2]
+        dimensions = (-1, -2, -3)
+        output_mean = output_slice.mean(dim=dimensions, keepdim=True).clamp_min(
+            torch.finfo(output_slice.dtype).tiny
+        )
+        ground_truth_mean = ground_truth_slice.mean(dim=dimensions, keepdim=True)
         output_normalized = output_slice / output_mean * ground_truth_mean
 
         psnr = self.psnr_metric(output_normalized, ground_truth_slice)
@@ -263,17 +320,24 @@ class Bit2Bit(pl.LightningModule):
     ) -> torch.Tensor:
         """Normalize the image for logging."""
         normalization = self.kwargs.get("log_image_normalization", "min-max")
-        img = image[:, image.shape[1] // 2, ...]
+        center = image[:, image.shape[1] // 2, ...]
+        img = logits_to_probabilities(center.unsqueeze(0))[0]
         match normalization:
             case "min-max":
-                return ((img - img.min()) / (img.max() - img.min()) * 255).to(torch.uint8)
+                return ((img - img.min()) / (img.max() - img.min()).clamp_min(EPSILON) * 255).to(
+                    torch.uint8
+                )
             case "mean-std":
-                return ((img - img.mean()) / img.std() * 255).to(torch.uint8)
+                return ((img - img.mean()) / img.std(unbiased=False).clamp_min(EPSILON) * 255).to(
+                    torch.uint8
+                )
             case "mean":
-                return (img / img.mean() * 128).to(torch.uint8)
+                return (img / img.mean().clamp_min(EPSILON) * 128).to(torch.uint8)
             case _:
                 LOGGER.warning("Normalization method not recognized. Using min-max.")
-                return ((img - img.min()) / (img.max() - img.min()) * 255).to(torch.uint8)
+                return ((img - img.min()) / (img.max() - img.min()).clamp_min(EPSILON) * 255).to(
+                    torch.uint8
+                )
 
     def _log_image(
         self,
@@ -283,18 +347,17 @@ class Bit2Bit(pl.LightningModule):
         frequency: int = 10,
     ) -> None:
         """Log the image."""
-        if batch_idx % frequency == 0:
+        experiment = getattr(self.logger, "experiment", None)
+        if batch_idx % frequency == 0 and callable(getattr(experiment, "add_image", None)):
             img = self._normalize_log_image(image)
-            self.logger.experiment.add_image(name, img, self.current_epoch)  # type: ignore
+            experiment.add_image(name, img, self.current_epoch)
 
     def _check_conflicts(self) -> None:
         """Check for conflicts in the model configuration."""
         # NOTE: up_mode 'upsample' is incompatible with merge_mode 'add'
         if (
-            self.config.up_mode == "upsample"
-            and self.config.merge_mode == "add"
-            or self.config.up_mode not in ["upsample", "transpose", "pixelshuffle"]
-        ):
+            self.config.up_mode == "upsample" and self.config.merge_mode == "add"
+        ) or self.config.up_mode not in ["upsample", "transpose", "pixelshuffle"]:
             raise InvalidUpModeError(self.config.up_mode)
 
     def test_step(
@@ -306,8 +369,10 @@ class Bit2Bit(pl.LightningModule):
         target = batch[0]
         input = batch[1]
         output = self(input)
-        loss = self.loss_function(output, target)
+        loss = self._batch_loss(output, target, input)
         self._tb_test_log(loss, output, target, batch_idx)
+        name = "test_masked_photon_nll" if self.config.masked else "test_photon_nll"
+        self.log(name, self._photon_score(output, target, input), on_step=False, on_epoch=True)
 
     def _tb_test_log(
         self,
@@ -319,9 +384,44 @@ class Bit2Bit(pl.LightningModule):
         """Log the test step. Can be extended for logging metrics."""
         self.log("test_loss", loss)
 
-    def on_train_end(self) -> None:
-        """Save the model at the end of training."""
-        self.trainer.save_checkpoint(self.trainer.default_root_dir)
+    def on_save_checkpoint(self, checkpoint: dict) -> None:
+        """Record the effective architecture independently of historical config flags."""
+        checkpoint["ssunet_architecture_version"] = self.architecture_version
+        checkpoint["ssunet_architecture_options"] = self._architecture_options.copy()
+
+    def on_load_checkpoint(self, checkpoint: dict) -> None:
+        """Reject loading weights under a different effective architecture."""
+        saved_config = checkpoint.get("hyper_parameters", {}).get("config", {})
+        config_version = (
+            saved_config.get("architecture_version", 1)
+            if isinstance(saved_config, dict)
+            else getattr(saved_config, "architecture_version", 1)
+        )
+        saved_version = checkpoint.get("ssunet_architecture_version", config_version)
+        if saved_version != self.architecture_version:
+            message = (
+                f"Checkpoint architecture version {saved_version} does not match model "
+                f"version {self.architecture_version}; load with the checkpoint's architecture."
+            )
+            raise ValueError(message)
+        if saved_version == 2:
+            saved_options = checkpoint.get("ssunet_architecture_options")
+            if saved_options is None:
+                get_option = (
+                    saved_config.get
+                    if isinstance(saved_config, dict)
+                    else lambda key: getattr(saved_config, key)
+                )
+                saved_options = {
+                    "partial_conv": get_option("partial_conv"),
+                    "merge_mode": get_option("merge_mode"),
+                }
+            if saved_options != self._architecture_options:
+                message = (
+                    "Checkpoint architecture options do not match the requested partial_conv "
+                    "and merge_mode; load with the checkpoint's configured layers."
+                )
+                raise ValueError(message)
 
     def reset_lr(self) -> None:
         """Reset the learning rate."""

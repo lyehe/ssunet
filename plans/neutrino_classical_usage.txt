@@ -1,0 +1,46 @@
+Traditional photon-distribution baseline comparison
+
+Configuration: config/neutrino_classical.yml
+Protocol: plans/neutrino_classical_protocol.txt
+Output: data/neutrino/classical_comparison_v1
+Viewer: http://127.0.0.1:8765/classical_comparison_v1/index.html
+
+From the ssunet root with the existing Python environment:
+  $env:CUDA_VISIBLE_DEVICES='0'
+  $env:OMP_NUM_THREADS='4'
+  $env:CUBLAS_WORKSPACE_CONFIG=':4096:8'
+  .venv/Scripts/python.exe -m src.tools.neutrino_classical --config config/neutrino_classical.yml --device cuda:0
+
+The output must be new. Stopped workers can use the same command with --resume
+after the previous PID is inactive, with identical data/configuration/source.
+An existing selection lock reuses parameters rather than reopening selection.
+Use the reporting command for a completed study rather than restarting fitting.
+
+Replay locked predictions, all event scores and PMF support, then regenerate
+the comparative figures and local viewer:
+  .venv/Scripts/python.exe -m src.tools.neutrino_classical_report --study data/neutrino/classical_comparison_v1 --device cuda:0
+
+The numerical estimators use float64. The selection pass uses only the
+original 800 training observations: 640 prior-fit and 160 tuning observations,
+separated by persisted configuration groups. No tuning-target photons enter
+the fit prior. The selected prior is refitted on all training observations;
+the 100 outer validation observations are read only after selection is locked.
+Neither fitting nor reporting opens reserved test photons or MC truth.
+
+selection_locked.json records the fixed choices. inner_split.json records
+the disjoint event/configuration IDs; validation_access.json binds the lock
+SHA256 before outer validation access. tuning_trials.json records every
+declared inner score and any numerical exclusions. predictions.npz contains
+the full normalized fields, observed A/B counts and population prior.
+per_event_scores.npz, comparison.csv and results.json contain both score
+weightings and conditional paired differences. evidence_audit.json records
+replay, probability support, partition checks and bound source identities.
+
+Correctness checks:
+  .venv/Scripts/python.exe -m pytest tests/test_neutrino_classical.py -q
+
+Implementation is separated into count/kernel/prior estimation in
+src/ssunet/neutrino_classical.py and primal-dual Poisson-TV in
+src/ssunet/poisson_tv.py. Poisson-TV convergence is checked by a feasible
+primal-dual objective gap per input photon; it is not an assertion that every
+individual intensity pixel is accurate to that numerical tolerance.

@@ -16,12 +16,12 @@ BLOCK = {
 }
 
 __all__ = [
+    "BLOCK",
     "DownConvDual3D",
-    "UpConvDual3D",
     "DownConvTri3D",
-    "UpConvTri3D",
     "LKDownConv3D",
+    "UpConvDual3D",
+    "UpConvTri3D",
     "conv111",
     "partial333",
-    "BLOCK",
 ]

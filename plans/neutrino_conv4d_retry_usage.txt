@@ -1,0 +1,24 @@
+Run the fixed x/y/z/time retry from the SSUNet checkout.
+
+The experiment uses the standalone torch-convnd package as an optional dependency.
+The recorded run uses PyTorch 2.10.0+cu130, torch-convnd 0.5.0, a compatible CUDA
+toolkit/MSVC compiler, and only physical GPU 0. Install the tested library commit:
+
+uv pip install --python .venv/Scripts/python.exe "torch-convnd[native] @ git+https://github.com/lyehe/torch-convnd.git@534ae69b60e1674faef821ac8de81284fd722164"
+
+In PowerShell:
+$env:CUDA_VISIBLE_DEVICES = "0"
+$env:MAX_JOBS = "2"
+$env:CUBLAS_WORKSPACE_CONFIG = ":4096:8"
+.venv/Scripts/python.exe -m src.tools.neutrino_conv4d_retry --config config/neutrino_conv4d_retry.yml --device cuda:0
+
+Output directories are protected against overwrite. For another run, copy the
+YAML and change its output path before starting. All previous studies remain
+separate. Read plans/neutrino_conv4d_retry_protocol.txt for the frozen comparison.
+
+Checks:
+.venv/Scripts/python.exe -m pytest tests/test_neutrino_conv4d.py -q
+
+The 4D model can use backend="torch" for compiler-free experiments; the recorded
+CUDA comparison explicitly uses native full 4D kernels. Its probability support
+is actual live sensors by time, not the enclosing grid's uninstrumented cells.

@@ -1,0 +1,96 @@
+Larger confocal GAP training test
+================================
+
+This is the earlier large preset: config/confocal_gap4d_large.yml.
+The selected current default is the 32-channel, effective-batch-four setup in
+config/confocal_gap4d_features32_batch4.yml; see plans/confocal_gap4d_batch4_usage.txt.
+The original small preset remains in config/confocal_gap4d_test.yml.
+
+Architecture and patch
+----------------------
+
+The 4D residual U-Net has four encoder resolutions with 24, 48, 96 and 192
+channels, three spatial downsampling stages, and corresponding skip-connected
+decoder stages. It has 10,110,649 parameters. Residual blocks use unrestricted
+3x3x3x3 kernels. XYZ are downsampled/upsampled; time retains its full resolution.
+
+The XYZ-only comparison uses four levels with 40, 80, 160 and 320 channels and
+9,766,281 parameters, 3.4% fewer than the 4D model. It processes time points
+independently and receives the same photon-split patches as the 4D model.
+
+Patch layout is T,Z,Y,X = [16,16,128,128], or 4,194,304 voxels per patch.
+Relative to the original small test this doubles each patch dimension and
+the base channel width, and adds one encoder/decoder level. Doubling four
+patch dimensions increases the voxel count by sixteen, not two.
+
+The microbatch is one patch; two microbatches are accumulated per optimizer
+update. Both models use FP32, Adam at 1e-4, clipping at 0.5, and 500 updates.
+The configured per-model bounds are 18 GiB of allocated GPU memory and 7,200
+training seconds. Initial checks use three updates and two validation patches;
+the full pilot evaluates sixteen fixed validation patches every 100 updates.
+
+The pilot reuses the previously verified local one-channel integer count
+crops: double snr data 2.lif / Series001 for training, and XYT cell microtuble
+4.lif / Series013 for validation. Source data and count units are documented
+in plans/confocal_gap4d_test_usage.txt. No additional NAS data copy is needed.
+No clean image target, other detector channel, or PSNR objective is used.
+
+Compare 3D and 4D scores within the same preset. The larger prediction support
+changes absolute per-photon NLL: its uniform score is log(4,194,304), whereas
+the small patch's uniform score is log(262,144). Their raw NLL numbers are not
+directly comparable as evidence that one model is better. Separate acquisitions
+do not establish independent biological replicates. This remains a pilot.
+
+Commands from the project root
+------------------------------
+
+Use the explicit config argument below for this preset. GPU 0 only is used.
+
+Check real-data training capacity:
+  .venv/Scripts/python.exe -m src.tools.confocal_train --config config/confocal_gap4d_large.yml --smoke-test
+
+Run the 500-update comparison:
+  .venv/Scripts/python.exe -m src.tools.confocal_train --config config/confocal_gap4d_large.yml --train
+
+Train only the 4D model:
+  .venv/Scripts/python.exe -m src.tools.confocal_train --config config/confocal_gap4d_large.yml --train --model conv4d
+
+The explicit config argument is --config config/confocal_gap4d_large.yml.
+The old small test is --config config/confocal_gap4d_test.yml.
+
+Output is data/confocal_gap4d_large_v1/training/. Timestamped smoke directories
+and pilot/<model>/ keep separate configurations out of earlier outputs. Each
+model records exact source hashes, config, data identity, checkpoints, learning
+curves, and measured peak allocated/reserved GPU memory. Completed pilot paths
+are not overwritten; this initial driver does not provide automatic resume.
+
+The original small smoke implementation was preserved byte for byte under
+data/confocal_gap4d_test_v1/source_snapshot/ before adding variable depth.
+Its saved config and results remain intact. The model's default depth is still
+three, preserving the original small model's state-dictionary layout.
+
+Measured capacity check: RTX 4090, physical GPU 0
+------------------------------------------------
+
+Three optimizer updates, FP32, one patch per microbatch, accumulation=2:
+
+Model    Parameters   Peak allocated GiB   Peak reserved GiB   Seconds/update
+4D       10,110,649             7.028               8.418             3.895
+3D        9,766,281            11.336              13.400             2.270
+
+Time is the median of the last two updates in this short smoke test. It
+excludes preparation, initialization and validation. Extrapolating these two
+samples suggests approximately 33 minutes of optimization for 500 4D updates,
+or 19 minutes for 500 3D updates; full-run times remain unmeasured. Reserved
+memory describes PyTorch's allocator and excludes additional CUDA-context
+overhead. These three-update results establish capacity, not training quality.
+
+All 31 relevant correctness tests pass, including depth 2/3/4 shapes and
+gradients, no temporal mixing in the 3D control, temporal dependence in 4D,
+photon conservation, loss parity and cache integrity. Both smoke checkpoints
+replay their saved photon NLL exactly; maximum PMF mass errors are below
+4.8e-7. Original three-level model initialization and logits are bitwise equal
+to the archived implementation for both 3D and 4D.
+
+Audit: data/confocal_gap4d_large_v1/setup_verification.json
+Compatibility: data/confocal_gap4d_large_v1/small_preset_compatibility.json

@@ -1,0 +1,55 @@
+4D convolution retry, fixed development pilot, 2026-10-27
+
+Question
+Can a small full x/y/z/time CNN improve observed-photon prediction on the
+existing P-ONE pilot? This is an exploratory architecture retry, not a new
+physical-event detection claim or a reopening of old test data for tuning.
+
+Data
+Use only the original 800 training and 100 validation records in the frozen
+prometheus_pone_reference_1000.h5 shard (hash in the YAML configuration).
+Load photon slices lazily for those partitions; never load test observations,
+truth sidecars, or simulated event labels. This is curated P-ONE simulation,
+not real untriggered detector data. Preserve empty observations and targets.
+Reuse p=.5 and photon-split seed 42. Each training epoch uses fresh splits.
+Validation splits remain fixed. No new baseline search is performed.
+
+Architecture
+The physical axes form a regular 3x2x20 grid with 60 instrumented cells.
+Preserve all 256 time bins. Scatter observations by physical coordinates,
+apply full Conv4d kernels, and gather logits at actual sensor cells before
+normalizing a distribution over live sensor/time support. Vacant grid cells
+are not photon-probability support. A sensor array permutation changes neither
+the physical neighborhood nor the corresponding predictions.
+
+Use a 9-to-4 pointwise stem, three width-4 residual full 3x3x3x3 convolutions
+with temporal dilations 1,2,4, and a pointwise output head: 3,945 parameters.
+Condition on A, live support, geometry, time coordinate, p, local counts and
+total retained count only. B is passed solely to the count-weighted loss.
+
+Matched controls and schedule
+Train DensePhotonReference and FinePhotonReference at width 16 (3,585
+parameters each) on the same observations, shuffle orders, photon splits,
+seeds 42/43/44, batch 16, FP32, AdamW lr=.001/weight_decay=.01, clipping 1,
+and 5,000 updates. The full-time model separates the old temporal bottleneck
+from spatial coupling. Parameter counts and actual compute costs differ.
+Record all scheduled curves; the fixed final step is primary, not the best
+validation checkpoint. Training time limit is 600 seconds per run, with a
+12 GiB allocated GPU ceiling. GPU 0 only; no multi-GPU training or sparse model.
+
+Scoring
+Use photon-weighted held-out NLL, lower better; primary stratum is 1-10 retained
+input photons. Report all photons, empty inputs and remaining input-count
+strata. Frozen prior/count mixtures use the earlier pilot's settings.
+Include 20 count-matched donor draws from training inputs and matching coverage.
+Average per-event NLL across seeds, not probabilities. Bootstrap complete
+persisted configuration IDs with 10,000 draws; intervals are descriptive and
+exclude model, selection and deeper unknown latent-family uncertainty.
+No PSNR, photon GT image, signal-presence labels or source-parameter targets.
+
+Evidence
+Write to a new conv4d_retry_v1 directory. Save source/native-library hashes,
+configuration, seed checkpoints, per-event scores, curves, resources and a
+comparison viewer. Choose arrival examples solely by retained-input strata
+and original record order; identify held-out photons as noisy observations.
+Preserve all earlier studies and their positive and negative outcomes.

@@ -1,0 +1,15 @@
+{
+  "repository": "https://github.com/krulllab/GAP",
+  "commit": "135b8c67ce5a6ab4c44bcdd0fbe756f75526e249",
+  "source": "gap/GAP_UNET_ResBlock.py",
+  "sha256": "3568742971dec5e83e5ebabfe30de1fb331c75bad47264fa439e58d8c6fca9ed",
+  "modifications": "none",
+  "paper_configuration": {
+    "levels": 10,
+    "channels": 1,
+    "depth": 6,
+    "start_filts": 28,
+    "up_mode": "transpose",
+    "merge_mode": "add"
+  }
+}

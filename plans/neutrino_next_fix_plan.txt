@@ -1,0 +1,93 @@
+Next fixes after development-only timing/selection diagnosis, 2026-10-26
+
+Objective and boundary
+----------------------
+Improve and test event-specific use of predicted arrival distributions without
+claiming that the completed detector tests were successful. New work must be
+clearly separated from the opened detection tests and the post-hoc development
+diagnosis. No clean photon GT, PSNR objective or graph rewrite is required.
+
+First: cheap head-feature ablation on development data
+-----------------------------------------------------
+Freeze existing encoders. The learned PDF-only timing features are informative;
+the pooled hidden features are near the constant timing baseline, but that
+does not prove they harm event discrimination. Test this directly before
+training a new encoder.
+
+Finite detector arms, each with identical raw/prior inputs and logistic-head
+layout, padding removed channels with zero:
+* raw/prior only;
+* raw/prior plus learned PDF summaries/scalars, hidden channels zero;
+* raw/prior plus learned hidden channels, PDF/scalar channels zero;
+* raw/prior plus full learned features (existing reference);
+* the same three additions using the untrained encoders.
+
+Use the original training observations/labels and only development validation
+for this exploratory ablation. Match feature definitions between learned and
+random arms; do not equate zero padding with equal effective capacity. Keep
+L2 candidates fixed, preserve unconverged points with explicit status, and
+report full curves rather than only the best point. Align the prospective
+selection rule with efficiency at a declared low false-positive rate; retain
+balanced log loss as a diagnostic. Current development has only 256 two-photon
+signal examples and about 41 nominal 1% tail events per calibration half, so
+do not treat small validation differences as established improvements.
+
+Exit: settle a frozen feature/score/selection recipe and whether added learned
+PDF features outperform both raw/prior and matched random features robustly
+enough to justify a NEW evaluation. Do not re-score the old test with the new
+recipe. If the evidence is absent, preserve that outcome and move to the
+targeted architecture experiment only with an explicit rationale.
+
+Second: dense context that retains the time axis, if justified
+------------------------------------------------------------
+Current shared context is approximately
+  C = mean_sensors phi(mean_time h_sensor(time), coordinates, counts, p),
+then broadcast across time. The new candidate is
+  C(time) = mean_live_sensors phi(h_sensor(time), coordinates, counts, p),
+then broadcast across sensors at each time. Use the same Linear(C+6,2C),
+SiLU and decoder parameter shapes; the change reuses weights at each time
+and adds no parameters. It does add compute/activation memory, which must
+be profiled rather than assumed equal. Sensor permutation equivariance,
+live-mask handling and normalized photon PDFs must remain explicit.
+
+Compare at the SAME temporal resolution. A full-resolution time-averaged
+reference (FinePhotonReference) and full-resolution time-indexed candidate
+isolate context preservation; comparing only with the old 256->64->256 model
+would confound context with temporal pooling. Use FP32 in both, based on the
+earlier precision evidence. Keep the probability output and count-weighted
+Poisson photon-splitting loss contract unchanged in the splitting arm.
+
+Before training: validate shapes/normalization, sensor permutation behavior,
+mask semantics and pairing sensitivity on controlled inputs. Benchmark memory
+and updates/second at a fixed dense batch and support. Start within existing
+resource ceilings, not an assumed graph/sparse efficiency requirement.
+
+For the contribution, use a finite matched architecture/objective design:
+time-averaged versus time-indexed context, each pretrained by self-splitting
+versus observed-count reconstruction, three matched seeds. Include untrained
+features and raw/prior/physics controls. Match observations, trained-arm update
+budgets, optimizer, precision and labelled-head budgets. Untrained controls
+have zero pretraining updates by definition; report that rather than claiming
+equal training cost for them. Any development architecture selection precedes
+the next held-out evaluation.
+
+Third: new evaluation after the recipe is frozen
+-----------------------------------------------
+Use fresh source families and independent background calibration. Predeclare
+event score, feature groups, fitted-head selection criterion, seed handling,
+primary expected signal/FPR and resource limits. Include all strong references
+and both recoveries/losses. Improve uncertainty accounting for finite null
+calibration; existing conditional source intervals do not cover it. Choose
+null exposure consistent with the tail precision being claimed.
+
+Report expected-signal efficiency, independent actual false alarms, paired
+source uncertainty, timing/position error where defined, and every negative
+result. A new conditional gain over random/alternative-objective controls is
+needed for a self-splitting claim. Matched detector simulation, documented
+untriggered real background, detector state/calibration and live exposure
+remain necessary before claims about previously missed physical events.
+
+Later robustness must reflect the intended detector: unknown onset, correlated
+noise and realistic response. Do not simultaneously alter the population and
+architecture and attribute all gain to self-splitting. Any deliberately harder
+toy remains exploratory and cannot substitute for real background validation.

@@ -1,0 +1,67 @@
+Corrected GAP 4D comparison, 2026-10-27
+
+Method selection
+The training shard has bins containing 444 photons. Its declared observation
+kind is photon_counts, selecting GAP. Genuine one-bit acquisitions select
+Bit2Bit. The loss rejects a conflicting method, nonbinary Bit2Bit data, and
+overlapping binary splits. Count data allow A and B in the same bin.
+
+Normalization
+Raw-count ten-scale sine features follow the published GAP input convention.
+Targets are normalized per observation inside the loss, following its unit-mean
+target/log-mean-exp objective. The predicted distribution is one joint unit-sum
+PMF over live sensor/time bins. Empty targets contribute zero loss; they are
+excluded from event cross-entropy averages. Clean photon GT is unavailable
+and unused. No GT intensity matching or PSNR is used.
+
+Fixed experiment
+800 training and 100 reused validation simulation observations; no test or
+truth access. Three seeds per architecture, all 5000 updates, same p=.5 A/B
+splits and FP32 optimization. Small detector backbones and the optimizer are
+adaptations of the papers, not a microscopy benchmark reproduction.
+
+Final scores, lower is better
+Architecture              Photon NLL all / low     Event CE all / low
+Coarse temporal            3.3699 / 4.2002           5.1207 / 4.9692
+Full-time temporal         2.8747 / 3.7495           4.9083 / 4.7435
+4D                         3.0124 / 3.3473           4.6194 / 4.2736
+Frozen tuned mixture       2.6892 / 4.6962           5.8716 / 6.0244
+
+Low means A has 1-10 retained photons: 50 validation observations, 36 with
+nonempty targets, 120 held-out B photons. All-photon evaluation has 907 B
+photons. Scores average seed-level event NLLs, not prediction ensembling.
+
+4D minus full-time, whole-configuration descriptive bootstrap intervals:
+  Low photon-weighted NLL: -0.4022 [-0.6740, -0.1594].
+  All photon-weighted NLL: +0.1377 [-0.1737, +0.2873].
+  Low equal-event CE:      -0.4699 [-0.8232, -0.1376].
+  All equal-event CE:      -0.2889 [-0.5413, -0.0599].
+The low-count advantage appears under both weightings. Across all photons,
+4D is worse at the point estimate and the contrast remains uncertain. The
+equal-event all-target comparison favors 4D. Changing the weighting changes
+which observations dominate, so both views are retained.
+
+Validation
+14 normalization/model/resume cases and one reporting-statistic case pass;
+scoped Ruff lint/format checks pass. All nine final checkpoints replay every
+saved per-event validation NLL with maximum absolute error zero. Frozen
+data, training sources and native-library sources match their identities.
+Maximum checked output mass error is 3.5763e-7; invalid-support mass is zero.
+4D training seconds per seed: 157.4, 177.5, 167.3. Peak allocated GPU memory
+is 0.2089 GiB. Timings exclude validation/checkpoint overhead; GPU is shared.
+
+Interpretation and limits
+These are conditional descriptive intervals on a small, previously explored
+simulation cohort. They exclude seed/selection uncertainty. No real-event
+recovery, newly detectable observations, Poisson-physics validation, or causal
+benefit of self splitting is established. Binary Bit2Bit data have not been
+newly benchmarked here; their loss and gradient parity are unit checked.
+
+The earlier raw-count-weighted/log1p run is preserved as conv4d_retry_v1.
+Both encoding and training weighting changed; this is not an ablation of
+target normalization alone. Its comparison remains valid for its objective.
+
+Viewer: http://127.0.0.1:8765/gap4d_retry_v1/index.html
+Numerical results and audits: data/neutrino/gap4d_retry_v1
+Primary source audit: plans/photon_method_normalization_audit.txt
+Commands and resume rules: plans/neutrino_gap4d_retry_usage.txt

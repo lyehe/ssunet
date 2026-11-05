@@ -1,0 +1,46 @@
+Published GAP network transfer comparison
+
+Use config/neutrino_published_gap.yml and read the fixed protocol at
+plans/neutrino_published_gap_protocol.txt. The source under
+src/ssunet/vendor/gap/GAP_UNET_ResBlock.py is the unchanged MIT-licensed
+released implementation, with license and immutable provenance included.
+The adapter supplies whole detector sensor/time observations, canonical
+geometry-based row order, pooling padding and output cropping only.
+
+PowerShell from the ssunet root, using the existing neutrino environment:
+  $env:CUDA_VISIBLE_DEVICES='0'
+  $env:MAX_JOBS='2'
+  $env:OMP_NUM_THREADS='4'
+  $env:CUBLAS_WORKSPACE_CONFIG=':4096:8'
+  .venv/Scripts/python.exe -m src.tools.neutrino_published_gap --config config/neutrino_published_gap.yml --device cuda:0
+
+The run requires a new output directory. Interrupted workers can resume
+with the same command plus --resume after verifying the old PID is inactive.
+Saved data, configuration, source, reference and published-network identities
+must match. Checkpoints retain optimizer/RNG/cursor/scheduler state.
+
+After all six published fits complete:
+  .venv/Scripts/python.exe -m src.tools.neutrino_published_gap_report --study data/neutrino/published_gap_comparison_v1 --device cuda:0
+
+This replays every checkpoint, verifies output probability support, adds
+equal-event paired intervals and exports plots, numerical comparisons and
+the viewer. It validates the frozen 4D comparator's identities and exact
+validation event IDs and A/B counts. No extra training or model selection
+occurs in the reporting command.
+
+Local viewer: http://127.0.0.1:8765/published_gap_comparison_v1/index.html
+Data: data/neutrino/published_gap_comparison_v1
+Source files are archived and hashed alongside each run's identity.
+
+The paper setup uses 28 initial channels, six levels, Adam lr=1e-4,
+batch 32 and 2500 updates. The matched setup changes optimizer/batch size
+to AdamW lr=.001, batch 16 and 5000 updates. Both see 80000 training examples
+over 100 detector-data epochs. The original image notebook uses virtual
+epochs of 16000 random crops; its complete image-training schedule is not
+replicated. Fixed p=.5, whole-event matrices, and omitting image augmentation
+are explicit domain adaptations. This is a budget-matched transfer of the
+published implementation, not a reproduced microscopy result or a globally
+optimized GAP configuration for this detector.
+
+Focused source/forward/gradient/mapping/loss/scheduler/statistics checks:
+  .venv/Scripts/python.exe -m pytest tests/test_neutrino_published_gap.py -q

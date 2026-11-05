@@ -1,0 +1,41 @@
+Fresh training retry after the Bit2Bit offset correction, 2026-10-27
+
+Requested by the user: retry training. Run the existing three-architecture,
+three-seed experiment from scratch under the corrected current sources.
+Use config/neutrino_gap4d_retry_v2.yml; output data/neutrino/gap4d_retry_v2.
+Preserve gap4d_retry_v1, conv4d_retry_v1 and their checkpoints/audits.
+
+The data are unchanged P-ONE simulation photon counts, with training bins
+up to 444. They select GAP, following the declared acquisition contract.
+True one-bit observations would use Bit2Bit with the input-hit mask inside
+the exponential normalization offset. This count-data rerun does not exercise
+that binary correction; GAP loss/gradients were already verified bitwise
+unchanged. This is a fresh reproducibility check, not a test of a new GAP loss.
+
+All data, architecture, optimizer, splitting, evaluation and seed settings
+match the previous GAP run. Only study identity/output/scope metadata change.
+The dataset contains 800 training and 100 validation observations; reserved
+test observations and truth sidecars are excluded from training/evaluation.
+No clean photon ground truth or PSNR metric is used.
+
+Arms: coarse temporal width 16, full-time temporal width 16, native 4D width 4.
+Seeds 42/43/44; 5000 updates per seed, batch 16, AdamW learning rate .001,
+weight decay .01, clipping 1, FP32, TF32 off. GPU 0 only, CPU threads 4.
+Inputs use ten-scale raw-count sine encoding, targets are normalized per
+event inside the loss, and outputs are joint live sensor/time probabilities.
+Keep the final fixed step rather than selecting a validation checkpoint.
+Save atomic resumable checkpoints every 250 updates and evaluation points.
+
+Keep the same fixed noisy validation split and fresh training-epoch splits,
+frozen prior/mixture controls and twenty count-matched donor draws. Report
+both photon-weighted NLL and per-nonempty-event cross entropy, including
+the input-defined retained 1-10 photon subset. The fixed configuration
+bootstrap intervals are descriptive and condition on the trained models.
+
+Save a hash-verified snapshot of all recorded training/native source files.
+Replay all nine final checkpoints against saved per-event scores, verify
+probability support and compare current scores with the previous GAP run.
+Export the usual comparison plots/examples and serve them on the existing
+localhost:8765 data/neutrino server. Neither old results nor source identities
+are overwritten. Reusing this validation cohort establishes no new held-out
+test, real-event detection, or causal benefit of self splitting.

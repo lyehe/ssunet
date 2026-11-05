@@ -1,0 +1,51 @@
+study_id: icecube_empirical_marked_pulse_v1
+data:
+  source: data/neutrino/icecube_odf
+  output: data/neutrino/pulse_study_v2
+  geometry: geometry.odf
+  folds:
+    train: Level1_IC59_data_Run00115150_Part00000000.h5
+    validation: neutrinos_run_121585.h5
+    test: LargeNChSample_122252.h5
+  time_window_ns: [0, 64000]
+  time_bins: 64
+  charge_interior_edges_pe: [0.5, 1.0, 2.0]
+  photon_split_seed: 42
+  split_probability: 0.5
+  spatial_representation: fixed_public_geometry_anchor_voronoi_cells
+  maximum_spatial_quantization_distance_m: 50.0
+contract:
+  count_object: reconstructed_pulses
+  charge_is_photon_count: false
+  objective: empirical_held_out_joint_sensor_time_charge_category_log_score
+  exact_independent_Poisson_theory_claimed: false
+  clock: fixed_analysis_window_on_unmodified_source_timestamps
+  live_mask: physical_geometry_candidates_only_live_status_unavailable
+  no_event_claim_allowed: false
+  exact_cross_run_DOM_correspondence_claimed: false
+model:
+  channels: 16
+training:
+  seeds: [42]
+  epochs: 3
+  batch_size: 2
+  learning_rate: 0.001
+  weight_decay: 0.01
+  gradient_clip: 1.0
+  cpu_threads: 4
+  num_workers: 0
+  precision: full_float32_due_to_development_mixed_precision_instability
+  max_training_seconds_per_seed: 1800
+  max_evaluation_seconds_per_seed: 300
+  max_gpu_allocated_gib: 12
+  max_process_rss_gib: 4
+baselines:
+  prior_pseudocount: 0.0001
+  time_width_bins: [0, 1, 2]
+  prior_fractions: [0.1, 0.25, 0.5, 0.9]
+evaluation:
+  checkpoint_selection: lowest_all_pulse_validation_nll_then_earliest_epoch
+  baseline_selection: lowest_all_pulse_validation_nll_then_candidate_order
+  bootstrap_draws: 10000
+  bootstrap_seed: 20261025
+  confidence_scope: within_one_test_run_only_unknown_additional_time_dependence

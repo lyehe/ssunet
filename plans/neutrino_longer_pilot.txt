@@ -1,0 +1,166 @@
+Longer photon-splitting pilot: execution and assessment
+Date: 2026-10-25
+Status: all three fixed-budget runs completed; larger independent study pending.
+
+Finding
+-------
+The short pilot was substantially undertrained. Keeping the same architecture,
+objective and learning rate, longer training reverses its low-count deficit
+against the fixed and previously tuned retained-count/prior mixtures. The three
+model seeds give very similar final scores. The all-event score still trails
+the tuned mixture on its point estimate, and validation evidence is preliminary.
+
+Fixed protocol
+--------------
+Configuration: config/neutrino_pilot.yml, written before training.
+Runner: src/tools/neutrino_pilot.py.
+Frozen metrics/controls: src/ssunet/neutrino_evaluation.py.
+
+Same P-ONE water simulation shard, 60 sensors, 256 bins of 25 ns, fixed clock:
+  1f927ea60a8327546c958f5bc5740d0f872ea0f38d1470271eb08f83958f2209
+Same 800 training / 100 validation / 100 reserved test events as the short pilot.
+Model: unchanged DensePhotonReference, 3,585 parameters, 16 channels.
+Objective: mean raw-count -sum(B*log(q)) over a batch, without target-total
+normalization. Inputs are A, fixed geometry/live support and p=0.5 only.
+No clean photon ground truth, simulation labels or image PSNR are used.
+
+Seeds: 42, 43, 44; 5,000 optimizer steps per seed; batch size 16.
+AdamW learning rate 0.001 and gradient clipping at 1, matching the original.
+BF16 training, FP32 probability normalization and frozen FP32 inference.
+Each run processes 80,000 training examples: 100 passes over 800 distinct
+events, with fresh event photon splits each epoch. These are not 80,000 new
+physical configurations. Photon-split seed 42 is shared across model seeds;
+initialization and training shuffle differ. Validation draws are identical.
+
+Evaluation steps: 0, 110, 250, 500, 1000, 2000, 3000, 4000 and 5000.
+Final step 5000 is the primary comparison. The best scheduled low-count
+validation checkpoint is reported separately as a selection-based diagnostic.
+All three best low-count checkpoints occur at step 4000.
+
+Baselines and donor settings were frozen from the preceding pilot: no new
+bandwidth or mixture search was performed. The short step-110 seed-42 model
+and both stronger baseline scores reproduce within 1e-5 and 1e-8 respectively.
+The test partition was not scored. No truth sidecar was read.
+
+Results
+-------
+Photon-weighted NLL, nats per held-out photon, lower is better.
+All-event validation has 907 target photons in 55 nonempty-target events.
+The 1--10 RETAINED-photon stratum has 50 events, 36 nonempty targets and 120
+held-out photons. Its strata depend on A, not the full A+B count.
+
+Method                                      All events    Retained 1--10
+Original 110-step pilot, seed 42                  4.6857           5.7950
+Fixed 50/50 retained-count/prior mixture          3.0603           4.9737
+Previously tuned retained-count/prior mixture    2.6892           4.6962
+Final model, seed 42                             2.9560           4.1150
+Final model, seed 43                             2.9606           4.1236
+Final model, seed 44                             2.9647           4.1387
+Mean final model across seeds                    2.9604           4.1258
+Sample standard deviation across seeds           0.0044           0.0120
+Mean validation-selected model                   2.9792           4.1149
+
+The means are means of seed-specific NLLs, not a probability-ensemble score.
+The same validation photons are used across seeds and are not counted as three
+independent datasets. Event-level differences are averaged across the seeds
+before bootstrapping persisted configuration IDs together.
+
+Final models: mean-seed model-minus-control differences, with descriptive
+95% configuration-bootstrap intervals (10,000 replicates):
+  Retained 1--10 vs fixed mixture:  -0.8480 [-1.4533, -0.3111]
+  Retained 1--10 vs tuned mixture:  -0.5705 [-1.1926, -0.0100]
+  All photons vs fixed mixture:    -0.0999 [-0.8036, +0.2028]
+  All photons vs tuned mixture:    +0.2712 [-0.5048, +0.5949]
+Negative differences favor the model. The low-count interval against the tuned
+mixture only narrowly excludes zero. These are exploratory validation intervals,
+conditional on the chosen models/baseline settings; they do not include model-
+selection uncertainty or establish a confirmatory scientific result.
+
+Event information and empty inputs
+---------------------------------
+Twenty donor realizations use training inputs matched on retained photon count,
+with the same geometry, exposure and p. All retained 1--10 matches are exact.
+Final donor-input NLLs at low counts are 8.719, 8.949 and 8.671 for seeds 42,
+43 and 44, versus their own-input scores 4.115, 4.124 and 4.139. The mean model-
+minus-donor difference is -4.654 [-5.493, -3.671], supporting event-specific
+location/timing information beyond brightness. The all-event donor comparison
+is not interpreted because the five brightest events lack exact count matches.
+
+With zero retained photons, final mean NLL is 7.264, compared with 7.939 for
+the tuned prior. That stratum contains only 15 target photons in 11 events.
+It evaluates conditional photon-location prediction for empty inputs, not
+physical no-event classification. Empty targets retain zero likelihood loss.
+
+Learning curves
+---------------
+Most improvement occurs in the first 250--1000 updates. Low-count scores approach
+a plateau at 2000--4000 and increase slightly from 4000 to 5000 in every seed.
+Longer training resolves much of the original deficit without changing the
+backbone. This experiment does not identify a need for a graph or sparse model,
+nor prove that a different dense head is necessary. The remaining all-event gap
+and the previously observed temporal-coarsening effect warrant later study.
+
+Cost
+----
+Device: cuda:0, one NVIDIA GeForce RTX 4090.
+
+Seed   Training seconds*   In-run total seconds   Training examples/second
+42               106.63                 109.65                    750.3
+43                92.87                  95.24                    861.4
+44               100.26                 102.81                    797.9
+* Training timings exclude scheduled validation/checkpoint/control work.
+
+Combined in-run time: 307.70 seconds (5.13 minutes), excluding initial package
+imports and data/setup work. Every seed finishes well inside the 600-second
+pilot limit. Peak PyTorch allocated memory, including evaluation, is 0.0791 GiB
+for every seed, below the 12 GiB target. This is tensor allocation, not total
+device/process memory. The regression suite ran concurrently for part of the
+experiment; these are workstation measurements, not isolated peak benchmarks.
+Larger geometries, models and datasets still need separate cost measurement.
+
+Checks and saved evidence
+-------------------------
+Full regression suite: 135 passed, 8 existing warnings in 57.36 seconds.
+Focused photon/evaluation tests: 21 passed.
+Ruff lint and formatting passed for all three new Python files.
+Source and installed-style CLI imports succeeded. Reloaded best checkpoints
+reproduce frozen validation scores. The run records data and source-file hashes.
+Independent final GPU-checkpoint reload on CPU reproduces seed-42 NLL within
+4.5e-7 nats/photon. Final data/source hashes and per-event denominators agree.
+
+Output: data/neutrino/controlled_reference/longer_pilot_v1/
+  manifest.json                  Frozen configuration, environment and IDs.
+  baseline_scores.json           Fixed controls with count-stratum denominators.
+  summary.json                   Seed summaries, intervals and per-event evidence.
+  verification.json              Hashes, score consistency and check results.
+  learning_curves.png / .svg     Exportable learning-curve figures.
+  seed_42/, seed_43/, seed_44/    Step checkpoints, best_low_count.pt, learning
+                                 curves as JSON/CSV and final/selected results.
+Checkpoints store model/optimizer state, data identity, seed, step and settings.
+They support inference and optimizer audit; CLI resume is not implemented.
+Experiment creation refuses to overwrite an existing output directory.
+
+Reproduction, from the repository root with a new output directory:
+  python -m src.tools.neutrino_pilot --config config/neutrino_pilot.yml --output data/neutrino/controlled_reference/longer_pilot_reproduction --device cuda:0
+Installed packages may use python -m tools.neutrino_pilot instead.
+
+Next step
+---------
+The low-count validation improvement now supports proceeding to a larger
+controlled comparison before changing architecture. Keep the fixed mixture,
+the frozen tuned estimator and exact count-matched controls. Increase the
+independent validation/test sample and lock the training/selection protocol.
+Current uncertainty is dominated by the small event sample, not seed variation.
+
+For a 100,000-event cohort, persist source-level group partitions, preserve any
+pilot development assignments that are reused, and exclude the entire pilot
+cohort from the new test set. Review repeated source configurations and upstream
+selection/clock/unit-photon provenance before claiming physical Poisson theory.
+The current P-ONE source remains a curated simulation in water; this experiment
+does not establish real-data or downstream neutrino-reconstruction benefit.
+
+The frozen dense donor cache in this small-pilot runner should be replaced by
+on-demand or bounded donor loading before a large-cohort run. Scaling should
+measure CPU memory, import/setup cost and full evaluation cost as well as GPU
+training throughput. The original 100,000-event independent-test study remains
+pending; the three-seed experiment completed here uses the 1,000-event pilot.

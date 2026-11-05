@@ -1,0 +1,84 @@
+Published GAP transfer comparison completed, 2026-10-27 local time
+
+Implementation and budget
+The official GAP residual U-Net is vendored byte for byte at commit
+135b8c67ce5a6ab4c44bcdd0fbe756f75526e249, with its MIT license. Network SHA256
+3568742971dec5e83e5ebabfe30de1fb331c75bad47264fa439e58d8c6fca9ed.
+The paper configuration has 6 levels, 28 initial channels, 10 sine scales and
+33443425 parameters. A separate adapter maps raw detector counts to canonical
+sensor/time rows, pads 60 rows to 64 for pooling, then crops before PMF scoring.
+
+All models use the same 800 training and 100 validation P-ONE simulation
+observations, photon splits, geometry and 256 arrival-time bins. No reserved
+test records, MC truth, clean photon GT, intensity matching or PSNR is used.
+The frozen 4D results are reused from gap4d_retry_v2 with all identities bound.
+
+Three seeds for each predeclared GAP configuration:
+  Paper setup: Adam 1e-4, clipping .5, batch 32, 2500 updates, validation-loss
+    ReduceLROnPlateau factor .5 / patience 10, once per detector-data epoch.
+  Matched setup: AdamW .001, weight decay .01, clipping 1, batch 16, 5000 updates.
+Both process 80000 examples over 100 complete detector-data epochs, matching
+the 4D reference. Both are reported at their fixed final update; no validation
+selection of optimizer or checkpoint was used for the primary comparison.
+
+Final predictive scores, lower is better
+Model                      Photon NLL all / low       Event CE all / low
+4D (3981 parameters)        3.012414 / 3.347322          4.619380 / 4.273617
+GAP paper setup            4.495784 / 4.742118          6.096509 / 5.789245
+GAP matched setup          3.590670 / 3.658091          4.930168 / 4.675821
+Full-time temporal         2.874665 / 3.749533          4.908299 / 4.743549
+Frozen tuned mixture       2.689193 / 4.696247          5.871634 / 6.024382
+
+The retained-input 1-10 count subset has 50 observations, 36 nonempty targets
+and 120 held-out photons. All-photon evaluation contains 907 held-out photons.
+
+Paired 4D minus GAP matched setup, descriptive configuration bootstrap:
+  Low photon NLL: -0.310768 [-0.535552, -0.122328].
+  All photon NLL: -0.578256 [-1.061879, +0.213234].
+  Low event CE:   -0.402203 [-0.668614, -0.131381].
+  All event CE:   -0.310788 [-0.531398, -0.084629].
+The low-count fixed-final comparison favors 4D. The all-photon contrast with
+matched GAP remains uncertain. Intervals condition on fitted models and this
+reused validation cohort; they omit training-seed and selection uncertainty.
+
+Important training-duration diagnostic
+The large U-Net degrades late in training on this small transfer dataset.
+The best recorded mean low-count GAP matched curve point is 3.392283 at
+48000 training examples, much closer to 4D's final 3.347322. The analogous
+paper-setup value is 3.771901 at 16000 examples, versus its final 4.742118.
+These minima were inspected retrospectively over saved curve summaries;
+they are not selected-model scores, have no paired interval, and are not an
+independent benchmark. Superiority over an early-stopped or fully tuned GAP
+model remains unestablished. The viewer makes this qualification prominent.
+
+Domain and training-schedule limits
+This transfers the released architecture to detector sensor/time matrices;
+it does not reproduce a microscopy benchmark. Whole-event matrices replace
+256x256 random image crops; image flips/transposes are omitted and thinning
+p=.5 is fixed. The original image notebook uses virtual epochs of 16000 random
+crops, so its complete original image-training schedule is not reproduced.
+Sensor-row adjacency differs from physical 4D adjacency, and no optimized
+detector-specific GAP embedding or sensor-order sensitivity study is claimed.
+This is not a Bit2Bit comparison, real-data validation, or detection proof.
+
+Resource measurements per seed, same 80000-example budget
+4D:       mean 155.3 training seconds, peak allocated GPU .2089 GiB.
+GAP paper: mean 162.2 seconds, peak allocated GPU 1.3509 GiB.
+GAP matched: mean 183.7 seconds, peak allocated GPU .8660 GiB.
+Times exclude validation/checkpoint overhead and use a shared RTX 4090.
+
+Verification
+Seven targeted tests pass: upstream-byte identity, full published capacity,
+forward/parameter-gradient parity with released code, physical sensor mapping,
+padding/dead-support behavior, source photon-loss parity, scheduler-safe
+resumption and equal-event statistics (some properties share a test case).
+Scoped Ruff checks pass. All six final published checkpoints replay every
+saved validation-event NLL exactly. Maximum probability-sum error is 2.3842e-7
+and invalid-support mass is zero. All current data/published/native/reference
+identities and all 45 archived training/reporting source files are verified.
+Earlier study results and checkpoints remain preserved.
+
+Viewer: http://127.0.0.1:8765/published_gap_comparison_v1/index.html
+Numerical evidence: data/neutrino/published_gap_comparison_v1
+Commands: plans/neutrino_published_gap_usage.txt
+Fixed protocol: plans/neutrino_published_gap_protocol.txt

@@ -1,0 +1,57 @@
+study_id: neutrino_analytic_gt_v1
+data:
+  output: data/neutrino/analytic_study
+  photon_split_seed: 42
+  split_probability: 0.5
+generator:
+  seed: 2749
+  events: 6000
+  time_window_ns: [0.0, 6400.0]
+  time_bins: 256
+  analytic:
+    strings: 8
+    sensors_per_string: 32
+    expected_signal_photons: [0, 2, 5, 10, 30, 100]
+    expected_background_photons: 1.0
+model:
+  channels: 16
+training:
+  seeds: [42, 43, 44]
+  epochs: 10
+  batch_size: 8
+  learning_rate: 0.001
+  weight_decay: 0.01
+  gradient_clip: 1.0
+  cpu_threads: 4
+  num_workers: 0
+  max_training_seconds_per_seed: 1800
+  max_evaluation_seconds_per_seed: 600
+  max_gpu_allocated_gib: 12
+  max_process_rss_gib: 4
+evaluation:
+  epochs: [0, 1, 2, 5, 10]
+  bootstrap_seed: 20261025
+  bootstrap_draws: 10000
+  bootstrap_chunk_draws: 64
+  primary_stratum: retained_1_to_10
+  fixed_training_diagnostic_events: 120
+baselines:
+  original_prior_pseudocount: 0.5
+  frozen_prior_time_ns: 200
+  frozen_prior_pseudocount: 0.0001
+  frozen_mixture_prior_fraction: 0.25
+  prior_time_ns: [0, 100, 400]
+  prior_pseudocounts: [0.0001, 0.1, 1.0]
+  input_time_ns: [0, 50, 200]
+  input_space_m: [0, 150]
+  mixture_prior_fractions: [0.1, 0.25, 0.5, 0.9]
+stress:
+  seed: 62841
+  background_added_expected_photons: 5.0
+  inactive_fraction: 0.1
+  timing_offset_ns: 50
+  efficiency_range: [0.5, 1.0]
+  dead_time_ns: 100
+  afterpulse_probability: 0.1
+  afterpulse_delay_ns: 100
+  interpretation: analytic_predictive_response_diagnostics_not_physical_calibration

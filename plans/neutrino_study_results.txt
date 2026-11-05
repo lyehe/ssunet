@@ -1,0 +1,211 @@
+Completed phased study: photon self-splitting and dense prediction
+2026-10-25
+
+The planned engineering, independent simulation test, finite mechanism/response
+studies, empirical real-pulse pilot and separate labelled probe were executed.
+Positive and negative results are retained. This is evidence for a restricted
+predictive claim, not proof of physical Poisson detection, clean intensity
+recovery, no-event classification, general neutrino reconstruction benefit or
+novelty of photon splitting itself.
+
+Open the offline viewers:
+  data/neutrino/study/visualizations_test_v1/index.html
+  data/neutrino/analytic_study/visualizations_v2/index.html
+  data/neutrino/study/followup_visualizations/index.html
+
+Each viewer has PNG/SVG exports. The main viewer includes an interactive event
+dropdown/zoom display, CSV scores, saved example distributions, checkpoint
+identities, training failures, empty-target rates, concentration and resources.
+The main and follow-up viewer folders also have adjacent ZIP bundles.
+
+Independent main comparison
+---------------------------
+New cohort: 79,771 training / 10,181 validation / 10,048 reserved test events.
+The test contains 10,028 stored configuration families. All known relatives of
+the pilot were excluded; no known family crosses folds. Unknown deeper latent
+relations and the archived source-generation/selection contract remain qualified.
+
+Prediction is a relative probability over fixed sensor/time support, conditional
+on A, p and geometry/support. No MC labels, held-out counts or clean rate maps
+enter the forward pass. The training loss keeps raw count weighting. PSNR is not
+an acceptance metric, and a random held-out photon realization is not clean GT.
+
+Three seeds use unchanged 3,585-parameter backbones, ten epochs and identical
+frozen validation/test photon splits at p=.5. Checkpoints are chosen by the
+registered low-count validation rule. Baseline selection evaluated 36 prior and
+144 mixture candidates on development data only. The selected low-count control
+uses 25 ns input smoothing, no spatial smoothing and a 25% selected-prior mixture.
+
+The first sealed main test passed both quality contrasts, the 0.10 nats/photon
+practical margin, and the resource limits. Scores are mean per-event seed NLLs,
+not a probability ensemble, and seeds are not counted as extra test events.
+
+                                   All photons    Retained input count 1--10
+  Selected dense models               2.857924              4.093423
+  Selected simple mixture             2.997441              4.338507
+  Frozen 75/25 mixture                2.734047              4.561258
+  Fixed 50/50 mixture                 3.008790              4.579706
+  Exact-count donor control                n/a              8.804127
+
+Primary model-minus-selected-control delta: -0.245084 nats/photon, descriptive
+95% paired group interval [-0.272125,-0.218388]. Model-minus-donor delta:
+-4.710704 [-4.822572,-4.597531]. Primary donor matching coverage is 100%.
+Unmatched bright-stratum donor contrasts are not interpreted as exact controls.
+
+The primary stratum has 5,135 events, 3,662 with nonempty B, and 12,261 held-out
+photons. All-event scoring uses 62,745 held-out photons in 6,059 events. Empty
+targets stay in the catalogue and contribute zero location NLL. Intervals use
+10,000 whole-configuration bootstrap draws and do not include model/selection
+uncertainty. The frozen mixture still leads overall, limiting any general claim.
+
+Engineering throughput was 684 examples/sec with a 1.68 GiB process peak and
+0.078 GiB allocated GPU peak. Completed main runs stayed below 4 GiB process,
+12 GiB allocated GPU, 1,800 training sec/seed and 600 total evaluation sec/seed.
+The main test cost 222--227 sec/seed. Measurements distinguish allocated tensor
+memory from other processes and CUDA context/driver memory.
+
+Numerical instability and precision diagnostic
+---------------------------------------------
+Main seed 43 degraded from low-count validation NLL 4.141 at epoch 2 to 223.771
+at epoch 10. All-event final NLL was 191.032; fresh training loss also diverged.
+The registered validation selection kept epoch 2. This failure is visible in
+the complete curves and all final-budget artifacts, rather than hidden by selection.
+
+A short matched FP32/BF16 study on the separate small cohort found almost no
+difference: low-count test delta +0.000829 [-0.000535,+0.002210]. Both precisions
+were stable at 6,000 updates; this does not reproduce the later failure regime.
+
+A separately declared diagnostic therefore forked the failing main seed at
+epoch 2, preserving weights, optimizer, RNG, exact cursor and prefix counters,
+then continued through epoch 5 in FP32. At identical total updates (24,930), its
+fresh-family test NLL was 4.230123 versus BF16's 5.528406; delta -1.298282
+[-1.436853,-1.159142]. Comparing validation-selected checkpoints gives a smaller
+delta -0.037204 [-0.047164,-0.027193]. The main test was not reused for this fix.
+
+Full-precision projection/optimization is a reasonable numerical guard supported
+by this matched failure case. It is not a multi-seed causal generalization claim.
+The original archived runs and analysis identities remain unchanged. The new
+FullPrecisionPhotonReference class disables outer autocast without changing the
+architecture, parameter layout, objective or observation inputs.
+
+Fresh mechanism studies
+-----------------------
+An additional 12,000 records / 11,970 known families exclude every main/pilot
+family. Folds are 9,594/1,221/1,185. Four methods receive equal observations,
+seeds, epochs, batch size, optimizer and compute ceilings; actual FLOPs differ.
+
+                                   All photons    Retained input count 1--10
+  Dense, fresh training splits        3.268628              4.294847
+  Dense, fixed training splits        3.274354              4.303644
+  Full temporal resolution, fresh     2.720802              3.952540
+  Prior/count residual, fresh         3.072792              4.230526
+
+Removing the 256->64->256 temporal bottleneck helps on this fresh test, with the
+same parameter count. Fine-minus-dense low-count delta is -0.342308
+[-0.409386,-0.276561]. The residual head also improves the point estimate, less
+than temporal resolution here. Fixed and fresh splitting are close at this budget.
+These are finite exploratory mechanism comparisons, not a replacement 100k test
+or a multiplicity-adjusted confirmatory search. GPU 1 auxiliary jobs can overlap;
+their throughput is not an isolated architecture speed benchmark.
+
+Registered p=.25/.75 shifts are complete without refitting. Low-count model/
+selected-control NLLs are 3.881745/4.034534 at .25 and 4.252102/4.534081 at .75.
+Stratum membership changes with p. Repeated views remain together under group
+resampling and do not add independent events. Primary results are unchanged.
+
+Analytic GT and response studies
+-------------------------------
+Models were trained on 6,000 exact analytic Poisson observations; 600 test records
+represent 100 unseen source positions. Latent rates/positions stayed outside the
+training loader. The oracle knows the latent source and has information unavailable
+to a sparse-input model; a nonzero KL gap need not be removable from A alone.
+
+The analytic result is negative against the selected simple control:
+                                   All photons    Retained input count 1--10
+  Learned models                      9.612301             10.406349
+  Selected simple control             9.478690              9.955031
+  Known-latent oracle                 7.832196              8.336437
+
+Mean event KL(true expected location PDF || prediction): learned 1.706877,
+control 1.575301. The analytic images show true expected PDFs, learned predictions,
+controls and A/B arrival ticks. They do not use a P-ONE model as an in-domain toy
+benchmark. Signal zero plus background one is not a zero-intensity state. A true
+zero-intensity state has no conditional photon-location distribution.
+
+Prescribed background, inactive support, timing and efficiency shifts, plus
+merging, binned dead time and afterpulses, were evaluated without refitting.
+The latter three violate the independent-Poisson observation assumptions. Their
+scores are empirical predictive diagnostics, not physical calibration evidence.
+
+Real calibrated pulse pilot
+--------------------------
+Train/validation/test are disjoint real runs 115150/121585/122252. Charge and
+reported coordinates are preserved exactly. Because exact native DOM matching
+was ambiguous across published geometries, this separately versioned experiment
+uses 5,480 fixed spatial cells, 64 one-us bins and four charge-mark categories.
+Each split unit is one whole pulse; fractional PE is never rounded into photons.
+
+Selected real marked-pulse model: 3,972 parameters, epoch 2 selected on the
+different validation run. Three epochs completed in 1,206.7 sec, 20.75 examples/sec,
+1.783 GiB process peak and 0.379 GiB allocated GPU peak. The measured real test
+took 141.2 sec, with 0.196 GiB allocated GPU and 1.544 GiB process peak.
+
+The one reserved bright run gives joint location/time/charge-category NLL
+9.932161 nats/pulse versus 13.849807 for the predeclared temporal mixture.
+The model's arrival marginal NLL is 8.666843; it is a different score from the
+joint marked score. Absolute scores must not be ranked across these datasets
+because supports and target units differ.
+
+This supports an empirical pulse-prediction result against the registered
+temporal controls. Stronger geometry-aware real controls require a new frozen
+comparison; this test must not be retuned. Live/DAQ exposure is unavailable,
+reported clock tails are unresolved, positions are quantized and selections
+change across runs. The fixed analysis window excludes 8,225/15,975 validation
+pulses. Raw values remain stored. No clean-photon GT, exact Poisson, real low-count,
+physical no-event or general new-run reconstruction claim follows.
+
+Separate labelled utility probe
+-------------------------------
+Frozen main encoders are compared with raw A and the simple estimator using
+equal-dimensional marginal/moment/count features on the fresh 9594/1221/1185
+folds. Ridge fitting/scaling uses training labels; penalties use validation only.
+Physics labels never enter self-supervised pretraining or photon-model inference.
+
+Mean absolute log10-energy errors: raw 0.224396, baseline 0.221118, learned
+0.215695. Learned-minus-baseline delta -0.005423 [-0.009346,-0.001877]. This is a
+modest exploratory improvement on curated labelled simulation.
+
+Mean angular errors: raw 84.427754 deg, baseline 84.399564 deg, learned
+84.498839 deg. Learned-minus-baseline +0.099275 [-1.298229,+1.506175]: no clear
+direction benefit. A limited linear probe does not establish end-to-end physics
+utility, and these conditional group intervals do not include probe selection
+or pretraining-seed uncertainty.
+
+Verification and reproducibility
+-------------------------------
+Full test suite: 166 passed, eight warnings. Scoped lint checks passed. Actual
+import, lazy/spawn epoch loading, count conservation, bounded donors, chunked
+group intervals, exact optimizer resume, support/normalization, test locks,
+GT diagnostics and marked-pulse integration were exercised.
+
+A broad check also exposed a legacy checkpoint allowlist ordering assumption and
+a nested/preexisting-entry bug. Scoped compatibility now adds only new entries;
+regression checks preserve the caller's exact allowlist set. This does not alter
+the photon-model study's computation.
+
+All five main/mechanism/precision/continuation/pulse analysis identities match
+the final frozen computation files and observations. The final evidence index
+hashes all result reports. No original test result was overwritten, no revised
+model was selected against the main test, and no external message was sent.
+
+Primary machine-readable evidence:
+  data/neutrino/study/test_results.json
+  data/neutrino/study/final_evidence_index.json
+  data/neutrino/mechanism_study/test_results.json
+  data/neutrino/precision_continuation/test_results.json
+  data/neutrino/analytic_study/test_results.json
+  data/neutrino/pulse_study_v2/test_results.json
+  data/neutrino/mechanism_study/downstream_probe/test_results.json
+
+Protocols/configurations remain under plans/ and config/neutrino_*.yml. Research
+orchestrator commands run from the repository root as python -m src.tools.<tool>.

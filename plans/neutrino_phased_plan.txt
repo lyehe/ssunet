@@ -1,0 +1,442 @@
+Photon self-splitting for neutrino-telescope observations: phased plan
+Date: 2026-10-25
+Status: planning; this document does not start the larger experiments.
+Main milestone: an independent 100,000-event comparison with bounded compute.
+
+Purpose and claim
+-----------------
+Determine whether self-splitting of observed detections learns useful photon-
+arrival probabilities for low-count telescope events, without clean photon
+targets or physics labels for pretraining. The dense architecture provides a
+practical implementation; the scientific focus is the supervision and its
+validation in this setting. Novelty claims require a separate related-work
+assessment and must not imply that photon splitting itself was invented here.
+
+Prediction: q(sensor,time | retained detections A, splitting probability p,
+fixed geometry and live support). It sums to one over valid bins. This is a
+relative arrival distribution, not an event-count estimate, a full posterior
+over physical events, or a physical no-event classifier.
+
+Evidence already available
+--------------------------
+The current physical reference is a curated P-ONE simulation in water, with
+60 sensors and 256 fixed 25 ns bins. The 1,000-event pilot has 800 training,
+100 validation and 100 reserved test events; its test partition was not scored.
+The exact analytic Poisson reference and its thinning audit are separate.
+
+Three unchanged dense models trained for 5,000 steps give mean validation NLL:
+                                    All photons   Retained input count 1--10
+  Original 110-step pilot                 4.686                        5.795
+  Fixed retained-count/prior mixture      3.060                        4.974
+  Previously tuned mixture                2.689                        4.696
+  Longer dense model                      2.960                        4.126
+
+The low-count comparison contains only 120 target photons in 36 nonempty-target
+events. Its model-minus-tuned-mixture interval is [-1.193,-0.010] nats/photon:
+promising, but exploratory and close to zero at its upper endpoint. Five events
+supply 80% of all validation photons. Seed variation is small; event sampling
+and model/selection uncertainty remain important. See neutrino_longer_pilot.txt.
+
+Execution order
+---------------
+0. Freeze evidence and specify the new comparison.
+1. Audit source provenance and latent-configuration grouping.
+2. Make import, training, evaluation and uncertainty computation memory bounded.
+3. Assemble nested engineering and full-study cohorts with persistent partitions.
+4. Fit strong controls and train the unchanged backbone under fixed budgets.
+5. Lock the analysis and evaluate the new test cohort once.
+6. Run targeted architecture/statistical stress studies if supported by findings.
+7. Transfer the validated procedure to real detector observations and downstream
+   physics tasks under an appropriate detector-response contract.
+
+Phases 2 and 3 can progress independently once Phase 1 supplies stable grouping.
+No performance-dependent choices use the new test set before Phase 5.
+
+PHASE 0 -- Evidence freeze and study definition
+-----------------------------------------------
+Goal: make the next comparison reproducible and independent of pilot selection.
+Expected effort: a few hours of implementation/documentation, not a GPU run.
+
+Actions:
+  - Preserve the two pilot reports, raw per-event scores, checkpoints, hashes,
+    thinning reports and representative figures. Label them validation-only.
+  - Write a versioned study configuration with data/group selection, p=0.5,
+    clock, geometry, seeds, training limits, model/checkpoint selection, baseline
+    candidate grids, bootstrap settings and primary decision rule.
+  - Keep model seeds 42/43/44 and the same frozen validation/test photon-split
+    seed across model seeds. Separate cohort, split, shuffle and bootstrap seeds.
+  - Use retained-input counts to define strata: 0, 1--5, 6--10, 11--30, above 30.
+    The predeclared primary stratum is 1--10, not the realized A+B count.
+  - Define the primary score as sum of target-photon NLL / sum of target photons.
+    Keep the training objective mean_batch[-sum(B*log(q))]; do not normalize each
+    event's training target by its realized target count.
+  - Retain final-budget results and validation-selected checkpoints separately.
+    For the new independent test, use each seed's checkpoint selected by the
+    predeclared low-count validation rule. Do not choose the best model seed.
+
+Deliverables:
+  plans/neutrino_study_protocol.txt
+  config/neutrino_study.yml
+  An evidence index linking the current reports and figures.
+
+Exit gate: every primary selection and evaluation rule is written before the
+new study's performance results are examined. Phase-0 settings are prospective;
+the pilot results remain exploratory rather than being retroactively registered.
+
+PHASE 1 -- Source, clock and statistical-contract audit
+-------------------------------------------------------
+Goal: establish exactly what one observed row and one independent event mean.
+Expected effort: about 0.5--1 working day if upstream documentation is sufficient;
+generator reproduction or missing source metadata may require additional time.
+
+Actions:
+  - Verify saved archive/geometry/source-definition hashes and inventory the
+    complete SQLite schema and metadata without modifying the source database.
+  - Check photon unit weights, potential repeated/oversampled photons, QE or
+    efficiency thinning, pulse merging, clipping, dead time and trigger cuts.
+    A table called photons with no explicit weight column is not sufficient
+    by itself to certify every generative assumption.
+  - Establish t units, origin and alignment. Confirm whether upstream event
+    clocks/cuts already depend on the detected hits. Preserve source times and
+    record any unavoidable source-side dependence as a limitation.
+  - Confirm the geometry's medium, units, fixed live sensors and mapping between
+    local source sensor IDs and global geometry IDs. Continue validating photon
+    coordinates against that mapping.
+  - Identify independent physical configurations and repeated realizations.
+    Prefer upstream configuration/family identifiers. Inspect exact duplicate
+    generation parameters and records as diagnostics, but do not invent an
+    independence guarantee from distinct row/event IDs or approximate kinematics.
+  - Document the merged_cut selection, event species/energy coverage, zero-hit
+    truth-table entries, simulation version/configuration and allowed data use.
+  - Classify the evidence: exact constructed Poisson reference; documented
+    physical unit-photon reference with stated assumptions; or qualified curated
+    predictive-thinning sample with unresolved generative/selection questions.
+
+Statistical rule:
+  A~Binomial(Y,p), B=Y-A gives conditional independence for Poisson Y at fixed
+  latent intensity when full Y is independently regenerated. Re-splitting one
+  frozen Y has negative conditional covariance and cannot establish that claim.
+  Repeat the existing exact analytic audit. If testing physical Poisson moments,
+  obtain independent full simulations at fixed source parameters; do not use
+  random events or repeated splits of a frozen physical event as substitutes.
+
+Deliverables:
+  data/neutrino/study/source_audit.json and source_audit.txt
+  source_group_index.parquet with source event ID, group ID, provenance and flags.
+  A short unresolved-assumptions section with evidence links or local snapshots.
+
+Exit gate:
+  Counts and clocks must support the declared data contract, and grouping must
+  prevent known repeats crossing partitions. If a physical Poisson assumption
+  remains unresolved, continue only with an explicitly qualified predictive
+  study; use the analytic reference for exact statistical claims. If rows are
+  weighted/merged pulses, do not round them into unit photons. Select a suitable
+  source or a separately pinned generator for the ideal-count experiment.
+
+PHASE 2 -- Memory-bounded execution and engineering qualification
+---------------------------------------------------------------
+Goal: scale event count without scaling dense resident tensors with the cohort.
+Expected effort: about 1--2 working days plus measured engineering runs.
+
+Implementation:
+  - Extend src/ssunet/datasets/neutrino.py to support selected event/group IDs
+    and chunked or lazy ragged reads. Densify only the active batch. Store event
+    boundaries, integer counts, fixed edges, live masks and stable global IDs.
+  - Extend src/tools/neutrino_reference.py for manifest-selected import and
+    incremental inspection; do not draw a new cohort inside every import call.
+  - Extend src/ssunet/neutrino_evaluation.py to regenerate frozen A/B per event
+    and stream model/baseline scoring. Retain scalar per-event NLL/count records,
+    not all validation count maps or baseline probability maps.
+  - Index donor candidates by TRAINING retained count plus geometry/exposure/p
+    strata. Save donor IDs/seeds and load only the current control batch.
+    Exact matching is required for interpreting the primary 1--10 control.
+    Mark unmatched cases; do not interpret brightness-confounded global shuffles.
+  - Aggregate NLL differences and photons by independent configuration before
+    bootstrapping. Generate resamples in bounded chunks; the present all-draws
+    integer matrix must not be carried unchanged to a 10k-event evaluation.
+  - Share immutable ragged observations/metadata across model seeds where safe.
+    Avoid extra full-cohort copies for training, validation and donors.
+  - Keep num_workers=0 as the verified starting point. Before enabling workers,
+    test HDF5 worker-local handles, prefetch limits and fresh epoch splits under
+    Windows spawning. Persistent workers must receive epoch updates explicitly.
+  - Save configuration/data/code hashes, optimizer state, selected/global steps,
+    learning curves, wall times and per-event scores. Add restart support only
+    if needed for the longer budget; do not describe inference checkpoints as
+    exact mid-epoch resume state unless shuffle/cursor/RNG state is preserved.
+
+Meaningful checks:
+  - Streaming scores equal the existing pilot within numerical tolerance.
+  - Changing batch size, batch ordering or bootstrap chunk size preserves the
+    deterministic evaluation specification and gives equivalent reductions.
+  - Unit counts, A+B conservation, empty events and shared occupied bins survive.
+  - Physical masks exclude invalid bins; probabilities normalize on live support.
+  - Target/truth changes cannot alter forward preprocessing or donor selection.
+  - Training changes splits by epoch; evaluation is unchanged across workers/seeds.
+  - Serialized/reloaded checkpoints reproduce reported frozen likelihoods.
+
+Engineering targets, to be measured rather than assumed:
+  - One explicitly chosen RTX 4090; peak tensor allocation below 12 GiB.
+  - Host resident memory below 4 GiB for the streaming study process, excluding
+    operating-system disk cache; revise explicitly if measured libraries require
+    a different fixed cap. No cohort-sized dense donor/evaluation allocation.
+  - Measure peak allocation AND reserved/device memory, CPU RSS, events/second,
+    data-read time, baseline-fit time, bootstrap time and import/storage costs.
+  - Profile at least 500 warm updates from training data. Default batch remains
+    16; optional 32/64 engineering trials may set a faster batch before the study
+    is locked. Any batch change updates the example/epoch/optimizer-step budget.
+
+Deliverables:
+  Streaming loader/control/evaluation changes, bounded bootstrap implementation,
+  focused tests and an engineering_profile.json with actual resource readings.
+
+Exit gate: no correctness regression, no unbounded dense cache, deterministic
+frozen evaluation and measured memory/time compliance on the engineering cohort.
+
+PHASE 3 -- Persistent cohort and staged data qualification
+----------------------------------------------------------
+Goal: create independent development/test samples from the existing local source.
+Expected effort: about 0.5--1 day of implementation plus measured import time.
+
+Actions:
+  - Default to a NEW cohort targeting 100,000 source events/configurations after
+    Phase-1 grouping; never split a family to hit an exact row quota.
+  - Exclude all 1,000 pilot events and their related configuration families from
+    the new test population. Prefer excluding them from the entire new cohort.
+    Preserve the pilot artifacts as development history. If reuse is necessary,
+    preserve their development assignments and never move them into new test.
+  - Assign source groups once using a recorded deterministic partition manifest
+    before photon thinning: approximately 80% train, 10% validation, 10% test.
+    Stable source-level assignment must survive 10k -> 100k cohort expansion.
+  - Sample groups without replacement without selecting on observed photon
+    counts, nonemptiness, prediction quality or held-out targets. Select event
+    IDs from the truth-event catalogue, including entries without photon rows.
+  - Create a nested 10,000-event engineering subset, respecting the same group
+    assignments. Use its training portion for pipeline profiling; do not score
+    its reserved test events during development.
+  - Use the current geometry and [0,6400) ns window initially. Review clock/tails
+    using training observations only. If a revision is necessary, define it
+    globally and version the data contract before primary validation/test use.
+  - Keep raw photon lists and evaluation truth separately. Track inactive sensors,
+    out-of-window photons, checksums, event IDs and split seeds in each shard.
+  - Store test observations as a separate partition/file path so ordinary fitting
+    and validation commands cannot accidentally include them.
+  - Produce streaming QA counts, integer/mapping checks, duplicate/group-overlap
+    checks and source-selection accounting. Do not redraw empty observations.
+
+Precision planning:
+  Use pilot/configuration resampling and the new TRAINING/development sample to
+  estimate whether the planned test cohort can resolve a 0.10 nats/photon
+  improvement. Record expected low-count event/photon totals and uncertainty;
+  100k events is a capacity target, not a guaranteed statistical power statement.
+  Do not alter test sample membership after examining its model performance.
+
+Deliverables:
+  cohort_manifest.parquet/json; grouping and exclusion audit; 10k engineering
+  shards; 100k train/validation/test shards; training-only QA and cost report.
+
+Exit gate: known family overlap is zero, pilot/test overlap is zero, empty events
+are retained, schema checks pass, IDs are persistent across scales, and source
+assumption qualifications accompany the data. If precision is inadequate under
+the fixed cohort budget, report an inconclusive study rather than sampling until
+the desired score difference appears.
+
+PHASE 4 -- Strong controls, training and validation selection
+-------------------------------------------------------------
+Goal: compare the unchanged dense model fairly with simple input-based methods.
+Expected compute: at most 30 training minutes per seed for three seeds; allocate
+up to 10 additional minutes per seed for validation/control work and measure
+setup/import/baseline fitting separately. These are limits, not runtime promises.
+
+Controls:
+  - Uniform probability on identical physical support.
+  - Training-only arrival prior, with fixed and validation-selected smoothing.
+  - Fixed 50/50 normalized retained-count/training-prior mixture.
+  - Previously fixed 75/25 retained-count/tuned-prior mixture.
+  - A strong smoothing/mixture baseline, with its finite candidate grid fixed
+    before scoring. Reuse the existing 36 prior and 144 mixture candidates as
+    the maximum initial grid; stream/reuse kernel computations within budget.
+  - Count/exposure/geometry-matched donor inputs, 20 fixed training-donor draws.
+    Use only exact matches for the primary low-count interpretation.
+
+All learned priors fit training observations only. Select the strongest simple
+baseline and model checkpoints on the same LOW-COUNT validation NLL. The old
+pilot baseline winner was selected on all photons; it must not be assumed to
+be the strongest candidate for the new primary stratum. Save all candidate
+validation scores and freeze the winner before test scoring.
+
+Model/training protocol:
+  - Start with the existing 3,585-parameter DensePhotonReference, channels 16,
+    current optimizer/loss, p=0.5 and seeds 42/43/44. No architecture search in
+    the first full comparison. Preserve multi-count bins and zero-input cases.
+  - Target 10 complete training epochs initially. With approximately 80k train
+    events and batch 16, this is about 50,000 updates and 800k processed examples
+    per seed. Reusing 5,000 updates would provide about ONE pass, not the 100
+    passes in the pilot. Confirm the budget with Phase-2 measurements.
+  - If the target cannot fit the 30-minute training cap, choose a smaller whole-
+    epoch budget before the full run and record it; aim for at least five passes.
+    A budget-limited unfinished learning curve is a limitation, not convergence.
+  - Schedule full validation at epoch 0, 1, 2, 5 and the final epoch; use a fixed
+    small training diagnostic and log fresh training photon NLL between checks.
+  - Select one scheduled checkpoint per seed by low-count validation NLL, with
+    a fixed tie rule (earliest step). Also retain the final-budget checkpoint.
+  - Log steps, epochs, processed examples and wall time. Keep validation photon
+    splits fixed across seeds; training photon splits refresh each epoch.
+  - Predeclare any additional validation-only training-budget revision, keep it
+    within the recorded experiment cap, and freeze the resulting rule before test.
+
+Deliverables:
+  Baseline selection table; three model runs; per-seed and mean validation
+  scores; checkpoints, optimizer/audit state, learning/resource curves; a frozen
+  analysis manifest naming exactly the models and baseline to evaluate on test.
+
+Exit gate:
+  Training/data checks pass and the model has a credible low-count validation
+  advantage over the chosen baseline and matched-donor control. A practical
+  target is at least 0.10 nats/photon improvement; it is a proposed study margin,
+  not a physical standard. If there is no benefit, diagnose on development data
+  in Phase 6 before opening test; preserve all negative results.
+
+PHASE 5 -- Locked independent test and claim decision
+------------------------------------------------------
+Goal: test the frozen claim once on the independently reserved cohort.
+Expected compute: bounded streaming inference/controls and 10,000 chunked
+configuration-bootstrap draws; estimate actual runtime during Phase 2.
+
+Actions:
+  - Verify hashes, group exclusions, data support, chosen checkpoints and frozen
+    analysis settings. Test scoring produces an immutable run record.
+  - Evaluate the three previously selected seeds together. Report individual
+    scores and mean seed NLL; do not treat seeds or repeated photon splits as
+    independent extra test events. A probability ensemble is a separate method.
+  - Primary contrast: mean-seed model minus the validation-chosen strongest
+    simple baseline, photon-weighted in retained-input count 1--10 at p=0.5.
+  - Required conditioning control: same model with count-matched donor inputs.
+  - Resample complete independent configuration families for paired intervals,
+    including all their retained variants/views together. Do not bootstrap
+    individual photons as independent samples. Report seed variation separately.
+  - Publish events, nonempty-target events, scored photons, empty-target rates,
+    donor matching coverage and loss concentration by event for every stratum.
+  - Report all-event, 0, 1--5, 6--10, 11--30 and above-30 results alongside the
+    primary aggregate. Mark secondary comparisons as exploratory.
+  - Include CPU/GPU memory, training/inference throughput, wall time, setup/data
+    costs, normalization checks and the exact source assumptions.
+
+Decision rule:
+  Support the restricted low-count prediction claim only if BOTH primary model-
+  minus-baseline and model-minus-donor upper 95% interval endpoints are below
+  zero, the point improvement over the baseline meets the predeclared practical
+  margin, and the measured resource limits pass. Other pairwise/stratum claims
+  are secondary and require their own uncertainty/multiplicity interpretation.
+  A worse all-event point estimate must remain visible; it limits general claims.
+  A success on a curated simulation does not establish real-data/physics benefit.
+
+Failure/inconclusive branch:
+  Preserve and report the result. Do not tune models against that test set or
+  repeatedly reopen it looking for a favorable score. Any revised claim/model
+  returns to development and needs a newly reserved independent test population.
+
+Deliverables:
+  Frozen test result bundle; paired intervals; full baseline/model table;
+  low-count and concentration plots; result interpretation and limitations.
+
+PHASE 6 -- Targeted ablations and statistical/response stress tests
+-------------------------------------------------------------------
+Goal: explain the mechanism and the remaining limits with small controlled studies.
+Timing: conditional on Phase-4/5 findings; each architecture comparison receives
+the same seed/data/compute budget and a finite predeclared hypothesis list.
+
+Priority experiments:
+  1. Fine temporal output versus the current 256 -> 64 -> 256 bottleneck.
+     Compare longer training and temporal resolution separately. The earlier
+     estimator-coarsening diagnostic alone did not explain the low-count gap.
+  2. A training-prior/retained-count residual head, initialized to contain the
+     strong simple mixture. All learned mixing/gates depend on A, geometry and
+     p only. Never scale an inference prediction by the realized target total.
+  3. Supervision checks: fixed versus fresh training splits, and optional
+     multiple p values. Keep training examples/updates/compute comparable.
+  4. Diagnostic p=0.25 and p=0.75 evaluations of the p=0.5-trained model, clearly
+     labelled distribution shift. Group all views when estimating uncertainty.
+  5. Background, inactive sensors, timing offsets, efficiency variation, pulse
+     merging, dead time and afterpulsing. Separate changes to intensity from
+     violations of independent detection assumptions; do not assert exact
+     Poisson theory for correlated or response-processed observations.
+  6. Exact analytic cases with known latent rates: compare predicted q with
+     the known expected location PDF, plus oracle held-out NLL/KL diagnostics.
+     Fit an analytic-data model for that benchmark; do not treat P-ONE-to-toy
+     domain transfer as an in-distribution performance result.
+
+Keep weak/strong/background-only analytic components and true empty observations
+distinct. A zero expected SIGNAL level with weak background still has photons.
+Zero observed hits and a known no-interaction/no-background state are different.
+
+Deliverables: finite ablation table, mechanism/stress figures and a written
+supported/unsupported assumptions table. Evaluate changed models on fresh test
+data if the original study's test results have influenced those changes.
+
+PHASE 7 -- Real observations and downstream utility
+----------------------------------------------------
+Goal: establish practical use beyond ideal simulated photon prediction.
+Timing: a separate study, dependent on available calibration and data contracts.
+
+Actions:
+  - Start with existing local low-pulse-count IceCube ODF observations for schema,
+    geometry, masking and detector-response development. Keep real runs/event
+    families separated across development/evaluation to avoid run leakage.
+  - Treat reconstructed pulse charge/time as detector observables. Fractional PE
+    charge, merged pulses and raw ADC values must not be rounded into Poisson
+    photon counts. Specify an appropriate marked-pulse/response-aware objective,
+    or obtain a calibrated photon-count representation with justified assumptions.
+  - For zero-event/background claims, seek documented zero-bias/untriggered
+    windows with exposure, live masks and DAQ/dead-time information. Empty
+    triggered records do not prove absence of a physical interaction.
+  - Use real likelihood/repeatability diagnostics without claiming unavailable
+    clean-photon GT. Keep MC label-based assessment separate and clearly named.
+  - Probe useful downstream outcomes on independently labelled simulation,
+    such as direction/energy estimation, comparing raw inputs, strong simple
+    estimators and learned features under matched data/compute budgets.
+    Any labelled probe training is separate from self-supervised pretraining.
+  - Report simulation-to-data shifts in geometry, clocks, backgrounds and detector
+    response. Data availability or calibration gaps limit the claim rather than
+    being filled with synthetic labels described as real ground truth.
+
+Deliverables: calibrated real-data contract, run-separated evaluation, response/
+robustness results and independently assessed downstream metrics. Paper claims
+must distinguish self-split predictive success, physical intensity recovery and
+actual neutrino-reconstruction benefit.
+
+Visualization and GT policy for all phases
+------------------------------------------
+Maintain these figures with explicit datasets, splits, seeds and checkpoint IDs:
+  - Aggregate NLL comparison, training/validation curves and paired intervals.
+  - Input-count strata with event/photon denominators, empty rates and resource
+    measurements; no image PSNR acceptance criterion.
+  - Representative event maps: retained A, held-out B, baseline q and model q,
+    plus sensor/time marginals. Display cases chosen by documented count rules,
+    not by the model's best-looking scores. Show common units/color scales.
+  - Physical MC truth geometry/vertex as context only. An event vertex is not
+    photon-arrival-distribution GT. The present P-ONE shard supplies one detected
+    photon realization, not a clean latent expected-arrival PDF.
+  - Analytic expected intensity/location PDF as genuine known-rate GT, reserved
+    for diagnostic plots/evaluation. Keep it outside the training loader.
+  - Mark any display-only zoom; do not renormalize predictions to a cropped
+    display or align the acquisition clock using held-out detections.
+  - Static PNG/SVG exports plus a self-contained interactive viewer where useful.
+
+Implementation map
+-------------------
+src/ssunet/datasets/neutrino.py       Indexed/lazy ragged loading and frozen IDs.
+src/tools/neutrino_reference.py      Manifest-driven import and streaming QA.
+src/ssunet/neutrino_evaluation.py    Streaming likelihood, controls, chunked CIs.
+src/tools/neutrino_pilot.py          Existing reference behavior/reproduction.
+src/tools/neutrino_study.py          Proposed large-cohort orchestrator/test lock.
+src/tools/neutrino_visualize.py      Reproducible plots and labelled GT views.
+config/neutrino_study.yml           Prospective fixed study configuration.
+tests/test_neutrino_*.py            Meaningful data, statistical and reload checks.
+
+Immediate first implementation batch
+-------------------------------------
+Complete Phase 0 and the Phase-1 group/clock/row audit. In parallel after grouping
+is available, replace dense evaluation/donor caches and all-at-once bootstrapping,
+then build the nested cohort manifests. Run the 10k engineering qualification
+before scheduling the 100k model study. The current unchanged dense backbone is
+the default throughout the first independent comparison.

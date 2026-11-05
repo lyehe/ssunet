@@ -1,0 +1,98 @@
+Photon-method selection and normalization audit, 2026-10-27
+
+Policy requested by the user
+True one-bit detections use Bit2Bit. Photon counts use GAP. Selection follows
+the acquisition contract, not whether a particularly sparse count batch
+happens to contain only 0 and 1. An override contradicting that contract is
+rejected. The P-ONE training data contain bins with 444 photons and use GAP.
+
+Primary sources inspected
+GAP paper, section 3.5, equations 13-14:
+https://arxiv.org/html/2307.06607v2
+GAP public code at 135b8c67ce5a6ab4c44bcdd0fbe756f75526e249:
+gap/BinomDataset.py, lines 49-55: raw retained counts; target divided by mean.
+gap/GAP_UNET_ResBlock.py, lines 267-280 and 310-314: sine input encoding and
+the log-mean-exp photon objective. The Convallaria example uses ten levels.
+gap/inference.py, lines 56-59: exponentiate logits and normalize their sum.
+https://github.com/krulllab/GAP/tree/135b8c67ce5a6ab4c44bcdd0fbe756f75526e249
+
+Bit2Bit paper, section 3:
+https://arxiv.org/html/2410.23247v1
+Paper-era code at 26ccc4399caf2f8139c21de8fd1c8c284fa51386:
+src/ssunet/datasets/binomial.py normalizes targets by mean when enabled.
+src/ssunet/configs/file_config.py defaults normalize_target to True.
+src/ssunet/utils.py defines that mean normalization, with EPSILON=1e-8.
+src/ssunet/losses.py masks logits and targets before its photon loss.
+src/ssunet/models/bit2bit.py and model_config.py use sine encoding by default.
+https://github.com/lyehe/ssunet/tree/26ccc4399caf2f8139c21de8fd1c8c284fa51386
+Downloaded references are cached under data/neutrino/normalization_audit_v1.
+
+Finding about the archived 4D retry
+Output normalization was correct: q=softmax(logits) jointly over live sensor
+and time bins, per observation. Invalid physical support has zero probability;
+the enclosing grid's empty cells are excluded. The network returns logits;
+normalization occurs in the loss/evaluation functions. Input features were
+computed from A alone, so B did not leak into inference.
+
+However, that retry used log1p input encoding and raw-target count-weighted
+NLL. These were deliberate count-likelihood adaptations, not the default
+published GAP/Bit2Bit preprocessing. In particular, raw loss weights an
+event in proportion to its held-out photon total. The original unit-mean
+target formulation approximately gives each nonempty target event equal
+weight. This difference is not a single batch-wide scalar when counts vary.
+All architecture arms shared the archived objective, so their comparison
+remains valid for that objective; it is not a paper-faithful GAP comparison.
+
+Implemented correction for new runs
+src/ssunet/photon_methods.py selects the family, implements GAP's multiscale
+sine input encoding, and normalizes raw targets inside the loss. For M live
+bins and target count N_B, target weights are B/(N_B + 1e-8*M). GAP loss is
+their negative log probability sum, minus their total weight times log(M).
+This equals the public mean-normalized log-mean-exp loss, using stable log q.
+For Bit2Bit only, input-hit locations are excluded from the exponential sum
+inside the normalization offset, using a boolean support mask and stable
+logsumexp. Nonbinary or overlapping binary A/B splits are rejected. A
+count-mode input and target may share a bin.
+Empty targets contribute zero loss and gradient, without division by zero.
+
+No per-sensor softmax, input mean-one normalization or ground-truth scaling
+is applied. The predicted field is a discrete location PMF, not a count rate
+or an event-presence probability. The binary dependence mask and the physical
+live-support mask have separate roles.
+
+Verification
+Tests compare GAP loss values and gradients against its pinned source
+expression, demonstrate different event weighting, check support/empty targets,
+check all three model interfaces and sensor permutations, reject incompatible
+method overrides, and reproduce uninterrupted training after mid-epoch resume.
+A native-GPU end-to-end smoke passed for all three architecture arms.
+
+Bit2Bit offset correction after the initial audit
+The user clarified that Bit2Bit must mask the normalization offset. The initial
+implementation reproduced the pinned old code by zeroing masked logits before
+exponentiation. That leaves an exp(0)=1 contribution in the offset. The old
+parity test reproduced that behavior, so parity alone missed this distinction.
+The corrected Bit2Bit loss and masked diagnostic exclude those exponential
+terms entirely. The target term and normalization term use the same mask.
+The mean reduction and additive log(original lattice size) convention remain.
+Stable normalization needs no absolute energy floor; the target normalization
+epsilon is retained. A shared additive logit offset changes neither loss nor
+gradients. Empty support contributes zero loss and gradient. The training mask
+is not applied to the inference distribution. This correction intentionally
+differs from the pinned old Bit2Bit implementation; GAP's expression is unchanged.
+
+Exact pre-fix sources are preserved at
+data/neutrino/normalization_audit_v1/before_bit2bit_offset_mask/.
+Completed study results and their original identities/audits are preserved.
+Their source guards still require the original source bytes for a historical
+replay/resume; the archived source files supply the changed originals.
+The fix verification records GAP value/gradient parity and artifact hashes.
+
+Offset-fix verification
+73 focused loss/model/normalization/resume/report/inference cases pass, with
+scoped Ruff lint/format checks passing. Native-GPU one-bit training smokes
+pass for coarse temporal, full-time temporal and 4D architectures, with zero
+input-hit logit gradients and finite parameter gradients. The GAP loss and
+gradient match the saved pre-fix reference bit for bit. All nine saved GAP
+checkpoint hashes and the completed studies' result/audit hashes are unchanged.
+Evidence: data/neutrino/normalization_audit_v1/bit2bit_offset_fix_verification.json.

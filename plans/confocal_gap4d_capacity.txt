@@ -1,0 +1,56 @@
+Further confocal model capacity: physical GPU 0 / RTX 4090
+=========================================================
+
+Four-resolution GAP models, FP32, batch size 1, two accumulated patches per
+optimizer update. Each candidate completed three real-data updates with finite
+losses and gradients. Times are short-smoke medians of the last two updates;
+they are not established full-run throughput or quality comparisons.
+
+4D widths          Patch T,Z,Y,X      Parameters   Allocated GiB  Reserved GiB  s/update
+24/48/96/192        16,16,128,128      10,110,649           7.028         8.418     3.895
+32/64/128/256       16,16,128,128      17,973,665           9.335        10.879     3.693
+48/96/192/384       16,16,128,128      40,438,897          14.045        16.178     6.569
+24/48/96/192        16,32,128,128      10,110,649          13.825        16.598     6.024
+
+The original 24-channel measurement is from confocal_gap4d_large_v1. The three
+larger alternatives were measured in this capacity probe. The per-process
+PyTorch allocator was capped at 85% of device memory during the probe. Reserved
+memory excludes additional CUDA-context overhead and other GPU processes.
+GPU 1 was not used.
+
+The 32-channel preset also has a verified, approximately parameter-matched
+3D control: 54/108/216/432 channels, 17,797,591 parameters, 15.285 GiB allocated,
+17.910 GiB reserved and 2.556 seconds per optimizer update in the same probe.
+Larger 3D controls for the 48-channel or 32-Z alternatives were not profiled.
+
+For the first comparison, the 32-channel option offers more capacity while
+keeping both model arms comfortably within the device budget. The 48-channel
+4D model and the larger Z window are alternatives that fit; these smoke tests
+provide no evidence that either yields better predictions. Extra convolution
+axes would require a meaningful extra data axis; these acquisitions remain
+T,Z,Y,X. Detector channels and learned features are not additional grid axes.
+
+These are historical batch-two-effective sizing measurements. The current
+default is config/confocal_gap4d_features32_batch4.yml, with effective batch
+four and Barron fixed log-softmax. Run the earlier 32-channel sizing setup with:
+  .venv/Scripts/python.exe -m src.tools.confocal_train --config config/confocal_gap4d_features32.yml --train
+
+Or run only its 4D model:
+  .venv/Scripts/python.exe -m src.tools.confocal_train --config config/confocal_gap4d_features32.yml --train --model conv4d
+
+The new preset reuses the verified integer-count caches and separate training
+and validation acquisitions. It takes 500 updates and preserves GAP's original
+input encoding and photon-split supervision. Existing presets/results are not
+overwritten. Its output path is data/confocal_gap4d_features32_v1/training/.
+
+Capacity-only reproduction:
+  .venv/Scripts/python.exe data/confocal_gap4d_capacity_v1/probe.py
+Set PYTHONPATH to the project root if invoking that ignored artifact directly.
+
+Evidence: data/confocal_gap4d_capacity_v1/results.json
+Audit: data/confocal_gap4d_capacity_v1/capacity_audit.json
+Source snapshot: data/confocal_gap4d_capacity_v1/source_snapshot.json
+Per-case arguments and checkpoints are under that directory. The audit checks
+source hashes, finite saved model tensors and optimizer trajectories, output
+probability mass, and agreement between the measured cases and the new preset.
+These are allocation checks and do not establish independent biological evidence.
