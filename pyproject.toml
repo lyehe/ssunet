@@ -38,6 +38,15 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff", "tox", "pre-commit"]
+# The pipelines' tools and scripts import more than the core model needs.
+confocal = ["dask", "defusedxml", "napari[all]", "qtpy", "readlif", "torch-convnd[native]"]
+neutrino = ["plotly", "torch-convnd[native]"]
+spad = [
+    "napari[all]",
+    "visionsim>=0.1.0a2",
+    # torch.compile on Windows; 3.6 is the Triton release for torch 2.10.
+    "triton-windows>=3.6,<3.7; sys_platform == 'win32'",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ssunet", "src/tools"]

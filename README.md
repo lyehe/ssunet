@@ -22,6 +22,14 @@ Partial convolutions and the 4D models use
 installs it from a sibling checkout at `../torch-convnd`. Without one, install it with
 `python -m pip install "torch-convnd @ git+https://github.com/lyehe/torch-convnd"`.
 
+The pipeline tools need optional extras: `confocal` (LIF reading, dask and the napari
+viewers), `neutrino` (plotly figures) and `spad` (visionsim colour conversion, the
+napari viewer and Triton for `torch.compile` on Windows). `uv sync --all-extras`
+installs them with the development tools; with pip, name them, as in
+`python -m pip install -e ".[dev,confocal,neutrino,spad]"`. `uv sync` removes packages
+that the lockfile does not list, so add `--inexact` when the environment also holds
+another project's packages.
+
 `forward(batch)` returns unrestricted photon-location logits in `(B, C, Z, H, W)`
 layout. Use the explicit distribution API when normalized probabilities are needed:
 
