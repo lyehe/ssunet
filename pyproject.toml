@@ -96,6 +96,13 @@ convention = "google"
 # Top-level research scripts report progress with print.
 "!{src,tests}/**" = ["T201"]
 
+[tool.uv]
+# soupsieve comes in only through readlif -> beautifulsoup4 (the confocal extra), and nothing
+# here uses CSS selectors. Its releases without open advisories (4.0 and later) need Python
+# 3.11.5, so older Pythons go without it instead of locking 2.10. Beautiful Soup still imports
+# and warns that CSS selectors are unavailable.
+override-dependencies = ["soupsieve>=4.0; python_full_version >= '3.11.5'"]
+
 [tool.uv.sources]
 torch = { index = "pytorch-cu130" }
 torchvision = { index = "pytorch-cu130" }
